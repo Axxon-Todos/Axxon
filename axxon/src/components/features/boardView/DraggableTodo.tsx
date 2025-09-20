@@ -4,6 +4,7 @@ import { useDraggable } from '@dnd-kit/core'
 import { useRef } from 'react'
 import { TodoWithLabels } from '@/lib/types/todoTypes'
 import { LabelBaseData } from '@/lib/types/labelTypes'
+import { useBoardView } from '@/context/BoardViewContext'
 
 export default function DraggableTodo({
   todo,
@@ -26,6 +27,8 @@ export default function DraggableTodo({
         }
         : undefined
 
+  const { hideTodos } = useBoardView();
+  
   // Track drag status
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const clickTimeout = useRef<NodeJS.Timeout | null>(null)
@@ -57,7 +60,7 @@ export default function DraggableTodo({
       style={style}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
-      className="p-3 border rounded mb-3 bg-gray-50 hover:bg-gray-100 cursor-pointer"
+      className={`${hideTodos ? 'hidden' : 'p-3 border rounded mb-3 bg-gray-50 hover:bg-gray-100 cursor-pointer'}`}
     >
       <div className="flex flex-col sm:flex-row sm:justify-between mb-2">
         <p className="font-semibold">{todo.title}</p>
