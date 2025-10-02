@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { getUserId } from '@/lib/api/getUserId'
-import { fetchBoards } from '@/lib/api/getBoards'
-import { deleteBoardById } from '@/lib/api/deleteBoardById'
+import { getUserId } from '@/lib/api/users/getUserId'
+import { fetchBoards } from '@/lib/api/boards/getBoards'
+import { deleteBoardById } from '@/lib/api/boards/deleteBoardById'
 
 import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal'
 import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal'

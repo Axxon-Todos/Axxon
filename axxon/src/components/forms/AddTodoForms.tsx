@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createTodo, NewTodoInput } from '@/lib/api/createTodo';
+import { createTodo, NewTodoInput } from '@/lib/api/todos/createTodo';
 import type { FormEvent } from 'react';
 
 interface AddTodoFormProps {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createTodo, NewTodoInput } from '@/lib/api/createTodo'; // wherever you saved it
+import { createTodo, NewTodoInput } from '@/lib/api/todos/createTodo'; // wherever you saved it
 
 export default function AddTodoForm({ boardId }: { boardId: number }) {
   const queryClient = useQueryClient();

@@ -216,4 +216,42 @@ export class Categories {
         .orderBy('position','asc')//orders descending by numerical vallue of position
         .select('*');
   };
+
+// -- BULK OPERATIONS -- //
+static reorderCategories = async (board_id: number, newOrder: number[]): Promise<void> => {
+  await knex.transaction(async (trx) => {
+    if (!newOrder.length) return;
+
+    // Build a CASE statement mapping each category ID => new position index
+    const caseStatements = newOrder
+      .map((id, index) => `WHEN ${id} THEN ${index}`)
+      .join(' ');
+
+    // Create a comma-separated list of IDs for the WHERE clause
+    const ids = newOrder.join(',');
+
+    // Step 1: temporarily move all positions out of the way to avoid unique constraint conflicts
+    await trx.raw(
+      `
+      UPDATE categories
+      SET position = position + 1000
+      WHERE board_id = ? AND id IN (${ids})
+    `,
+      [board_id]
+    );
+
+    // Step 2: assign the final positions
+    await trx.raw(
+      `
+      UPDATE categories
+      SET position = CASE id
+        ${caseStatements}
+      END
+      WHERE board_id = ? AND id IN (${ids})
+    `,
+      [board_id]
+    );
+  });
+};
+
 }

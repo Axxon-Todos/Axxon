@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { updateTodoById } from '@/lib/api/updateTodoById'
-import { deleteTodoById } from '@/lib/api/deleteTodoById'
+import { updateTodoById } from '@/lib/api/todos/updateTodoById'
+import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 interface UpdateTodoModalProps {

@@ -108,6 +108,32 @@ export async function GET(_req: NextRequest, params: { boardId: string; }) {
   }
 }
 
+//Reorder Categories
+export async function PATCH_reorder(req: NextRequest, params: { boardId: string }) {
+  try {
+    const board_id = Number(params.boardId);
+    if (!board_id) {
+      return NextResponse.json({ error: 'Missing or invalid boardId' }, { status: 400 });
+    }
+
+    const { newOrder } = await req.json();
+    if (!Array.isArray(newOrder) || newOrder.length === 0) {
+      return NextResponse.json({ error: 'Invalid newOrder payload' }, { status: 400 });
+    }
+
+    // Perform bulk reorder
+    await Categories.reorderCategories(board_id, newOrder);
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    console.error('[REORDER_CATEGORIES_ERROR]', error);
+    return NextResponse.json(
+      { error: 'Failed to reorder categories' },
+      { status: 500 }
+    );
+  }
+}
+
 // GetById
 export async function getCategoryByIdController(_req: NextRequest, params: { boardId: string; categoryId: string }) {
   try {
