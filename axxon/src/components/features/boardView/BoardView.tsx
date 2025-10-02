@@ -12,6 +12,8 @@ import { useBoardRealtime } from '@/hooks/useBoardRealtime'
 import { useUpdateTodoMutation } from '@/lib/mutations/useUpdateTodo'
 import { useDeleteTodoMutation } from '@/lib/mutations/useDeleteTodo'
 import { useUpdateCategory } from '@/lib/mutations/UseUpdateCategory'
+import { useDeleteCategory } from '@/lib/mutations/useDeleteCategory'
+import { useReorderCategories } from '@/lib/mutations/useReorderCategories'
 
 // --- Fetchers ---
 import { fetchBoard } from '@/lib/api/boards/getSingleBoard'
@@ -25,15 +27,15 @@ import DraggableCategory from './DraggableCategory'
 import Modal from '@/components/ui/Modal'
 import AddTodoForm from '@/components/forms/AddTodoForms'
 import UpdateTodoForm from '@/components/forms/UpdateTodoForm'
+import UpdateCategoryForm from '@/components/forms/CategoryForm'
 
 // --- Contexts ---
 import BoardViewContext from '@/context/BoardViewContext'
 import { useModal } from '@/context/ModalManager'
 
-// --- Types & Mutations ---
+// --- Types ---
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
-import { useReorderCategories } from '@/lib/mutations/useReorderCategories'
 
 export default function BoardView({ boardId }: { boardId: string }) {
   const modalTitleMap = { ADD_TODO: 'Add Todo', UPDATE_TODO: 'Update Todo', CATEGORY: 'Category' }
@@ -47,6 +49,7 @@ export default function BoardView({ boardId }: { boardId: string }) {
   const [hideTodos, setHideTodos] = useState(false)
   const [categoryOrder, setCategoryOrder] = useState<number[]>([])
   const [unsavedOrder, setUnsavedOrder] = useState<number[] | null>(null)
+  const [unsavedCategories, setUnsavedCategories] = useState<Record<number, Partial<CategoryBaseData>>>({})
 
   // --- Modal Context ---
   const { modalState, openModal, closeModal } = useModal()
@@ -55,6 +58,8 @@ export default function BoardView({ boardId }: { boardId: string }) {
   const updateTodo = useUpdateTodoMutation(boardId)
   const deleteTodo = useDeleteTodoMutation(boardId)
   const reorderCategories = useReorderCategories(boardId)
+  const updateCategory = useUpdateCategory(boardId)
+  const deleteCategory = useDeleteCategory(boardId)
 
   // --- Queries ---
   const { data: board } = useQuery({ queryKey: ['board', boardId], queryFn: () => fetchBoard(boardId) })
@@ -62,14 +67,15 @@ export default function BoardView({ boardId }: { boardId: string }) {
   const { data: labels } = useQuery({ queryKey: ['labels', boardId], queryFn: () => fetchLabels(boardId) })
   const { data: todos } = useQuery<TodoWithLabels[]>({ queryKey: ['todos', boardId], queryFn: () => fetchTodosWithLabels(boardId) })
 
-  // --- Category Map for O(1) lookup ---
+  // --- Category Map with Optimistic Updates ---
   const categoryMap = useMemo(() => {
     if (!categories) return {}
     return categories.reduce((acc, c) => {
-      acc[c.id] = c
+      const overrides = unsavedCategories[c.id] || {}
+      acc[c.id] = { ...c, ...overrides } // merge optimistic edits
       return acc
     }, {} as Record<number, CategoryBaseData>)
-  }, [categories])
+  }, [categories, unsavedCategories])
 
   // --- Initialize category order ---
   useEffect(() => {
@@ -112,14 +118,33 @@ export default function BoardView({ boardId }: { boardId: string }) {
       if (activeIndex === -1 || overIndex === -1) return prevOrder
 
       const newOrder = arrayMove(prevOrder, activeIndex, overIndex)
-
-      // Save locally for “Save Changes” button
       setUnsavedOrder(newOrder)
       return newOrder
     })
   }
 
-  
+  // --- Save Changes Handler ---
+  const handleSaveCategoryChanges = async () => {
+    try {
+      // 1. Commit pending category updates
+      const updatePromises = Object.entries(unsavedCategories).map(([id, data]) =>
+        updateCategory.mutateAsync({ categoryId: Number(id), data })
+      )
+
+      // 2. Commit category reorder if needed
+      if (unsavedOrder) {
+        await reorderCategories.mutateAsync(unsavedOrder.map(String))
+      }
+
+      // 3. Reset local state after successful save
+      await Promise.all(updatePromises)
+      setUnsavedCategories({})
+      setUnsavedOrder(null)
+    } catch (err) {
+      console.error('Failed to save category changes', err)
+    }
+  }
+
   // --- Loading State ---
   if (!board || !categories || !todos || !labels) return <div>Loading board...</div>
 
@@ -141,117 +166,134 @@ export default function BoardView({ boardId }: { boardId: string }) {
             }}
           />
         ) : null
+      case 'CATEGORY':
+        return modalState.payload ? (
+          <UpdateCategoryForm
+            category={modalState.payload}
+            onSave={(updatedProps) => {
+              setUnsavedCategories(prev => ({
+                ...prev,
+                [modalState.payload.id]: { ...prev[modalState.payload.id], ...updatedProps }
+              }))
+              closeModal()
+            }}
+            onDelete={(id) => {
+              // Optimistically remove locally
+              setCategoryOrder(prev => prev.filter(cid => cid !== id))
+              setUnsavedCategories(prev => {
+                const copy = { ...prev }
+                delete copy[id]
+                return copy
+              })
+              // Trigger mutation
+              deleteCategory.mutate(id)
+              closeModal()
+            }}
+            onClose={closeModal}
+          />
+        ) : null
       default:
         return null
     }
   }
 
   // --- Render ---
-return (
-  <BoardViewContext.Provider value={{ hideTodos, setHideTodos }}>
-    <div className="p-4">
-      <h1 className="text-2xl font-bold mb-6">{board.name}</h1>
+  return (
+    <BoardViewContext.Provider value={{ hideTodos, setHideTodos }}>
+      <div className="p-4">
+        <h1 className="text-2xl font-bold mb-6">{board.name}</h1>
 
-      {/* Add Todo Button */}
-      <button
-        onClick={() => openModal('ADD_TODO')}
-        className="mb-4 px-4 py-2 bg-blue-600 text-white rounded"
-      >
-        Add Todo
-      </button>
-
-      {/* Manage Board Button */}
-      <button
-        onClick={() => {
-          setHideTodos((prev) => {
-            const newHide = !prev;
-            if (prev) {
-              // Leaving management mode, discard unsaved changes
-              setUnsavedOrder(null);
-              if (categories) {
-                setCategoryOrder(categories.map(c => c.id));
-              }
-            }
-            return newHide;
-          });
-        }}
-        className="mt-4 px-4 py-2 bg-gray-600 text-white rounded"
-      >
-        {hideTodos ? 'Show Todos' : 'Hide Todos'}
-      </button>
-
-      {/* Generic Modal */}
-      {modalState.type && (
-        <Modal
-          isOpen={!!modalState.type}
-          onClose={closeModal}
-          title={modalTitleMap[modalState.type]}
+        {/* Add Todo Button */}
+        <button
+          onClick={() => openModal('ADD_TODO')}
+          className="mb-4 px-4 py-2 bg-blue-600 text-white rounded"
         >
-          {renderModalContent()}
-        </Modal>
-      )}
+          Add Todo
+        </button>
 
-      {/* Board Content */}
-      <DndContext
-        collisionDetection={closestCenter}
-        onDragStart={hideTodos ? () => {} : handleDragStart}
-        onDragEnd={hideTodos ? handleCategoryDragEnd : handleTodoDragEnd}
-        modifiers={[restrictToVerticalAxis]}
-      >
-        {hideTodos ? (
-          <SortableContext
-            items={categoryOrder}
-            strategy={verticalListSortingStrategy}
-          >
-            {categoryOrder.map((id) => {
-              const category = categoryMap[id];
-              if (!category) return null;
-              return (
-                <DraggableCategory
-                  key={category.id}
-                  category={category}
-                  onTodoClick={(todo: any) => openModal('UPDATE_TODO', todo)}
-                />
-              );
-            })}
-          </SortableContext>
-        ) : (
-          categoryOrder.map((id) => {
-            const category = categoryMap[id];
-            if (!category) return null;
-            return (
-              <DroppableColumn
-                key={category.id}
-                categoryId={category.id}
-                categoryName={category.name}
-                todos={categorizedTodos[category.id] || []}
-                onTodoClick={(todo) => openModal('UPDATE_TODO', todo)}
-              />
-            );
-          })
-        )}
-      </DndContext>
-
-      {/* Save button for category reordering */}
-      {hideTodos && unsavedOrder && (
+        {/* Manage Board Button */}
         <button
           onClick={() => {
-            reorderCategories.mutate(
-              unsavedOrder.map(String), // pass as string[]
-              {
-                onSuccess: () => setUnsavedOrder(null),
-                onError: (err) =>
-                  console.error('Failed to reorder categories', err),
+            setHideTodos((prev) => {
+              const newHide = !prev
+              if (prev) {
+                // Leaving management mode, discard unsaved changes
+                setUnsavedOrder(null)
+                setUnsavedCategories({})
+                if (categories) {
+                  setCategoryOrder(categories.map(c => c.id))
+                }
               }
-            );
+              return newHide
+            })
           }}
-          className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
+          className="mt-4 px-4 py-2 bg-gray-600 text-white rounded"
         >
-          Save Changes
+          {hideTodos ? 'Show Todos' : 'Hide Todos'}
         </button>
-      )}
-    </div>
-  </BoardViewContext.Provider>
-);
 
+        {/* Generic Modal */}
+        {modalState.type && (
+          <Modal
+            isOpen={!!modalState.type}
+            onClose={closeModal}
+            title={modalTitleMap[modalState.type]}
+          >
+            {renderModalContent()}
+          </Modal>
+        )}
+
+        {/* Board Content */}
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragStart={hideTodos ? () => {} : handleDragStart}
+          onDragEnd={hideTodos ? handleCategoryDragEnd : handleTodoDragEnd}
+          modifiers={[restrictToVerticalAxis]}
+        >
+          {hideTodos ? (
+            <SortableContext
+              items={categoryOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              {categoryOrder.map((id) => {
+                const category = categoryMap[id]
+                if (!category) return null
+                return (
+                  <DraggableCategory
+                    key={category.id}
+                    category={category}
+                    onTodoClick={(todo: any) => openModal('UPDATE_TODO', todo)}
+                  />
+                )
+              })}
+            </SortableContext>
+          ) : (
+            categoryOrder.map((id) => {
+              const category = categoryMap[id]
+              if (!category) return null
+              return (
+                <DroppableColumn
+                  key={category.id}
+                  categoryId={category.id}
+                  categoryName={category.name}
+                  todos={categorizedTodos[category.id] || []}
+                  onTodoClick={(todo) => openModal('UPDATE_TODO', todo)}
+                />
+              )
+            })
+          )}
+        </DndContext>
+
+        {/* Save button for category updates + reordering */}
+        {hideTodos && (unsavedOrder || Object.keys(unsavedCategories).length > 0) && (
+          <button
+            onClick={handleSaveCategoryChanges}
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded"
+          >
+            Save Changes
+          </button>
+        )}
+      </div>
+    </BoardViewContext.Provider>
+  )
 }
