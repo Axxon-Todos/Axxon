@@ -1,6 +1,9 @@
 "use client";
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, LayoutDashboard, Plus } from "lucide-react";
 import Dashboard from "@/components/features/dashboard/BoardList";
+import Modal from "@/components/ui/modal";
+import CreateBoardForm from "@/components/features/dashboard/CreateBoardForm";
 import Link from "next/link";
 
 export default function Sidebar({
@@ -10,6 +13,8 @@ export default function Sidebar({
   collapsed: boolean;
   setCollapsed: (value: boolean) => void;
 }) {
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
   return (
     <div
       className={`bg-gray-900 text-white flex flex-col h-screen fixed top-0 left-0 transition-all duration-300 ${
@@ -33,7 +38,11 @@ export default function Sidebar({
         {/* Dashboard link with two icons */}
         <div className="transition-all duration-300 delay-200">
           <Link href="/dashboard">
-            <SidebarItem collapsed={collapsed} label="Dashboard" />
+            <SidebarItem
+              collapsed={collapsed}
+              label="Dashboard"
+              onPlusClick={() => setIsCreateModalOpen(true)}
+            />
           </Link>
         </div>
 
@@ -46,6 +55,15 @@ export default function Sidebar({
           </div>
         )}
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create New Board"
+      >
+        <CreateBoardForm onClose={() => setIsCreateModalOpen(false)} />
+      </Modal>
     </div>
   );
 }
@@ -53,9 +71,11 @@ export default function Sidebar({
 function SidebarItem({
   label,
   collapsed,
+  onPlusClick,
 }: {
   label: string;
   collapsed: boolean;
+  onPlusClick?: () => void;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-2 hover:bg-gray-800 transition-colors cursor-pointer">
@@ -63,7 +83,16 @@ function SidebarItem({
         <LayoutDashboard className="w-5 h-5" />
         {!collapsed && <span className="whitespace-nowrap">{label}</span>}
       </div>
-      {!collapsed && <Plus className="w-4 h-4 text-gray-400" />}
+      {!collapsed && onPlusClick && (
+        <Plus
+          className="w-4 h-4 text-gray-400 hover:text-white transition-colors cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onPlusClick();
+          }}
+        />
+      )}
     </div>
   );
 }
