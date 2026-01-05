@@ -24,7 +24,7 @@ import { fetchTodosWithLabels } from '@/lib/api/todos/getTodosWithLabels'
 // --- Components ---
 import DroppableColumn from './DroppableColumn'
 import DraggableCategory from './DraggableCategory'
-import Modal from '@/components/ui/Modal'
+import Modal from '@/components/ui/modal'
 import AddTodoForm from '@/components/forms/AddTodoForms'
 import UpdateTodoForm from '@/components/forms/UpdateTodoForm'
 import UpdateCategoryForm from '@/components/forms/CategoryForm'

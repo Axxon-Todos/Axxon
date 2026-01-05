@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { TodoLabels } from '@/lib/models/todoLabels';
-import type {
-  AddLabelToTodo,
-  RemoveLabelFromTodo,
-  GetLabelsOnTodo,
-} from '@/lib/types/todoLabelTypes';
+import type { AddLabelToTodo, RemoveLabelFromTodo, GetLabelsOnTodo, } from '@/lib/types/todoLabelTypes';
+import { publishBoardUpdate } from '@/lib/wsServer';
 
 // Add a label to a todo (POST /board/[boardId]/todos/[todoId]/labels)
 export async function POST(_req: NextRequest, params: { boardId: string; todoId: string; labelId: string }) {
   try {
+    const board_id = Number(params.boardId);
     const todo_id = Number(params.todoId);
     const label_id = Number(params.labelId);
 
     const data: AddLabelToTodo = { todo_id, label_id };
     const todoLabel = await TodoLabels.addLabelToTodo(data);
+
+    // Fetch updated todo with all labels and publish to WebSocket
+    const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todo_id);
+    await publishBoardUpdate(String(board_id), {
+      type: 'todo:updated',
+      payload: updatedTodo
+    });
 
     return NextResponse.json(todoLabel, { status: 201 });
   } catch (error) {
@@ -27,11 +32,19 @@ export async function POST(_req: NextRequest, params: { boardId: string; todoId:
 export async function DELETE(_req: NextRequest, params: { boardId: string; todoId: string; labelId: string }
 ) {
   try {
+    const board_id = Number(params.boardId);
     const todo_id = Number(params.todoId);
     const label_id = Number(params.labelId);
 
     const data: RemoveLabelFromTodo = { todo_id, label_id };
     const removed = await TodoLabels.removeLabelFromTodo(data);
+
+    // Fetch updated todo with all labels and publish to WebSocket
+    const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todo_id);
+    await publishBoardUpdate(String(board_id), {
+      type: 'todo:updated',
+      payload: updatedTodo
+    });
 
     return NextResponse.json({ removed }, { status: 200 });
   } catch (error) {

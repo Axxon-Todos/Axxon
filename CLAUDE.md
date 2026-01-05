@@ -245,9 +245,10 @@ pnpm dev                    # Start both servers
 **Types:**
 - `src/lib/types/*.ts` - Domain-specific TypeScript definitions
 
-# Best Practices 
-
+# Rules
 - ensure that you follow proper seperation of concerns and maintain up-to-date security practices
 - Maintain proper organization with the rest of the codebase 
 - Ensure functions and components are organized correctly in their respected areas
 - frontend components on the ui layer should be used as global components such as my modals which is a global component that gets data placed into it depending on the usecase
+- add comments to code to briefly explain it purpose
+

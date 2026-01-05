@@ -1,9 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { updateTodoById } from '@/lib/api/todos/updateTodoById'
 import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
+import { fetchLabels } from '@/lib/api/labels/getLabels'
+import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
+import { useCreateLabel } from '@/lib/mutations/useCreateLabel'
+import LabelSelector from '@/components/features/boardView/LabelSelector'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 interface UpdateTodoFormProps {
@@ -40,6 +44,27 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
       onDelete?.()
     },
   })
+
+  // Label management
+  const { data: allLabels } = useQuery({
+    queryKey: ['labels', String(numericBoardId)],
+    queryFn: () => fetchLabels(String(numericBoardId))
+  })
+
+  const toggleLabel = useToggleTodoLabel(String(numericBoardId))
+  const createLabel = useCreateLabel(String(numericBoardId))
+
+  const handleToggleLabel = (labelId: number, isAdding: boolean) => {
+    toggleLabel.mutate({ todoId: numericTodoId, labelId, isAdding })
+  }
+
+  const handleCreateLabel = (name: string) => {
+    createLabel.mutate({ name }, {
+      onSuccess: (newLabel) => {
+        toggleLabel.mutate({ todoId: numericTodoId, labelId: newLabel.id, isAdding: true })
+      }
+    })
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -91,6 +116,17 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
         placeholder="Assignee ID (optional)"
         className="w-full p-2 border rounded"
       />
+      <div className="border rounded p-3">
+        <h3 className="text-sm font-semibold mb-2">Labels</h3>
+        <LabelSelector
+          boardId={String(numericBoardId)}
+          todoId={numericTodoId}
+          currentLabels={todo.labels || []}
+          allLabels={Array.isArray(allLabels) ? allLabels : []}
+          onToggleLabel={handleToggleLabel}
+          onCreateLabel={handleCreateLabel}
+        />
+      </div>
       <div className="flex justify-between items-center mt-4">
         <button
           type="button"

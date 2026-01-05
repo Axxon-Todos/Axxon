@@ -1,10 +1,17 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { TodoWithLabels } from '@/lib/types/todoTypes'
-import { LabelBaseData } from '@/lib/types/labelTypes'
 import { useBoardView } from '@/context/BoardViewContext'
+import { useLabelPopup } from '@/context/LabelPopupManager'
+import { fetchLabels } from '@/lib/api/labels/getLabels'
+import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
+import { useCreateLabel } from '@/lib/mutations/useCreateLabel'
+import LabelIcon from './LabelIcon'
+import LabelPopup from './LabelPopup'
+import LabelSelector from './LabelSelector'
 
 export default function DraggableTodo({
   todo,
@@ -28,19 +35,63 @@ export default function DraggableTodo({
         : undefined
 
   const { hideTodos } = useBoardView();
-  
+
+  // Use global popup context instead of local state to prevent multiple popups
+  const { openPopup, closePopup, isPopupOpen } = useLabelPopup()
+
   // Track drag status
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null)
+  const dragStartRef = useRef<{ x: number; y: number; target: HTMLElement } | null>(null)
   const clickTimeout = useRef<NodeJS.Timeout | null>(null)
+
+  // Label popup anchor reference
+  const labelIconRef = useRef<HTMLDivElement>(null)
+
+  // Fetch all board labels
+  const { data: allLabels } = useQuery({
+    queryKey: ['labels', String(todo.board_id)],
+    queryFn: () => fetchLabels(String(todo.board_id))
+  })
+
+  // Mutations
+  const toggleLabel = useToggleTodoLabel(String(todo.board_id))
+  const createLabel = useCreateLabel(String(todo.board_id))
+
+  // Cleanup: close popup if this todo is unmounting and its popup is open
+  useEffect(() => {
+    return () => {
+      if (isPopupOpen(todo.id)) {
+        closePopup()
+      }
+    }
+  }, [])
 
   // gets starting pointer position when mouse is pressed
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    dragStartRef.current = { x: e.clientX, y: e.clientY }
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      target: e.target as HTMLElement
+    }
   }
 
   // determines if mouseup is a click or drag based on distance moved
   const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!dragStartRef.current) return
+
+    // Check if click originated from label icon or its children
+    const clickedElement = dragStartRef.current.target
+    const labelIconElement = labelIconRef.current
+
+    if (labelIconElement && labelIconElement.contains(clickedElement)) {
+      dragStartRef.current = null
+      return // Don't trigger todo edit form
+    }
+
+    // Don't trigger modal if the label popup is currently open
+    if (isPopupOpen(todo.id)) {
+      dragStartRef.current = null
+      return
+    }
 
     const dx = Math.abs(e.clientX - dragStartRef.current.x)
     const dy = Math.abs(e.clientY - dragStartRef.current.y)
@@ -50,6 +101,26 @@ export default function DraggableTodo({
     if (isClick) clickTimeout.current = setTimeout(onClick, 0)
 
     dragStartRef.current = null
+  }
+
+  // Handlers for label actions
+  const handleLabelClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (labelIconRef.current) {
+      openPopup(todo.id, labelIconRef.current)
+    }
+  }
+
+  const handleToggleLabel = (labelId: number, isAdding: boolean) => {
+    toggleLabel.mutate({ todoId: todo.id, labelId, isAdding })
+  }
+
+  const handleCreateLabel = (name: string) => {
+    createLabel.mutate({ name }, {
+      onSuccess: (newLabel) => {
+        toggleLabel.mutate({ todoId: todo.id, labelId: newLabel.id, isAdding: true })
+      }
+    })
   }
 
   return (
@@ -68,19 +139,34 @@ export default function DraggableTodo({
         <p className="text-sm text-gray-500">Assignee ID: {todo.assignee_id}</p>
         <p className="text-sm text-gray-500">Priority: {todo.priority}</p>
       </div>
-      <div className="flex flex-wrap gap-2 mt-2">
-        {todo.labels?.map((label: LabelBaseData) => (
-          <span
-            key={label.id}
-            className="text-xs px-3 py-1 rounded-full"
-            style={{
-              backgroundColor: label.color,
-              color: '#fff',
-            }}
+      <div className="flex items-center gap-2 mt-2">
+        <div
+          ref={labelIconRef}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <LabelIcon
+            labels={todo.labels || []}
+            onClick={handleLabelClick}
+          />
+        </div>
+
+        {isPopupOpen(todo.id) && (
+          <LabelPopup
+            isOpen={isPopupOpen(todo.id)}
+            onClose={closePopup}
+            anchorRef={labelIconRef}
           >
-            {label.name}
-          </span>
-        ))}
+            <LabelSelector
+              boardId={String(todo.board_id)}
+              todoId={todo.id}
+              currentLabels={todo.labels || []}
+              allLabels={Array.isArray(allLabels) ? allLabels : []}
+              onToggleLabel={handleToggleLabel}
+              onCreateLabel={handleCreateLabel}
+            />
+          </LabelPopup>
+        )}
       </div>
     </div>
   )
