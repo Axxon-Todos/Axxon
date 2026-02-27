@@ -1,15 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { Board } from '@/lib/models/board';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardCreator } from '@/lib/utils/authorization';
 
+type DeleteBoardInput = {
+  boardId: number;
+  sessionUserId: number;
+};
 
-export async function deleteBoardController(_req: NextRequest, params: {boardId: string}) {
-  try{
-    const id = params.boardId;
-    const result = await Board.deleteBoard({id});
-   
-    return NextResponse.json(result, {status: 200});
-  }catch(error){
-    console.error('[DELETE_BOARD_ERROR]', error);
-    return NextResponse.json({error: 'failed to delete board'}, {status: 500});
+export async function deleteBoard({ boardId, sessionUserId }: DeleteBoardInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardCreator(boardId, sessionUserId);
+
+  const result = await Board.deleteBoard({ id: String(boardId) });
+  if (result === 0) {
+    throw new NotFoundError('Board not found');
+  }
+
+  return { deleted: result };
 }

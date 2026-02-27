@@ -87,4 +87,12 @@ export class Board {
     static getBoardById = async (id:number): Promise<BoardBaseData | null> => {
         return await knex('boards').where({id}).first() || null;
     };
+
+    static isCreator = async (boardId: number, userId: number): Promise<boolean> => {
+        const board = await knex('boards')
+            .where({ id: boardId, created_by: userId })
+            .first();
+
+        return Boolean(board);
+    };
 }

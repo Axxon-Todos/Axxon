@@ -48,16 +48,16 @@ export class Todos {
 
     static deleteTodo = async(data: DeleteTodoData): Promise<number> => {
         return await knex('todos')
-        .where({id: data.id})
+        .where({id: data.id, board_id: data.board_id})
         .del();
         
     };
 
     static updateTodo = async(data: UpdateTodoData): Promise<TodoBaseData | null> => {
-        const {id, ...updateData } = data;
+        const {id, board_id, ...updateData } = data;
 
         const [todo] = await knex('todos')
-        .where({id})
+        .where({id, board_id})
         .update(updateData)
         .returning('*')
 
@@ -82,7 +82,7 @@ export class Todos {
     //used for editing and detailed todo view
     static getTodoById = async (data: GetTodoByIdData): Promise<TodoBaseData | null> => {
         const todo = await knex('todos')
-        .where({ id: data.id })
+        .where({ id: data.id, board_id: data.board_id })
         .first();
 
         return todo || null;

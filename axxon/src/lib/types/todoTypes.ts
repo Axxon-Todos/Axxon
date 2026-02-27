@@ -25,11 +25,14 @@ export type CreateTodoData = {
   is_complete?: boolean;
 };
 
-export type DeleteTodoData = Pick<TodoBaseData, 'id'>;
-export type UpdateTodoData = Partial<Pick<TodoBaseData, 'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'>> & { id: number };
+export type DeleteTodoData = Pick<TodoBaseData, 'id' | 'board_id'>;
+export type UpdateTodoData = Partial<Pick<TodoBaseData, 'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'>> & {
+  id: number;
+  board_id: number;
+};
 export type ListAllTodosData = Pick<TodoBaseData, 'board_id'>
 export type GetTodoByNameData = Pick<TodoBaseData, 'title' | 'board_id'>;
-export type GetTodoByIdData = Pick<TodoBaseData, 'id'>;
+export type GetTodoByIdData = Pick<TodoBaseData, 'id' | 'board_id'>;
 export type GetTodoByCompletionData = Pick<TodoBaseData, 'is_complete'>;
 export type GetTodoByAssigneeData = Pick<TodoBaseData, 'assignee_id' | 'board_id'>;
 export type GetTodoByStatusData = Pick<TodoBaseData, 'category_id' | 'board_id'>;

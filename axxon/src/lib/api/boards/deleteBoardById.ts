@@ -1,5 +1,7 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function deleteBoardById(id: string) {
-  const res = await fetch(`/api/board/${id}`, {
+  const res = await apiFetch(`/api/board/${id}`, {
     method: 'DELETE',
   });
 

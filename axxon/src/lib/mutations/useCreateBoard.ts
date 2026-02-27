@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/api/apiFetch'
 
 export function useCreateBoard() {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (data: { name: string; color?: string }) => {
-      const res = await fetch('/api/board', {
+      const res = await apiFetch('/api/board', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

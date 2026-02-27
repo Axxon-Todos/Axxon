@@ -1,12 +1,26 @@
-import { GET as getLabelsForTodo } from '@/lib/controllers/todoLabels/todoLabelControllers';
-import type { NextRequest } from 'next/server';
+import { getTodoLabels } from '@/lib/controllers/todoLabels/todoLabelControllers';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import { parseNumericRouteParam, RouteContext } from '@/lib/utils/apiRoute';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const pathParts = url.pathname.split('/');
+type TodoLabelRouteParams = {
+  boardId: string;
+  todoId: string;
+};
 
-  const boardId = pathParts[3];
-  const todoId = pathParts[5];  
+export async function GET(req: NextRequest, context: RouteContext<TodoLabelRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId, todoId } = await context.params;
+    const labels = await getTodoLabels({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      todoId: parseNumericRouteParam(todoId, 'todo id'),
+      sessionUserId: session.userId,
+    });
 
-  return getLabelsForTodo(req, { boardId, todoId });
+    return NextResponse.json(labels, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[GET_LABELS_FOR_TODO_ERROR]', 'Failed to get labels for todo');
+  }
 }

@@ -1,62 +1,93 @@
 'use server';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import db from '../../db/db';
-import jwt from 'jsonwebtoken';
+import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { Users } from '@/lib/models/users';
+import type { User } from '@/lib/types/users';
+import { BadRequestError, UnauthorizedError } from '@/lib/utils/apiErrors';
 
-//using NextRequest and NextResponse TypeAnnotations helps identify specific return values 
-//while allowing me to utilize next helpers like NextResponse.json()   
-export const handleOAuthLogin = async (req: NextRequest): Promise<NextResponse>=> {
-    try{
-        //grabs the users info
-        const body = await req.json();
-    //sorts out all of the incoming info from the user 
-        const { email, first_name, last_name, avatar_url} = body;
+const googleJwks = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
-    //checks if email is there
-    if(!email) return NextResponse.json({ message: 'Your Email is required to login.'}, { status: 400})
-
-
-        //Checks db to see if user exists
-        //first() returns the first matching result meaning
-        //  it'll be a singular object return rather than an arr
-        let user = await db('users').where({email}).first();
-
-        //if user doesn't exist, signup will be triggered
-        if(!user){
-            const [newUser] =  await db('users')
-                .insert({email, first_name, last_name, avatar_url})
-                .returning('*');
-            user = newUser;
-        }
- 
-        // Make sure JWT_SECRET exists
-        const jwtSecret = process.env.JWT_SECRET;
-        if (!jwtSecret) {
-            console.error('JWT_SECRET is not defined in environment variables');
-            return NextResponse.json({ message: 'Server misconfiguration.' }, {status:500});
-        }
-        
-        const token = jwt.sign(
-            { id: user.id, email: user.email, name: user.first_name },
-             jwtSecret,
-            { expiresIn: '7d' }
-        ); // expiration set to seven days
-
-        //waits for cookieStoring to return then sets up validated and secure cookie
-        const cookieStoring = await cookies();
-        cookieStoring.set('token', token, {
-            httpOnly: true, //prevents js from reading cookies
-            secure: process.env.NODE_ENV === 'production',
-            maxAge: 60 * 60 * 24 * 7, // 7 days
-            path: '/'
-        });
-       
-        return NextResponse.json({ user, token }, {status:200});
-        
-    }catch (error) {
-        console.error('OAuth login failed:', error);
-        return NextResponse.json({ message: 'Internal server error.' }, {status:500});
-    }
+type GoogleTokenResponse = {
+  error?: string;
+  error_description?: string;
+  id_token?: string;
 };
+
+type GoogleIdTokenPayload = JWTPayload & {
+  email?: string;
+  email_verified?: boolean;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+};
+
+type CompleteGoogleOAuthLoginInput = {
+  code: string;
+};
+
+function getGoogleOAuthConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI;
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Google OAuth configuration is incomplete');
+  }
+
+  return { clientId, clientSecret, redirectUri };
+}
+
+// Exchanges the Google authorization code and resolves the local user.
+export async function completeGoogleOAuthLogin({
+  code,
+}: CompleteGoogleOAuthLoginInput): Promise<User> {
+  if (!code) {
+    throw new BadRequestError('Authorization code not provided');
+  }
+
+  const { clientId, clientSecret, redirectUri } = getGoogleOAuthConfig();
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  let tokenData: GoogleTokenResponse;
+  try {
+    tokenData = (await tokenRes.json()) as GoogleTokenResponse;
+  } catch {
+    throw new BadRequestError('Failed to exchange token');
+  }
+
+  if (!tokenRes.ok || tokenData.error || !tokenData.id_token) {
+    throw new BadRequestError('Failed to exchange token');
+  }
+
+  let payload: JWTPayload;
+  try {
+    ({ payload } = await jwtVerify(tokenData.id_token, googleJwks, {
+      audience: clientId,
+      issuer: ['https://accounts.google.com', 'accounts.google.com'],
+    }));
+  } catch {
+    throw new UnauthorizedError('Google identity token could not be verified');
+  }
+
+  const decoded = payload as GoogleIdTokenPayload;
+  if (!decoded.email || decoded.email_verified !== true) {
+    throw new UnauthorizedError('Google account email could not be verified');
+  }
+
+  return Users.findOrCreateByGoogle({
+    email: decoded.email,
+    first_name: decoded.given_name ?? '',
+    last_name: decoded.family_name ?? '',
+    avatar_url: decoded.picture ?? '',
+  });
+}

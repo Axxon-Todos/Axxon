@@ -1,13 +1,14 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function addLabelToTodo(
   boardId: string | number,
   todoId: number,
   labelId: number
 ) {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/board/${boardId}/todos/${todoId}/labels/${labelId}`,
     {
       method: 'POST',
-      credentials: 'include',
     }
   )
   if (!res.ok) throw new Error('Failed to add label to todo')

@@ -1,68 +1,117 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { TodoLabels } from '@/lib/models/todoLabels';
-import type { AddLabelToTodo, RemoveLabelFromTodo, GetLabelsOnTodo, } from '@/lib/types/todoLabelTypes';
+import type {
+  AddLabelToTodo as AddLabelToTodoData,
+  GetLabelsOnTodo,
+  RemoveLabelFromTodo as RemoveLabelFromTodoData,
+} from '@/lib/types/todoLabelTypes';
 import { publishBoardUpdate } from '@/lib/wsServer';
+import { Labels } from '@/lib/models/labels';
+import { Todos } from '@/lib/models/todos';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardMember } from '@/lib/utils/authorization';
 
-// Add a label to a todo (POST /board/[boardId]/todos/[todoId]/labels)
-export async function POST(_req: NextRequest, params: { boardId: string; todoId: string; labelId: string }) {
-  try {
-    const board_id = Number(params.boardId);
-    const todo_id = Number(params.todoId);
-    const label_id = Number(params.labelId);
+type TodoLabelRouteInput = {
+  boardId: number;
+  todoId: number;
+  sessionUserId: number;
+};
 
-    const data: AddLabelToTodo = { todo_id, label_id };
-    const todoLabel = await TodoLabels.addLabelToTodo(data);
+type AddLabelToTodoInput = TodoLabelRouteInput & {
+  labelId: number;
+};
 
-    // Fetch updated todo with all labels and publish to WebSocket
-    const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todo_id);
-    await publishBoardUpdate(String(board_id), {
-      type: 'todo:updated',
-      payload: updatedTodo
-    });
+type RemoveLabelFromTodoInput = TodoLabelRouteInput & {
+  labelId: number;
+};
 
-    return NextResponse.json(todoLabel, { status: 201 });
-  } catch (error) {
-    console.error('[ADD_LABEL_TO_TODO_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to add label to todo' }, { status: 500 });
+// Adds a label to a todo in a board.
+export async function addLabelToTodo({
+  boardId,
+  todoId,
+  labelId,
+  sessionUserId,
+}: AddLabelToTodoInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId) || !Number.isFinite(labelId)) {
+    throw new BadRequestError('Invalid board, todo, or label id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
+  if (!todo) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  const label = await Labels.getLabelById({ id: labelId, board_id: boardId });
+  if (!label) {
+    throw new NotFoundError('Label not found');
+  }
+
+  const data: AddLabelToTodoData = { todo_id: todoId, label_id: labelId };
+  const todoLabel = await TodoLabels.addLabelToTodo(data);
+
+  const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todoId, boardId);
+  await publishBoardUpdate(String(boardId), {
+    type: 'todo:updated',
+    payload: updatedTodo,
+  });
+
+  return todoLabel;
 }
 
 
-// Remove a label from a todo (DELETE /board/[boardId]/todos/[todoId]/labels/[labelId])
-export async function DELETE(_req: NextRequest, params: { boardId: string; todoId: string; labelId: string }
-) {
-  try {
-    const board_id = Number(params.boardId);
-    const todo_id = Number(params.todoId);
-    const label_id = Number(params.labelId);
-
-    const data: RemoveLabelFromTodo = { todo_id, label_id };
-    const removed = await TodoLabels.removeLabelFromTodo(data);
-
-    // Fetch updated todo with all labels and publish to WebSocket
-    const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todo_id);
-    await publishBoardUpdate(String(board_id), {
-      type: 'todo:updated',
-      payload: updatedTodo
-    });
-
-    return NextResponse.json({ removed }, { status: 200 });
-  } catch (error) {
-    console.error('[REMOVE_LABEL_FROM_TODO_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to remove label from todo' }, { status: 500 });
+// Removes a label from a todo in a board.
+export async function removeLabelFromTodo({
+  boardId,
+  todoId,
+  labelId,
+  sessionUserId,
+}: RemoveLabelFromTodoInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId) || !Number.isFinite(labelId)) {
+    throw new BadRequestError('Invalid board, todo, or label id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
+  if (!todo) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  const label = await Labels.getLabelById({ id: labelId, board_id: boardId });
+  if (!label) {
+    throw new NotFoundError('Label not found');
+  }
+
+  const data: RemoveLabelFromTodoData = { todo_id: todoId, label_id: labelId };
+  const removed = await TodoLabels.removeLabelFromTodo(data);
+
+  const updatedTodo = await TodoLabels.getTodoByIdWithLabels(todoId, boardId);
+  await publishBoardUpdate(String(boardId), {
+    type: 'todo:updated',
+    payload: updatedTodo,
+  });
+
+  return { removed };
 }
 
-// Get all labels for a todo (GET /board/[boardId]/todos/[todoId]/labels)
-export async function GET(_req: NextRequest, params: { boardId: string; todoId: string }) {
-  try {
-    const todo_id = Number(params.todoId);
-    const data: GetLabelsOnTodo = { todo_id };
-    const labels = await TodoLabels.getLabelsForTodo(data);
-
-    return NextResponse.json(labels, { status: 200 });
-  } catch (error) {
-    console.error('[GET_LABELS_FOR_TODO_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to get labels for todo' }, { status: 500 });
+// Lists labels for a todo in a board.
+export async function getTodoLabels({
+  boardId,
+  todoId,
+  sessionUserId,
+}: TodoLabelRouteInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId)) {
+    throw new BadRequestError('Invalid board or todo id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
+  if (!todo) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  const data: GetLabelsOnTodo = { todo_id: todoId };
+  return TodoLabels.getLabelsForTodo(data);
 }

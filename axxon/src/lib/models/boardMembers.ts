@@ -4,8 +4,6 @@ import type { BoardBaseData } from '../types/boardTypes';
 import type { User } from '../types/users';
 import { Conversations } from './conversations';
 
-
-
 export class BoardMembers {
 
   // user_id destructures the data so that you can utilize it under where
@@ -37,7 +35,17 @@ export class BoardMembers {
 
     if (users.length === 0) return;
 
-    const memberInserts = users.map(user => ({
+    const existingMembers = await knex('board_members')
+      .where({ board_id: data.board_id })
+      .whereIn('user_id', users.map((user) => user.id))
+      .select('user_id');
+
+    const existingMemberIds = new Set(existingMembers.map((member) => member.user_id));
+    const newUsers = users.filter((user) => !existingMemberIds.has(user.id));
+
+    if (newUsers.length === 0) return;
+
+    const memberInserts = newUsers.map(user => ({
       user_id: user.id,
       board_id: data.board_id,
     }));
@@ -50,16 +58,37 @@ export class BoardMembers {
     if (!mainConvo) return;
 
     // Add each user to the main conversation
-    const conversationMemberInserts = users.map(user => ({
+    const existingConversationMembers = await knex('conversation_members')
+      .where({ conversation_id: mainConvo.id })
+      .whereIn('user_id', newUsers.map((user) => user.id))
+      .select('user_id');
+
+    const existingConversationMemberIds = new Set(
+      existingConversationMembers.map((member) => member.user_id)
+    );
+
+    const conversationMemberInserts = newUsers
+      .filter((user) => !existingConversationMemberIds.has(user.id))
+      .map(user => ({
       conversation_id: mainConvo.id,
       user_id: user.id,
     }));
 
-    await knex('conversation_members').insert(conversationMemberInserts);
+    if (conversationMemberInserts.length > 0) {
+      await knex('conversation_members').insert(conversationMemberInserts);
+    }
   };
 
   //used for detailed member view/deletion section
   static getMemberById = async (data: GetMemberById): Promise<BoardMembersBaseData | null> => {
     return await knex('board_members').where({user_id: data.user_id, board_id: data.board_id}).first() || null;
+  };
+
+  static isMember = async (data: GetMemberById): Promise<boolean> => {
+    const membership = await knex('board_members')
+      .where({ user_id: data.user_id, board_id: data.board_id })
+      .first();
+
+    return Boolean(membership);
   };
 }

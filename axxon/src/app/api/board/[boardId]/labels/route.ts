@@ -1,36 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { POST as createLabel, GET as listLabels } from '@/lib/controllers/labels/labelControllers';
+import { createLabel, listLabels } from '@/lib/controllers/labels/labelControllers';
+import type { CreateLabelData } from '@/lib/types/labelTypes';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import {
+  parseJsonBody,
+  parseNumericRouteParam,
+  RouteContext,
+} from '@/lib/utils/apiRoute';
 
-interface RouteParams {
+type RouteParams = {
   boardId: string;
-}
+};
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<RouteParams> } // note the Promise here
+  context: RouteContext<RouteParams>
 ) {
   try {
-    const { boardId } = await context.params; // await the params object
-    if (!boardId) throw new Error('Missing boardId');
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const labels = await listLabels({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+    });
 
-    const labels = await listLabels(req, { boardId });
     return NextResponse.json(labels, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    return handleApiError(error, '[LIST_LABELS_ERROR]', 'Failed to list labels');
   }
 }
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<RouteParams> } // again, async
+  context: RouteContext<RouteParams>
 ) {
   try {
+    const session = await requireSession(req);
     const { boardId } = await context.params;
-    if (!boardId) throw new Error('Missing boardId');
+    const data = await parseJsonBody<Omit<CreateLabelData, 'board_id'>>(req);
+    const label = await createLabel({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+      data,
+    });
 
-    const newLabel = await createLabel(req, { boardId });
-    return NextResponse.json(newLabel, { status: 201 });
+    return NextResponse.json(label, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+    return handleApiError(error, '[CREATE_LABEL_ERROR]', 'Failed to create label');
   }
 }

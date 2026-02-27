@@ -1,83 +1,148 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { Labels } from '@/lib/models/labels';
 import type { CreateLabelData, UpdateLabelData } from '@/lib/types/labelTypes';
 import { publishBoardUpdate } from '@/lib/wsServer';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardMember } from '@/lib/utils/authorization';
 
-// Create Label (POST /board/[boardId]/labels)
-export async function POST(req: NextRequest, params: { boardId: string } ) {
-    const board_id = Number(params.boardId);
-    const body = await req.json();
+type CreateLabelPayload = Omit<CreateLabelData, 'board_id'>;
 
-    const data: CreateLabelData = { ...body, board_id };
-    const label = await Labels.createLabel(data);
+type UpdateLabelPayload = Partial<Pick<UpdateLabelData, 'name' | 'color'>>;
 
-    // Publish to WebSocket for real-time sync
-    await publishBoardUpdate(String(board_id), {
-      type: 'label:created',
-      payload: label
-    });
+type CreateLabelInput = {
+  boardId: number;
+  sessionUserId: number;
+  data: CreateLabelPayload;
+};
 
-    return label;
-}
+type ListLabelsInput = {
+  boardId: number;
+  sessionUserId: number;
+};
 
-// List Labels in Board (GET /board/[boardId]/labels)
-export async function GET(_req: NextRequest, params: { boardId: string } ) {
-    const board_id = Number(params.boardId);
-    return await Labels.listAllLabelsInBoard({ board_id });
-}
+type UpdateLabelInput = {
+  boardId: number;
+  labelId: number;
+  sessionUserId: number;
+  data: UpdateLabelPayload;
+};
 
-// Update Label (PATCH /board/[boardId]/labels/[labelId])
-export async function PATCH(req: NextRequest, params: { boardId: string; labelId: string } ) {
-  try {
-    const id = Number(params.labelId);
-    const board_id = Number(params.boardId);
-    const body = await req.json();
+type DeleteLabelInput = {
+  boardId: number;
+  labelId: number;
+  sessionUserId: number;
+};
 
-    const data: UpdateLabelData = { ...body, id, board_id };
-    const label = await Labels.updateLabel(data);
+type GetLabelByIdInput = {
+  boardId: number;
+  labelId: number;
+  sessionUserId: number;
+};
 
-    // Publish to WebSocket for real-time sync
-    await publishBoardUpdate(String(board_id), {
-      type: 'label:updated',
-      payload: label
-    });
-
-    return NextResponse.json(label, { status: 200 });
-  } catch (error) {
-    console.error('[UPDATE_LABEL_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to update label' }, { status: 500 });
+// Creates a label in a board.
+export async function createLabel({
+  boardId,
+  sessionUserId,
+  data,
+}: CreateLabelInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const label = await Labels.createLabel({ ...data, board_id: boardId });
+
+  // Publish label changes after persistence succeeds.
+  await publishBoardUpdate(String(boardId), {
+    type: 'label:created',
+    payload: label,
+  });
+
+  return label;
 }
 
-// Delete Label (DELETE /board/[boardId]/labels/[labelId])
-export async function DELETE(_req: NextRequest, params: { boardId: string; labelId: string } ) {
-  try {
-    const id = Number(params.labelId);
-    const board_id = Number(params.boardId);
-    const deleted = await Labels.deleteLabel({ id });
-
-    // Publish to WebSocket for real-time sync
-    await publishBoardUpdate(String(board_id), {
-      type: 'label:deleted',
-      payload: { id }
-    });
-
-    return NextResponse.json({ deleted }, { status: 200 });
-  } catch (error) {
-    console.error('[DELETE_LABEL_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to delete label' }, { status: 500 });
+// Lists labels in a board.
+export async function listLabels({ boardId, sessionUserId }: ListLabelsInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+  return Labels.listAllLabelsInBoard({ board_id: boardId });
 }
 
-// Get Label by ID (GET /board/[boardId]/labels/[labelId])
-export async function getLabelByIdController(_req: NextRequest, params: { boardId: string; labelId: string } ) {
-  try {
-    const id = Number(params.labelId);
-    const label = await Labels.getLabelById({ id });
-
-    return NextResponse.json(label, { status: 200 });
-  } catch (error) {
-    console.error('[GET_LABEL_BY_ID_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to retrieve label' }, { status: 500 });
+// Updates a label in a board.
+export async function updateLabel({
+  boardId,
+  labelId,
+  sessionUserId,
+  data,
+}: UpdateLabelInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(labelId)) {
+    throw new BadRequestError('Invalid board or label id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const allowedKeys: Array<keyof UpdateLabelPayload> = ['name', 'color'];
+  const filteredBody = Object.fromEntries(
+    Object.entries(data ?? {}).filter(([key]) => allowedKeys.includes(key as keyof UpdateLabelPayload))
+  );
+
+  const label = await Labels.updateLabel({ ...filteredBody, id: labelId, board_id: boardId });
+  if (!label) {
+    throw new NotFoundError('Label not found');
+  }
+
+  await publishBoardUpdate(String(boardId), {
+    type: 'label:updated',
+    payload: label,
+  });
+
+  return label;
+}
+
+// Deletes a label from a board.
+export async function deleteLabel({
+  boardId,
+  labelId,
+  sessionUserId,
+}: DeleteLabelInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(labelId)) {
+    throw new BadRequestError('Invalid board or label id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const deleted = await Labels.deleteLabel({ id: labelId, board_id: boardId });
+  if (deleted === 0) {
+    throw new NotFoundError('Label not found');
+  }
+
+  await publishBoardUpdate(String(boardId), {
+    type: 'label:deleted',
+    payload: { id: labelId },
+  });
+
+  return { deleted };
+}
+
+// Gets a single label in a board.
+export async function getLabelById({
+  boardId,
+  labelId,
+  sessionUserId,
+}: GetLabelByIdInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(labelId)) {
+    throw new BadRequestError('Invalid board or label id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const label = await Labels.getLabelById({ id: labelId, board_id: boardId });
+  if (!label) {
+    throw new NotFoundError('Label not found');
+  }
+
+  return label;
 }

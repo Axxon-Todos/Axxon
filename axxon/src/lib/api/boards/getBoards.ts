@@ -1,8 +1,9 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function fetchBoards(id: string): Promise<any[]> {
   try {
-    const res = await fetch(`/api/users/${id}/boards`, {
+    const res = await apiFetch(`/api/users/${id}/boards`, {
       method: 'GET',
-      credentials: 'include',
       cache: 'no-store',
     });
 
