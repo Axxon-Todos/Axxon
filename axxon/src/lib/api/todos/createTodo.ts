@@ -1,3 +1,5 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export type NewTodoInput = {
   title: string;
   description?: string;
@@ -11,7 +13,7 @@ export const createTodo = async (
   boardId: number,
   data: NewTodoInput
 ): Promise<any> => {
-  const res = await fetch(`/api/board/${boardId}/todos`, {
+  const res = await apiFetch(`/api/board/${boardId}/todos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)

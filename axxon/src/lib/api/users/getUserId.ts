@@ -1,8 +1,9 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function getUserId(): Promise<string | null> {
   try {
-    const res = await fetch('/api/users/me', {
+    const res = await apiFetch('/api/users/me', {
       method: 'GET',
-      credentials: 'include',
       cache: 'no-store',
     })
 

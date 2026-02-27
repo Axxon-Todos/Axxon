@@ -1,19 +1,48 @@
-import { POST as createTodo, GET as listTodos } from '@/lib/controllers/todos/todoControllers';
-import type { NextRequest } from 'next/server';
+import { createTodo, listTodos } from '@/lib/controllers/todos/todoControllers';
+import type { CreateTodoData } from '@/lib/types/todoTypes';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import {
+  parseJsonBody,
+  parseNumericRouteParam,
+  RouteContext,
+} from '@/lib/utils/apiRoute';
+import { NextRequest, NextResponse } from 'next/server';
 
-// Helper to extract boardId from the request URL
-function getBoardId(req: NextRequest) {
-  const parts = new URL(req.url).pathname.split('/');
-  // ['', 'api', 'board', boardId, 'todos']
-  return parts[3];
+type TodoRouteParams = {
+  boardId: string;
+};
+
+type CreateTodoPayload = Omit<CreateTodoData, 'board_id'>;
+
+export async function POST(req: NextRequest, context: RouteContext<TodoRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const data = await parseJsonBody<CreateTodoPayload>(req);
+    const todo = await createTodo({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+      data,
+    });
+
+    return NextResponse.json(todo, { status: 201 });
+  } catch (error) {
+    return handleApiError(error, '[CREATE_TODO_ERROR]', 'Failed to create todo');
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const boardId = getBoardId(req);
-  return createTodo(req, { boardId });
-}
+export async function GET(req: NextRequest, context: RouteContext<TodoRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const todos = await listTodos({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+    });
 
-export async function GET(req: NextRequest) {
-  const boardId = getBoardId(req);
-  return listTodos(req, { boardId });
+    return NextResponse.json(todos, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[LIST_TODOS_ERROR]', 'Failed to list todos');
+  }
 }

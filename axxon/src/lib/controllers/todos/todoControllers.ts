@@ -1,108 +1,168 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { Todos } from '@/lib/models/todos';
 import type { CreateTodoData, UpdateTodoData } from '@/lib/types/todoTypes';
-import { publishBoardUpdate } from '@/lib/wsServer'
+import { publishBoardUpdate } from '@/lib/wsServer';
 import { TodoLabels } from '@/lib/models/todoLabels';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardMember } from '@/lib/utils/authorization';
 
-// Create Todo (POST /board/[boardId]/todos)
-export async function POST(req: NextRequest, params: { boardId: string }) {
-  try {
-    const board_id = Number(params.boardId);
-    const body = await req.json();
+type CreateTodoPayload = Omit<CreateTodoData, 'board_id'>;
 
-    const data: CreateTodoData = { ...body, board_id };
-    const todo = await Todos.createTodo(data);
+type UpdateTodoPayload = Partial<
+  Pick<
+    UpdateTodoData,
+    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'
+  >
+>;
 
-    // Fetch the full todo with labels
-    const fullTodo = await TodoLabels.getTodosWithLabels(board_id);
-    const createdTodo = fullTodo.find(t => t.id === todo.id);
+type CreateTodoInput = {
+  boardId: number;
+  sessionUserId: number;
+  data: CreateTodoPayload;
+};
 
-    // --- PUBLISH TO WEBSOCKET ---
-    if (createdTodo) {
-      await publishBoardUpdate(String(board_id), {
-        type: 'todo:created',
-        payload: createdTodo
-      });
-    }
+type ListTodosInput = {
+  boardId: number;
+  sessionUserId: number;
+};
 
-    return NextResponse.json(todo, { status: 201 });
-  } catch (error) {
-    console.error('[CREATE_TODO_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to create todo' }, { status: 500 });
+type UpdateTodoInput = {
+  boardId: number;
+  todoId: number;
+  sessionUserId: number;
+  data: UpdateTodoPayload;
+};
+
+type DeleteTodoInput = {
+  boardId: number;
+  todoId: number;
+  sessionUserId: number;
+};
+
+type GetTodoByIdInput = {
+  boardId: number;
+  todoId: number;
+  sessionUserId: number;
+};
+
+// Creates a todo in a board.
+export async function createTodo({
+  boardId,
+  sessionUserId,
+  data,
+}: CreateTodoInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
-}
 
-// List Todos (GET /board/[boardId]/todos)
-export async function GET(_req: NextRequest, params: { boardId: string }) {
-  try {
-    const board_id = Number(params.boardId);
-    const todos = await Todos.listTodosInBoard({ board_id });
+  await requireBoardMember(boardId, sessionUserId);
 
-    return NextResponse.json(todos, { status: 200 });
-  } catch (error) {
-    console.error('[LIST_TODOS_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to list todos' }, { status: 500 });
-  }
-}
+  const todo = await Todos.createTodo({ ...data, board_id: boardId });
 
-// Update Todo (PATCH /board/[boardId]/todos/[todoId])
-export async function PATCH(req: NextRequest, params: { boardId: string; todoId: string }) {
-  try {
-    const id = Number(params.todoId);
-    const board_id = Number(params.boardId);
-    const body = await req.json();
+  // Publish the hydrated todo to keep realtime clients in sync.
+  const fullTodo = await TodoLabels.getTodosWithLabels(boardId);
+  const createdTodo = fullTodo.find(item => item.id === todo.id);
 
-    const data: UpdateTodoData = { ...body, id, board_id };
-
-    const updated = await Todos.updateTodo(data);
-
-    // Hydrate with labels (make sure your model supports this)
-    const fullTodo = await TodoLabels.getTodoByIdWithLabels(updated!.id);
-
-    // --- PUBLISH TO WEBSOCKET ---
-    await publishBoardUpdate(String(board_id), {
-      type: "todo:updated",
-      payload: fullTodo,
+  if (createdTodo) {
+    await publishBoardUpdate(String(boardId), {
+      type: 'todo:created',
+      payload: createdTodo,
     });
-
-    // Returns full todo to client
-    return NextResponse.json(fullTodo, { status: 200 });
-  } catch (error) {
-    console.error("[UPDATE_TODO_ERROR]", error);
-    return NextResponse.json({ error: "Failed to update todo" }, { status: 500 });
   }
+
+  return todo;
 }
 
-// Delete Todo (DELETE /board/[boardId]/todos/[todoId])
-export async function DELETE(_req: NextRequest, params: { boardId: string; todoId: string }) {
-  try {
-    const id = Number(params.todoId);
-    const board_id = Number(params.boardId);
-
-    const deleted = await Todos.deleteTodo({ id });
-
-    // --- PUBLISH TO WEBSOCKET ---
-    await publishBoardUpdate(String(board_id), {
-      type: 'todo:deleted',
-      payload: { id },
-    });
-
-    return NextResponse.json({ deleted }, { status: 200 });
-  } catch (error) {
-    console.error('[DELETE_TODO_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to delete todo' }, { status: 500 });
+// Lists todos in a board.
+export async function listTodos({ boardId, sessionUserId }: ListTodosInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+  return Todos.listTodosInBoard({ board_id: boardId });
 }
 
-// Get Todo by ID (GET /board/[boardId]/todos/[todoId])
-export async function getTodoByIdController(_req: NextRequest, params: { boardId: string; todoId: string }) {
-  try {
-    const id = Number(params.todoId);
-    const todo = await Todos.getTodoById({ id });
-
-    return NextResponse.json(todo, { status: 200 });
-  } catch (error) {
-    console.error('[GET_TODO_BY_ID_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to retrieve todo' }, { status: 500 });
+// Updates a todo in a board.
+export async function updateTodo({
+  boardId,
+  todoId,
+  sessionUserId,
+  data,
+}: UpdateTodoInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId)) {
+    throw new BadRequestError('Invalid board or todo id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const allowedKeys: Array<keyof UpdateTodoPayload> = [
+    'title',
+    'description',
+    'due_date',
+    'assignee_id',
+    'priority',
+    'category_id',
+    'is_complete',
+  ];
+  const filteredBody = Object.fromEntries(
+    Object.entries(data ?? {}).filter(([key]) => allowedKeys.includes(key as keyof UpdateTodoPayload))
+  );
+
+  const updated = await Todos.updateTodo({ ...filteredBody, id: todoId, board_id: boardId });
+  if (!updated) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  const fullTodo = await TodoLabels.getTodoByIdWithLabels(updated.id, boardId);
+
+  await publishBoardUpdate(String(boardId), {
+    type: 'todo:updated',
+    payload: fullTodo,
+  });
+
+  return fullTodo;
+}
+
+// Deletes a todo from a board.
+export async function deleteTodo({
+  boardId,
+  todoId,
+  sessionUserId,
+}: DeleteTodoInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId)) {
+    throw new BadRequestError('Invalid board or todo id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const deleted = await Todos.deleteTodo({ id: todoId, board_id: boardId });
+  if (deleted === 0) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  await publishBoardUpdate(String(boardId), {
+    type: 'todo:deleted',
+    payload: { id: todoId },
+  });
+
+  return { deleted };
+}
+
+// Gets a single todo in a board.
+export async function getTodoById({
+  boardId,
+  todoId,
+  sessionUserId,
+}: GetTodoByIdInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(todoId)) {
+    throw new BadRequestError('Invalid board or todo id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+  const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
+  if (!todo) {
+    throw new NotFoundError('Todo not found');
+  }
+
+  return todo;
 }

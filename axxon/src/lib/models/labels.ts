@@ -33,15 +33,15 @@ export class Labels {
 
     static deleteLabel = async(data: DeleteLabelData ): Promise<number> => {
         return await knex('labels')
-        .where({id: data.id})
+        .where({id: data.id, board_id: data.board_id})
         .del();
     };
 
     static updateLabel = async(data: UpdateLabelData): Promise<LabelBaseData | null> => {
-        const {id, ...updateData } = data;
+        const {id, board_id, ...updateData } = data;
 
         const [label] = await knex('labels')
-        .where({id})
+        .where({id, board_id})
         .update(updateData)
         .returning('*')
 
@@ -63,6 +63,6 @@ export class Labels {
     };
 
     static getLabelById = async(data: GetLabelByIdData): Promise<LabelBaseData | null> => {
-        return await knex('labels').where({id: data.id}).first() || null;
+        return await knex('labels').where({id: data.id, board_id: data.board_id}).first() || null;
     };
 }

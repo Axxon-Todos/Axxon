@@ -15,7 +15,7 @@ export class Categories {
   };
 
   static getCategoryById = async (data: GetCategoryById): Promise<CategoryBaseData | null> =>{
-    return await knex('categories').where({id: data.id}).first() || null
+    return await knex('categories').where({id: data.id, board_id: data.board_id}).first() || null
   };
 
   // -- CRUD OPERATIONS -- //
@@ -147,7 +147,7 @@ export class Categories {
 
       // --- Perform the update ---
       const [updatedCategory] = await trx('categories')
-        .where({ id })
+        .where({ id, board_id })
         .update({
           ...rest,
           ...(position !== undefined ? { position } : {}),
@@ -164,7 +164,7 @@ export class Categories {
     return await knex.transaction(async (trx) => {
       // Find category inside transaction
       const category = await trx('categories')
-        .where({ id: data.id })
+        .where({ id: data.id, board_id: data.board_id })
         .first();
 
       if (!category) throw new Error('Category not found');
@@ -191,7 +191,7 @@ export class Categories {
 
       // Delete category
       const deleted = await trx('categories')
-        .where({ id: data.id })
+        .where({ id: data.id, board_id: data.board_id })
         .del();
 
       // Rebalance positions (optional but keeps them sequential)

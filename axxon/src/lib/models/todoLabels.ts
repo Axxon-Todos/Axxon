@@ -77,8 +77,11 @@ export class TodoLabels {
   };
 
   // Fetch todo by ID with labels
-  static async getTodoByIdWithLabels( todoId: number): Promise<(TodoBaseData & { labels: LabelBaseData[] }) | null> {
-    const todo = await Todos.getTodoById({ id: todoId });
+  static async getTodoByIdWithLabels(
+    todoId: number,
+    boardId: number
+  ): Promise<(TodoBaseData & { labels: LabelBaseData[] }) | null> {
+    const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
     if (!todo) return null;
 
     const labels = await TodoLabels.getLabelsForTodo({ todo_id: todoId });

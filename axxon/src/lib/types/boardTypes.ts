@@ -8,7 +8,7 @@ export type BoardBaseData = {
 };
 
 //pick<> can be used to pick out specific things within type declaration
-export type BoardCreation = Pick<BoardBaseData, 'name' | 'created_by'> & {
+export type BoardCreation = Pick<BoardBaseData, 'name' | 'created_by' | 'color'> & {
   member_emails:  string [];
 };
 

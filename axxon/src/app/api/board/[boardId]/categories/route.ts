@@ -1,29 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { POST as createCategory, GET as listAllCategories } from '@/lib/controllers/categories/categoryControllers';
+import {
+  createCategory,
+  listCategories,
+} from '@/lib/controllers/categories/categoryControllers';
+import type { CreateCategory } from '@/lib/types/categoryTypes';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import {
+  parseJsonBody,
+  parseNumericRouteParam,
+  RouteContext,
+} from '@/lib/utils/apiRoute';
 
-// Helper to extract boardId from the request URL
-function getBoardId(req: NextRequest) {
-  const parts = new URL(req.url).pathname.split('/');
-  // ['', 'api', 'board', boardId, 'categories']
-  return parts[3];
+type CategoryRouteParams = {
+  boardId: string;
+};
+
+type CreateCategoryPayload = Omit<CreateCategory, 'board_id'>;
+
+export async function POST(req: NextRequest, context: RouteContext<CategoryRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const data = await parseJsonBody<CreateCategoryPayload>(req);
+    const category = await createCategory({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+      data,
+    });
+
+    return NextResponse.json(category, { status: 201 });
+  } catch (error) {
+    return handleApiError(error, '[CREATE_CATEGORY_ERROR]', 'Failed to create category');
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const boardId = getBoardId(req);
+export async function GET(req: NextRequest, context: RouteContext<CategoryRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const categories = await listCategories({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+    });
 
-  if (!boardId) {
-    return NextResponse.json({ error: 'Missing boardId' }, { status: 400 });
+    return NextResponse.json(categories, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[LIST_CATEGORIES_ERROR]', 'Failed to display categories');
   }
-
-  return createCategory(req, { params: { boardId } });
-}
-
-export async function GET(req: NextRequest) {
-  const boardId = getBoardId(req);
-
-  if (!boardId) {
-    return NextResponse.json({ error: 'Missing boardId' }, { status: 400 });
-  }
-
-  return listAllCategories(req, { boardId });
 }

@@ -1,18 +1,33 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Board } from "@/lib/models/board";
-import { UpdateBoard } from "@/lib/types/boardTypes";
+import { Board } from '@/lib/models/board';
+import { UpdateBoard } from '@/lib/types/boardTypes';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardCreator } from '@/lib/utils/authorization';
 
-export async function updateBoardController(req: NextRequest, params: { boardId: string;}) {
-  try{
-    const id = Number(params.boardId);
-    const data = await req.json();
+type UpdateBoardPayload = Partial<Pick<UpdateBoard, 'name' | 'color'>>;
 
-    const updateData: UpdateBoard = { id, ...data };
+type UpdateBoardInput = {
+  boardId: number;
+  sessionUserId: number;
+  data: UpdateBoardPayload;
+};
 
-    const board = await Board.updateBoard(updateData);//passes through method
-    return NextResponse.json(board, { status: 200 });//returns updated data
-  }catch(error){
-    console.error('[UPDATE_BOARD_ERROR]', error);
-    return NextResponse.json({error: 'failed to update board'}, {status: 500});
+export async function updateBoard({ boardId, sessionUserId, data }: UpdateBoardInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardCreator(boardId, sessionUserId);
+
+  const filteredData = Object.fromEntries(
+    Object.entries(data ?? {}).filter(([key]) => ['name', 'color'].includes(key))
+  );
+
+  const updateData: UpdateBoard = { id: String(boardId), ...filteredData };
+  const board = await Board.updateBoard(updateData);
+
+  if (!board) {
+    throw new NotFoundError('Board not found');
+  }
+
+  return board;
 }

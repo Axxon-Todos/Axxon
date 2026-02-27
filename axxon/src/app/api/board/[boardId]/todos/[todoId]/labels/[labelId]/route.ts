@@ -1,22 +1,48 @@
-import { POST as addLabelToTodo, DELETE as removeLabelFromTodo } from '@/lib/controllers/todoLabels/todoLabelControllers';
-import type { NextRequest } from 'next/server';
+import {
+  addLabelToTodo,
+  removeLabelFromTodo,
+} from '@/lib/controllers/todoLabels/todoLabelControllers';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import { parseNumericRouteParam, RouteContext } from '@/lib/utils/apiRoute';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-  const segments = url.pathname.split('/');
-  const boardId = segments[3];
-  const todoId = segments[5];
-  const labelId = segments[7];
+type TodoLabelRouteParams = {
+  boardId: string;
+  todoId: string;
+  labelId: string;
+};
 
-  return addLabelToTodo(req, { boardId, todoId, labelId });
+export async function POST(req: NextRequest, context: RouteContext<TodoLabelRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId, todoId, labelId } = await context.params;
+    const todoLabel = await addLabelToTodo({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      todoId: parseNumericRouteParam(todoId, 'todo id'),
+      labelId: parseNumericRouteParam(labelId, 'label id'),
+      sessionUserId: session.userId,
+    });
+
+    return NextResponse.json(todoLabel, { status: 201 });
+  } catch (error) {
+    return handleApiError(error, '[ADD_LABEL_TO_TODO_ERROR]', 'Failed to add label to todo');
+  }
 }
 
-export async function DELETE(req: NextRequest) {
-  const url = new URL(req.url);
-  const segments = url.pathname.split('/');
-  const boardId = segments[3];
-  const todoId = segments[5];
-  const labelId = segments[7];
+export async function DELETE(req: NextRequest, context: RouteContext<TodoLabelRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId, todoId, labelId } = await context.params;
+    const result = await removeLabelFromTodo({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      todoId: parseNumericRouteParam(todoId, 'todo id'),
+      labelId: parseNumericRouteParam(labelId, 'label id'),
+      sessionUserId: session.userId,
+    });
 
-  return removeLabelFromTodo(req, { boardId, todoId, labelId });
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[REMOVE_LABEL_FROM_TODO_ERROR]', 'Failed to remove label from todo');
+  }
 }

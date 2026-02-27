@@ -1,46 +1,71 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCategoryByIdController, PATCH as updateCategoryController, DELETE as deleteCategoryController, } from '@/lib/controllers/categories/categoryControllers';
+import {
+  deleteCategory,
+  getCategoryById,
+  updateCategory,
+} from '@/lib/controllers/categories/categoryControllers';
+import type { UpdateCategory } from '@/lib/types/categoryTypes';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import {
+  parseJsonBody,
+  parseNumericRouteParam,
+  RouteContext,
+} from '@/lib/utils/apiRoute';
 
-// Helper to extract boardId and categoryId from the path
-function getParams(req: NextRequest) {
-  const parts = new URL(req.url).pathname.split('/');
-  // ['', 'api', 'board', boardId, 'categories', categoryId]
-  const boardId = parts[3];
-  const categoryId = parts[5];
+type CategoryRouteParams = {
+  boardId: string;
+  categoryId: string;
+};
 
-  if (!boardId || !categoryId) {
-    throw new Error('Missing boardId or categoryId');
+type UpdateCategoryPayload = Partial<Pick<UpdateCategory, 'name' | 'color' | 'position' | 'is_done'>>;
+
+export async function GET(req: NextRequest, context: RouteContext<CategoryRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId, categoryId } = await context.params;
+    const category = await getCategoryById({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      categoryId: parseNumericRouteParam(categoryId, 'category id'),
+      sessionUserId: session.userId,
+    });
+
+    return NextResponse.json(category, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[GET_CATEGORY_BY_ID_ERROR]', 'Failed to retrieve category');
   }
-
-  return { boardId, categoryId };
 }
 
-export async function GET(req: NextRequest) {
+export async function PATCH(req: NextRequest, context: RouteContext<CategoryRouteParams>) {
   try {
-    const { boardId, categoryId } = getParams(req);
-    const category = await getCategoryByIdController(req, { boardId, categoryId });
-    return NextResponse.json(category);
+    const session = await requireSession(req);
+    const { boardId, categoryId } = await context.params;
+    const data = await parseJsonBody<UpdateCategoryPayload>(req);
+    const category = await updateCategory({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      categoryId: parseNumericRouteParam(categoryId, 'category id'),
+      sessionUserId: session.userId,
+      data,
+    });
+
+    return NextResponse.json(category, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    return handleApiError(error, '[UPDATE_CATEGORY_ERROR]', 'Failed to update category');
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function DELETE(req: NextRequest, context: RouteContext<CategoryRouteParams>) {
   try {
-    const { boardId, categoryId } = getParams(req);
-    const updatedCategory = await updateCategoryController(req, { boardId, categoryId });
-    return NextResponse.json(updatedCategory);
-  } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
-  }
-}
+    const session = await requireSession(req);
+    const { boardId, categoryId } = await context.params;
+    const result = await deleteCategory({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      categoryId: parseNumericRouteParam(categoryId, 'category id'),
+      sessionUserId: session.userId,
+    });
 
-export async function DELETE(req: NextRequest) {
-  try {
-    const { boardId, categoryId } = getParams(req);
-    const deletedCategory = await deleteCategoryController(req, { boardId, categoryId });
-    return NextResponse.json(deletedCategory);
+    return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    return NextResponse.json({ error: (error as Error).message }, { status: 400 });
+    return handleApiError(error, '[DELETE_CATEGORY_ERROR]', 'Failed to delete category');
   }
 }

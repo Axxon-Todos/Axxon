@@ -1,149 +1,205 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { Categories } from '@/lib/models/categories';
 import type { CreateCategory, UpdateCategory } from '@/lib/types/categoryTypes';
+import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
+import { requireBoardMember } from '@/lib/utils/authorization';
 
-// creates categories
-export async function POST( req: NextRequest, context: { params: { boardId: string } }) {
-  try {
-    const board_id = Number(context.params.boardId);
-    const body = await req.json();
+type CreateCategoryPayload = Omit<CreateCategory, 'board_id'>;
 
-    const data: CreateCategory = { ...body, board_id };
+type UpdateCategoryPayload = Partial<Pick<UpdateCategory, 'name' | 'color' | 'position' | 'is_done'>>;
 
-    const category = await Categories.createCategory(data);
+type ReorderCategoriesPayload = {
+  newOrder: number[];
+};
 
-    return NextResponse.json(category, { status: 201 });
-  } catch (error: any) {
-    console.error('[CREATE_CATEGORY_ERROR]', error);
+type CreateCategoryInput = {
+  boardId: number;
+  sessionUserId: number;
+  data: CreateCategoryPayload;
+};
 
-    // Business rule violations -> 400
-    if (
-      error.message.includes('Maximum categories') ||
-      error.message.includes('backlog category') ||
-      error.message.includes('done categories')
-    ) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
+type UpdateCategoryInput = {
+  boardId: number;
+  categoryId: number;
+  sessionUserId: number;
+  data: UpdateCategoryPayload;
+};
 
-    return NextResponse.json({ error: 'Failed to create category' }, { status: 500 });
+type DeleteCategoryInput = {
+  boardId: number;
+  categoryId: number;
+  sessionUserId: number;
+};
+
+type ListCategoriesInput = {
+  boardId: number;
+  sessionUserId: number;
+};
+
+type ReorderCategoriesInput = {
+  boardId: number;
+  sessionUserId: number;
+  data: ReorderCategoriesPayload;
+};
+
+type GetCategoryByIdInput = {
+  boardId: number;
+  categoryId: number;
+  sessionUserId: number;
+};
+
+function throwCategoryRuleError(error: unknown, messages: string[]) {
+  if (
+    error instanceof Error &&
+    messages.some(message => error.message.includes(message))
+  ) {
+    throw new BadRequestError(error.message);
   }
 }
 
-// updates categories
-export async function PATCH( req: NextRequest, params: { boardId: string; categoryId: string }) {
+// Creates a category in a board.
+export async function createCategory({
+  boardId,
+  sessionUserId,
+  data,
+}: CreateCategoryInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
   try {
-    const board_id = Number(params.boardId);
-    const id = Number(params.categoryId);
+    const categoryData: CreateCategory = { ...data, board_id: boardId };
+    return await Categories.createCategory(categoryData);
+  } catch (error) {
+    throwCategoryRuleError(error, [
+      'Maximum categories',
+      'backlog category',
+      'done categories',
+    ]);
+    throw error;
+  }
+}
 
-    const body = await req.json();
+// Updates a category in a board.
+export async function updateCategory({
+  boardId,
+  categoryId,
+  sessionUserId,
+  data,
+}: UpdateCategoryInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(categoryId)) {
+    throw new BadRequestError('Invalid board or category id');
+  }
 
-    // Only allow specific fields to be updated
-    const allowedKeys: Array<keyof UpdateCategory> = ['name', 'color', 'position', 'is_done'];
+  await requireBoardMember(boardId, sessionUserId);
+
+  try {
+    const allowedKeys: Array<keyof UpdateCategoryPayload> = ['name', 'color', 'position', 'is_done'];
     const filteredBody = Object.fromEntries(
-      Object.entries(body).filter(([key]) => allowedKeys.includes(key as keyof UpdateCategory))
+      Object.entries(data ?? {}).filter(([key]) => allowedKeys.includes(key as keyof UpdateCategoryPayload))
     );
 
-    const data: UpdateCategory = { ...filteredBody, id, board_id };
+    const updateData: UpdateCategory = { ...filteredBody, id: categoryId, board_id: boardId };
 
-    if (data.position === undefined || data.position === null) {
-      delete data.position;
+    if (updateData.position === undefined || updateData.position === null) {
+      delete updateData.position;
     }
 
-    const updatedCategory = await Categories.updateCategory(data);
-
-    return NextResponse.json(updatedCategory, { status: 200 });
-  } catch (error: any) {
-    console.error('[UPDATE_CATEGORY_ERROR]', error);
-
-    // Business rule violations -> 400
-    if (
-      error.message.includes('backlog category') ||
-      error.message.includes('done categories') ||
-      error.message.includes('Invalid position')
-    ) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    const updatedCategory = await Categories.updateCategory(updateData);
+    if (!updatedCategory) {
+      throw new NotFoundError('Category not found');
     }
 
-    return NextResponse.json({ error: 'Failed to update category' }, { status: 500 });
+    return updatedCategory;
+  } catch (error) {
+    throwCategoryRuleError(error, [
+      'backlog category',
+      'done categories',
+      'Invalid position',
+    ]);
+    throw error;
   }
 }
 
-// Deletes categories
-export async function DELETE( _req: NextRequest, params: { boardId: string; categoryId: string }) {
-  try {
-    const id = Number(params.categoryId);
+// Deletes a category from a board.
+export async function deleteCategory({
+  boardId,
+  categoryId,
+  sessionUserId,
+}: DeleteCategoryInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(categoryId)) {
+    throw new BadRequestError('Invalid board or category id');
+  }
 
-    const deleted = await Categories.deleteCategory({ id });
+  await requireBoardMember(boardId, sessionUserId);
+
+  try {
+    const deleted = await Categories.deleteCategory({ id: categoryId, board_id: boardId });
 
     if (deleted === 0) {
-      return NextResponse.json({ error: 'Category not found' }, { status: 404 });
+      throw new NotFoundError('Category not found');
     }
 
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error: any) {
-    console.error('[DELETE_CATEGORY_ERROR]', error);
-
-    // Map known business rule errors -> 400
-    if (
-      error.message.includes('at least one backlog') || // safeguard from future rules
-      error.message.includes('two categories') ||
-      error.message.includes('cannot delete') ||
-      error.message.includes('still has todos')
-    ) {
-      return NextResponse.json({ error: error.message }, { status: 400 });}
-
-    return NextResponse.json({ error: 'Failed to delete category' }, { status: 500 });
-  }
-}
-
-// lists out categories
-export async function GET(_req: NextRequest, params: { boardId: string; }) {
-  try{
-    const board_id = Number(params.boardId);
-    const categories = await Categories.listAllCategoriesInBoard({board_id});
-    return NextResponse.json(categories, {status: 200});
-  }catch(error){
-    console.error('[LIST_CATEGORIES_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to display categories'},{status: 500});
-  }
-}
-
-//Reorder Categories
-export async function PATCH_reorder(req: NextRequest, params: { boardId: string }) {
-  try {
-    const board_id = Number(params.boardId);
-    if (!board_id) {
-      return NextResponse.json({ error: 'Missing or invalid boardId' }, { status: 400 });
-    }
-
-    const { newOrder } = await req.json();
-    if (!Array.isArray(newOrder) || newOrder.length === 0) {
-      return NextResponse.json({ error: 'Invalid newOrder payload' }, { status: 400 });
-    }
-
-    // Perform bulk reorder
-    await Categories.reorderCategories(board_id, newOrder);
-
-    return NextResponse.json({ success: true }, { status: 200 });
+    return { success: true };
   } catch (error) {
-    console.error('[REORDER_CATEGORIES_ERROR]', error);
-    return NextResponse.json(
-      { error: 'Failed to reorder categories' },
-      { status: 500 }
-    );
+    throwCategoryRuleError(error, [
+      'at least one backlog',
+      'two categories',
+      'cannot delete',
+      'still has todos',
+    ]);
+    throw error;
   }
 }
 
-// GetById
-export async function getCategoryByIdController(_req: NextRequest, params: { boardId: string; categoryId: string }) {
-  try {
-    const id = Number(params.categoryId);
-
-    const category = await Categories.getCategoryById({ id });
-
-    return NextResponse.json(category, { status: 200 });
-  } catch (error) {
-    console.error('[GET_CATEGORY_BY_ID_ERROR]', error);
-    return NextResponse.json({ error: 'Failed to retrieve category' }, { status: 500 });
+// Lists categories in a board.
+export async function listCategories({ boardId, sessionUserId }: ListCategoriesInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid board id');
   }
+
+  await requireBoardMember(boardId, sessionUserId);
+  return Categories.listAllCategoriesInBoard({ board_id: boardId });
+}
+
+// Reorders categories in a board.
+export async function reorderCategories({
+  boardId,
+  sessionUserId,
+  data,
+}: ReorderCategoriesInput) {
+  if (!Number.isFinite(boardId)) {
+    throw new BadRequestError('Missing or invalid boardId');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  if (!Array.isArray(data.newOrder) || data.newOrder.length === 0) {
+    throw new BadRequestError('Invalid newOrder payload');
+  }
+
+  await Categories.reorderCategories(boardId, data.newOrder);
+
+  return { success: true };
+}
+
+// Gets a single category in a board.
+export async function getCategoryById({
+  boardId,
+  categoryId,
+  sessionUserId,
+}: GetCategoryByIdInput) {
+  if (!Number.isFinite(boardId) || !Number.isFinite(categoryId)) {
+    throw new BadRequestError('Invalid board or category id');
+  }
+
+  await requireBoardMember(boardId, sessionUserId);
+
+  const category = await Categories.getCategoryById({ id: categoryId, board_id: boardId });
+  if (!category) {
+    throw new NotFoundError('Category not found');
+  }
+
+  return category;
 }

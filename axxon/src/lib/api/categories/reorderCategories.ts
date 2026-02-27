@@ -1,5 +1,7 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function reorderCategories(boardId: string, newOrder: string[]) {
-  const res = await fetch(`/api/board/${boardId}/categories/reorder`, {
+  const res = await apiFetch(`/api/board/${boardId}/categories/reorder`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ newOrder }),

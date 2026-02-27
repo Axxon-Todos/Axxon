@@ -10,6 +10,7 @@ export function useSocket(boardId: string) {
     if (!socketRef.current) {
       const socket = io(process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000", {
         transports: ["websocket"],
+        withCredentials: true,
       });
 
       socket.on("connect", () => {

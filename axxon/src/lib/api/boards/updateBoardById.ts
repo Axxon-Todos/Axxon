@@ -1,5 +1,7 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function updateBoardById(id: string, data: { name?: string, color?: string }) {
-  const res = await fetch(`/api/board/${id}`, {
+  const res = await apiFetch(`/api/board/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),

@@ -2,10 +2,39 @@
 import { Server } from "socket.io";
 import http from "http";
 import Redis from "ioredis";
+import { BoardMembers } from '@/lib/models/boardMembers';
+import {
+  getSessionTokenFromCookieHeader,
+  verifySessionToken,
+} from '@/lib/utils/auth';
 
-// Create Redis clients (publisher and subscriber)
-const pub = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
-const sub = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+let pub: Redis | null = null;
+let sub: Redis | null = null;
+let isSubscribed = false;
+
+function createRedisClient(role: 'publisher' | 'subscriber') {
+  const client = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+  client.on('error', (error) => {
+    console.error(`Redis ${role} error:`, error);
+  });
+  return client;
+}
+
+function getPublisher() {
+  if (!pub) {
+    pub = createRedisClient('publisher');
+  }
+
+  return pub;
+}
+
+function getSubscriber() {
+  if (!sub) {
+    sub = createRedisClient('subscriber');
+  }
+
+  return sub;
+}
 
 // Initialize WebSocket server with Socket.IO
 export function createWsServer(server: http.Server) {
@@ -14,18 +43,42 @@ export function createWsServer(server: http.Server) {
   const io = new Server(server, {
     cors: {
       origin: process.env.CLIENT_URL || "http://localhost:3000",
+      credentials: true,
       methods: ["GET", "POST"],
     },
   });
 
-  // Subscribe to all Redis channels
-  sub.psubscribe("board:*", (err) => {
-    if (err) console.error("Redis psubscribe error:", err);
-    else console.log("Subscribed to Redis channels: board:*");
+  io.use(async (socket, next) => {
+    try {
+      const token = getSessionTokenFromCookieHeader(socket.request.headers.cookie);
+
+      if (!token) {
+        return next(new Error('Unauthorized'));
+      }
+
+      const session = await verifySessionToken(token);
+      socket.data.userId = session.userId;
+      next();
+    } catch (error) {
+      console.error('WebSocket authentication failed:', error);
+      next(new Error('Unauthorized'));
+    }
   });
 
+  const subscriber = getSubscriber();
+
+  if (!isSubscribed) {
+    isSubscribed = true;
+
+    // Subscribe to all Redis channels
+    subscriber.psubscribe("board:*", (err) => {
+      if (err) console.error("Redis psubscribe error:", err);
+      else console.log("Subscribed to Redis channels: board:*");
+    });
+  }
+
   // On Redis publish, forward the message to the correct board room
-  sub.on("pmessage", (pattern, channel, message) => {
+  subscriber.on("pmessage", (pattern, channel, message) => {
     console.log("🔔 Redis pmessage received:", { pattern, channel, message });
 
     try {
@@ -57,22 +110,43 @@ export function createWsServer(server: http.Server) {
     let currentBoard: string | null = null;
 
     // Join a board room (only if different from current)
-    socket.on("joinBoard", (boardId: string) => {
-      if (currentBoard === boardId) {
-        // Already in the desired room, no action
-        console.log(`Socket ${socket.id} already in board ${boardId}`);
-        return;
-      }
+    socket.on("joinBoard", async (boardId: string) => {
+      try {
+        const numericBoardId = Number(boardId);
 
-      if (currentBoard) {
-        socket.leave(currentBoard);
-        console.log(`Socket ${socket.id} left previous board ${currentBoard}`);
-      }
+        if (!Number.isFinite(numericBoardId)) {
+          socket.emit('socket:error', { error: 'Invalid board id' });
+          return;
+        }
 
-      socket.join(boardId);
-      currentBoard = boardId;
-      console.log(`Socket ${socket.id} joined board ${boardId}`);
-      
+        const isMember = await BoardMembers.isMember({
+          board_id: numericBoardId,
+          user_id: Number(socket.data.userId),
+        });
+
+        if (!isMember) {
+          socket.emit('socket:error', { error: 'Forbidden' });
+          return;
+        }
+
+        if (currentBoard === String(numericBoardId)) {
+          // Already in the desired room, no action
+          console.log(`Socket ${socket.id} already in board ${numericBoardId}`);
+          return;
+        }
+
+        if (currentBoard) {
+          socket.leave(currentBoard);
+          console.log(`Socket ${socket.id} left previous board ${currentBoard}`);
+        }
+
+        socket.join(String(numericBoardId));
+        currentBoard = String(numericBoardId);
+        console.log(`Socket ${socket.id} joined board ${numericBoardId}`);
+      } catch (error) {
+        console.error(`Socket ${socket.id} failed to join board ${boardId}:`, error);
+        socket.emit('socket:error', { error: 'Failed to join board' });
+      }
     });
 
     // Leave current board explicitly
@@ -96,5 +170,5 @@ export function createWsServer(server: http.Server) {
 // Helper to publish events into Redis for cross-instance broadcast
 export async function publishBoardUpdate(boardId: string, payload: any) {
   console.log(`Publishing update to Redis board:${boardId}`, payload);
-  await pub.publish(`board:${boardId}`, JSON.stringify(payload));
+  await getPublisher().publish(`board:${boardId}`, JSON.stringify(payload));
 }

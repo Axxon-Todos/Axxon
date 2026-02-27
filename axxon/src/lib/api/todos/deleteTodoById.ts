@@ -1,5 +1,7 @@
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function deleteTodoById(boardId: string | number, todoId: string | number) {
-  const res = await fetch(`/api/board/${boardId}/todos/${todoId}`, {
+  const res = await apiFetch(`/api/board/${boardId}/todos/${todoId}`, {
     method: 'DELETE',
   });
 

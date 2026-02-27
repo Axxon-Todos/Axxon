@@ -1,18 +1,35 @@
 // app/api/board/[boardId]/categories/reorder/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { PATCH_reorder } from '@/lib/controllers/categories/categoryControllers';
+import { reorderCategories } from '@/lib/controllers/categories/categoryControllers';
+import { handleApiError } from '@/lib/utils/apiErrors';
+import { requireSession } from '@/lib/utils/auth';
+import {
+  parseJsonBody,
+  parseNumericRouteParam,
+  RouteContext,
+} from '@/lib/utils/apiRoute';
 
-// Helper to extract boardId
-function getBoardId(req: NextRequest) {
-  const parts = new URL(req.url).pathname.split('/');
-  // ['', 'api', 'board', boardId, 'categories', 'reorder']
-  return parts[3];
-}
+type CategoryReorderRouteParams = {
+  boardId: string;
+};
 
-export async function PATCH(req: NextRequest) {
-  const boardId = getBoardId(req);
-  if (!boardId) {
-    return NextResponse.json({ error: 'Missing boardId' }, { status: 400 });
+type ReorderCategoriesPayload = {
+  newOrder: number[];
+};
+
+export async function PATCH(req: NextRequest, context: RouteContext<CategoryReorderRouteParams>) {
+  try {
+    const session = await requireSession(req);
+    const { boardId } = await context.params;
+    const data = await parseJsonBody<ReorderCategoriesPayload>(req);
+    const result = await reorderCategories({
+      boardId: parseNumericRouteParam(boardId, 'board id'),
+      sessionUserId: session.userId,
+      data,
+    });
+
+    return NextResponse.json(result, { status: 200 });
+  } catch (error) {
+    return handleApiError(error, '[REORDER_CATEGORIES_ERROR]', 'Failed to reorder categories');
   }
-  return PATCH_reorder(req, { boardId });
 }

@@ -1,6 +1,8 @@
 // lib/api/categories/deleteCategoryById.ts
+import { apiFetch } from '@/lib/api/apiFetch';
+
 export async function deleteCategoryById(boardId: string | number, categoryId: string | number) {
-  const res = await fetch(`/api/board/${boardId}/categories/${categoryId}`, {
+  const res = await apiFetch(`/api/board/${boardId}/categories/${categoryId}`, {
     method: 'DELETE',
   });
 

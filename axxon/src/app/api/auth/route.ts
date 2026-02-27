@@ -1,10 +1,10 @@
-//This route might be utilized in the future if additional login/signup approaches are implemented
 'use server';
 
-import { handleOAuthLogin } from "@/lib/controllers/auth/authController";
-import { NextRequest } from "next/server";
+import { NextResponse } from 'next/server';
 
-//nextjs routes handle requests and responses differently 
-export async function POST(req: NextRequest) {
-    return handleOAuthLogin(req);
+export async function POST() {
+  return NextResponse.json(
+    { error: 'This authentication endpoint has been disabled. Use Google OAuth instead.' },
+    { status: 410 }
+  );
 }
