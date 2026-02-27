@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { updateBoardById } from '@/lib/api/boards/updateBoardById'
 import type { UpdateBoard } from '@/lib/types/boardTypes'
+import Modal from '@/components/ui/Modal'
 
 type EditBoardModalProps = {
   board: UpdateBoard
@@ -35,33 +36,44 @@ export default function EditBoardModal({ board, onClose, onSuccess }: EditBoardM
   }, [name, color, onClose, updateMutation])
 
   return (
-    <div className="fixed inset-0 bg-gray-400/50 flex justify-center items-center z-50">
-      <div className="bg-black p-6 rounded-2xl shadow w-96">
-        <h2 className="text-xl font-bold mb-4">Edit Board</h2>
+    <Modal isOpen onClose={onClose} title="Edit Board">
+      <div className="space-y-4">
         <input
           type="text"
-          className="w-full p-2 mb-3 border rounded"
+          className="app-input"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Board name"
           autoFocus
         />
-        <input
-          type="color"
-          className="w-full mb-4"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-        />
+        <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
+          <div>
+            <p className="text-sm font-medium">Board Accent</p>
+            <p className="mt-1 text-sm app-text-muted">Keep it distinct in the sidebar and dashboard.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className="h-10 w-10 rounded-2xl border border-white/40"
+              style={{ backgroundColor: color }}
+            />
+            <input
+              type="color"
+              className="h-10 w-14 rounded-xl bg-transparent"
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+            />
+          </div>
+        </div>
         <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="text-sm">Cancel</button>
+          <button onClick={onClose} className="glass-button text-sm">Cancel</button>
           <button
             onClick={() => updateMutation.mutate()}
-            className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+            className="glass-button glass-button-primary text-sm"
           >
-            Save
+            {updateMutation.isPending ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }

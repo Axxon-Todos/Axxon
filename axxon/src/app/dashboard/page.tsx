@@ -1,12 +1,5 @@
-import Calendar from '@/components/common/calendar'
+import DashboardOverview from '@/components/features/dashboard/DashboardOverview'
 
 export default function Page() {
-  return( 
-    <>
-      <div className='flex'>
-        <Calendar todosByDate={{}} />
-      </div>
-    </>
-  )
+  return <DashboardOverview />
 }
-

@@ -1,6 +1,12 @@
 "use client";
-import { useState } from "react";
-import Sidebar from "@/components/ui/sideBar";
+
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import Sidebar, {
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_EXPANDED_WIDTH,
+  SIDEBAR_TRANSITION,
+} from "@/components/ui/sideBar";
 
 export default function DashboardLayout({
   children,
@@ -8,20 +14,31 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
+  const transition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
+
+  useEffect(() => {
+    if (window.innerWidth < 1024) {
+      setCollapsed(true);
+    }
+  }, []);
 
   return (
-    <div className="flex h-screen">
-      {/* Sidebar */}
+    <div className="app-shell-bg min-h-screen">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
 
-      {/* Main content */}
-      <main
-        className={`transition-all duration-300 h-screen w-full overflow-auto ${
-          collapsed ? "ml-16" : "ml-64"
-        }`}
+      <motion.main
+        initial={false}
+        animate={{
+          marginLeft: collapsed
+            ? SIDEBAR_COLLAPSED_WIDTH
+            : SIDEBAR_EXPANDED_WIDTH,
+        }}
+        transition={transition}
+        className="min-h-screen min-w-0 w-full overflow-auto px-4 pb-10 pt-6 sm:px-6 lg:px-8"
       >
         {children}
-      </main>
+      </motion.main>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CategoryBaseData } from '@/lib/types/categoryTypes'
+
+import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 
 interface CategoryFormProps {
   category: CategoryBaseData
@@ -30,58 +31,64 @@ export default function UpdateCategoryForm({ category, onSave, onDelete, onClose
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <label className="flex flex-col">
-        Name
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Name</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="border rounded px-2 py-1 mt-1"
+          className="app-input"
         />
-      </label>
+      </div>
 
-      <label className="flex flex-col">
-        Color
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          className="w-16 h-8 mt-1 p-0 border-none"
-        />
-      </label>
+      <div className="glass-panel flex items-center justify-between rounded-[1.4rem] p-4">
+        <div>
+          <p className="text-sm font-medium">Lane Color</p>
+          <p className="mt-1 text-sm app-text-muted">Used for quick visual recognition on the board.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className="h-10 w-10 rounded-2xl border border-white/40"
+            style={{ backgroundColor: color }}
+          />
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="h-10 w-14 rounded-xl bg-transparent"
+          />
+        </div>
+      </div>
 
-      <label className="flex items-center gap-2">
+      <label className="glass-panel flex items-center gap-3 rounded-[1.3rem] p-4">
         <input
           type="checkbox"
           checked={isDone}
           onChange={() => setIsDone((prev) => !prev)}
+          className="h-4 w-4"
         />
-        Mark as Done
+        <span className="text-sm font-medium">Mark this as the done lane</span>
       </label>
 
-      <div className="flex justify-between mt-4">
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
-        >
-          Save
-        </button>
-        <button
-          onClick={handleDelete}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <button onClick={handleDelete} className="glass-button glass-button-danger justify-center sm:justify-start">
           Delete
         </button>
-      </div>
 
-      <button
-        onClick={onClose}
-        className="mt-2 px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
-      >
-        Cancel
-      </button>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="glass-button">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

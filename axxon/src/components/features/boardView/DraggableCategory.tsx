@@ -1,18 +1,24 @@
 'use client'
 
+import { useRef } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import DroppableColumn from './DroppableColumn'
-import { TodoWithLabels } from '@/lib/types/todoTypes'
+
 import { useModal } from '@/context/ModalManager'
-import { useRef } from 'react'
+
+import type { CategoryBaseData } from '@/lib/types/categoryTypes'
+import type { TodoWithLabels } from '@/lib/types/todoTypes'
+
+import DroppableColumn from './DroppableColumn'
 
 export default function DraggableCategory({
   category,
+  todoCount,
   onTodoClick,
 }: {
-  category: any
-  onTodoClick: (todo: TodoWithLabels) => void 
+  category: CategoryBaseData
+  todoCount: number
+  onTodoClick: (todo: TodoWithLabels) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: category.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -32,11 +38,12 @@ export default function DraggableCategory({
     const dy = Math.abs(e.clientY - dragStartRef.current.y)
 
     const isClick = dx < 5 && dy < 5
-    if (isClick) clickTimeout.current = setTimeout(() => openModal('CATEGORY', category), 0)
-    
+    if (isClick) {
+      clickTimeout.current = setTimeout(() => openModal('CATEGORY', category), 0)
+    }
+
     dragStartRef.current = null
   }
-  
 
   return (
     <div
@@ -50,8 +57,12 @@ export default function DraggableCategory({
       <DroppableColumn
         categoryId={category.id}
         categoryName={category.name}
-        todos={category.todos || []}
+        categoryColor={category.color}
+        isDone={Boolean(category.is_done)}
+        todoCount={todoCount}
+        todos={[]}
         onTodoClick={onTodoClick}
+        managementMode
       />
     </div>
   )

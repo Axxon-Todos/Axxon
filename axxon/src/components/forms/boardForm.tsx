@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { getUserId } from '@/lib/api/users/getUserId'
+import { apiFetch } from '@/lib/api/apiFetch'
 
 export default function CreateBoardForm() {
   const [name, setName] = useState('')
@@ -18,10 +19,10 @@ export default function CreateBoardForm() {
       return
     }
 
-    const res = await fetch('/api/board', {
+    const res = await apiFetch('/api/board', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, created_by: userId }),
+      body: JSON.stringify({ name }),
     })
 
     setLoading(false)

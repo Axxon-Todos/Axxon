@@ -62,7 +62,7 @@ export default function LabelPopup({ isOpen, onClose, anchorRef, children }: Lab
   return createPortal(
     <div
       ref={popupRef}
-      className="bg-white border rounded-lg shadow-lg"
+      className="glass-panel-strong rounded-[1.25rem] border border-[var(--app-border)] shadow-2xl"
       onClick={(e) => e.stopPropagation()}
     >
       {children}

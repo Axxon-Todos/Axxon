@@ -9,7 +9,7 @@ interface CreateBoardFormProps {
 
 export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
   const [name, setName] = useState('')
-  const [color, setColor] = useState('#000000')
+  const [color, setColor] = useState('#2563eb')
 
   const createMutation = useCreateBoard()
 
@@ -29,47 +29,56 @@ export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium mb-2">Board Name</label>
+      <div className="space-y-2">
+        <label className="block text-sm font-medium">Board Name</label>
         <input
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Enter board name"
-          className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          className="app-input"
           autoFocus
         />
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-2">Board Color</label>
-        <input
-          type="color"
-          value={color}
-          onChange={(e) => setColor(e.target.value)}
-          className="w-full h-10 rounded-lg cursor-pointer"
-        />
+      <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
+        <div>
+          <p className="text-sm font-medium">Board Accent</p>
+          <p className="mt-1 text-sm app-text-muted">Used as the board’s visual identifier.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span
+            className="h-10 w-10 rounded-2xl border border-white/40 shadow-inner"
+            style={{ backgroundColor: color }}
+          />
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="h-10 w-14 cursor-pointer rounded-xl border-0 bg-transparent"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 mt-6">
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+          className="glass-button"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!name.trim() || createMutation.isPending}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {createMutation.isPending ? 'Creating...' : 'Create Board'}
         </button>
       </div>
 
       {createMutation.isError && (
-        <p className="text-red-500 text-sm">
+        <p className="text-sm text-rose-400">
           {createMutation.error?.message || 'Failed to create board'}
         </p>
       )}

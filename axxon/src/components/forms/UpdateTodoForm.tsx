@@ -2,12 +2,15 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+
 import { updateTodoById } from '@/lib/api/todos/updateTodoById'
 import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
 import { fetchLabels } from '@/lib/api/labels/getLabels'
 import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
 import { useCreateLabel } from '@/lib/mutations/useCreateLabel'
+
 import LabelSelector from '@/components/features/boardView/LabelSelector'
+
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 interface UpdateTodoFormProps {
@@ -24,7 +27,6 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
   const [assigneeId, setAssigneeId] = useState(todo.assignee_id ? String(todo.assignee_id) : '')
 
   const queryClient = useQueryClient()
-
   const numericBoardId = Number(boardId)
   const numericTodoId = Number(todo.id)
 
@@ -45,10 +47,9 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
     },
   })
 
-  // Label management
   const { data: allLabels } = useQuery({
     queryKey: ['labels', String(numericBoardId)],
-    queryFn: () => fetchLabels(String(numericBoardId))
+    queryFn: () => fetchLabels(String(numericBoardId)),
   })
 
   const toggleLabel = useToggleTodoLabel(String(numericBoardId))
@@ -59,17 +60,20 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
   }
 
   const handleCreateLabel = (name: string) => {
-    createLabel.mutate({ name }, {
-      onSuccess: (newLabel) => {
-        toggleLabel.mutate({ todoId: numericTodoId, labelId: newLabel.id, isAdding: true })
+    createLabel.mutate(
+      { name },
+      {
+        onSuccess: (newLabel) => {
+          toggleLabel.mutate({ todoId: numericTodoId, labelId: newLabel.id, isAdding: true })
+        },
       }
-    })
+    )
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const assigneeIdValue = assigneeId.trim() === '' ? null : Number(assigneeId)
-    if (assigneeIdValue !== null && isNaN(assigneeIdValue)) {
+    if (assigneeIdValue !== null && Number.isNaN(assigneeIdValue)) {
       alert('Assignee ID must be a number or empty')
       return
     }
@@ -84,65 +88,87 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Todo title"
-        className="w-full p-2 border rounded"
-        required
-      />
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Description (optional)"
-        className="w-full p-2 border rounded"
-      />
-      <select
-        value={priority}
-        onChange={(e) => setPriority(e.target.value)}
-        className="w-full p-2 border rounded"
-        required
-      >
-        <option value="1">None</option>
-        <option value="2">Low</option>
-        <option value="3">Medium</option>
-        <option value="4">High</option>
-      </select>
-      <input
-        type="text"
-        value={assigneeId}
-        onChange={(e) => setAssigneeId(e.target.value)}
-        placeholder="Assignee ID (optional)"
-        className="w-full p-2 border rounded"
-      />
-      <div className="border rounded p-3">
-        <h3 className="text-sm font-semibold mb-2">Labels</h3>
-        <LabelSelector
-          boardId={String(numericBoardId)}
-          todoId={numericTodoId}
-          currentLabels={todo.labels || []}
-          allLabels={Array.isArray(allLabels) ? allLabels : []}
-          onToggleLabel={handleToggleLabel}
-          onCreateLabel={handleCreateLabel}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Title</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Todo title"
+          className="app-input"
+          required
         />
       </div>
-      <div className="flex justify-between items-center mt-4">
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Description (optional)"
+          className="app-input min-h-28 resize-none"
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Priority</label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="app-input"
+            required
+          >
+            <option value="1">None</option>
+            <option value="2">Low</option>
+            <option value="3">Medium</option>
+            <option value="4">High</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Assignee ID</label>
+          <input
+            type="text"
+            value={assigneeId}
+            onChange={(e) => setAssigneeId(e.target.value)}
+            placeholder="Assignee ID (optional)"
+            className="app-input"
+          />
+        </div>
+      </div>
+
+      <div className="glass-panel rounded-[1.4rem] p-4">
+        <h3 className="text-sm font-semibold">Labels</h3>
+        <div className="mt-3">
+          <LabelSelector
+            boardId={String(numericBoardId)}
+            todoId={numericTodoId}
+            currentLabels={todo.labels || []}
+            allLabels={Array.isArray(allLabels) ? allLabels : []}
+            onToggleLabel={handleToggleLabel}
+            onCreateLabel={handleCreateLabel}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={() => deleteMutation.mutate()}
-          className="text-sm text-red-600 hover:underline"
+          className="glass-button glass-button-danger justify-center sm:justify-start"
           disabled={deleteMutation.isPending}
         >
           {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
         </button>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="text-sm border px-3 py-1 rounded">
+
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="glass-button">
             Cancel
           </button>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+            className="glass-button glass-button-primary"
             disabled={updateMutation.isPending}
           >
             {updateMutation.isPending ? 'Saving...' : 'Save'}
