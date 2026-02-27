@@ -1,119 +1,225 @@
 "use client";
+
 import { useState } from "react";
 import dayjs from "dayjs";
 import clsx from "clsx";
+import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 
-type Todo = {
+export type CalendarTodo = {
   id: number | string;
-  text: string;
+  title: string;
   color?: string;
+  boardName?: string;
+  boardId?: string;
+  categoryName?: string;
+  isComplete?: boolean;
 };
 
-type TodosByDate = Record<string, Todo[]>;
+type TodosByDate = Record<string, CalendarTodo[]>;
 
 type CalendarProps = {
   todosByDate: TodosByDate;
+  selectedDate?: string | null;
+  onSelectDate?: (date: string) => void;
 };
 
-const daysOfWeek = ["Sun", "Mon", "Tues", "Weds", "Thurs", "Fri", "Sat"];
+const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function Calendar({ todosByDate }: CalendarProps) {
+export default function Calendar({ todosByDate, selectedDate, onSelectDate }: CalendarProps) {
   const today = dayjs();
-  const monthsBefore = 12;
-  const monthsAfter = 12;
+  const [currentMonth, setCurrentMonth] = useState(today.startOf("month"));
+  const activeDate = selectedDate ?? today.format("YYYY-MM-DD");
 
-  const months = Array.from({ length: monthsBefore + monthsAfter + 1 }).map(
-    (_, i) => today.add(i - monthsBefore, "month")
-  );
-
-  const [monthIndex, setMonthIndex] = useState(monthsBefore);
-  const currentMonth = months[monthIndex];
-
-  const prevMonth = () => {
-    if (monthIndex > 0) setMonthIndex(monthIndex - 1);
+  const prevMonth = () => setCurrentMonth((value) => value.subtract(1, "month"));
+  const nextMonth = () => setCurrentMonth((value) => value.add(1, "month"));
+  const jumpToToday = () => {
+    setCurrentMonth(today.startOf("month"));
+    onSelectDate?.(today.format("YYYY-MM-DD"));
   };
 
-  const nextMonth = () => {
-    if (monthIndex < months.length - 1) setMonthIndex(monthIndex + 1);
-  };
-
-  // Generate 42 days for 6-week calendar grid
   const startOfMonth = currentMonth.startOf("month").startOf("week");
   const days = Array.from({ length: 42 }).map((_, i) => startOfMonth.add(i, "day"));
+  const selectedTodos = (todosByDate[activeDate] || [])
+    .slice()
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   return (
-    <div className="max-w-full mx-auto w-[60%] h-screen border border-gray-200 rounded flex flex-col text-black">
-      {/* Header with buttons on sides */}
-      <div className="flex items-center justify-between p-2 bg-white border-b border-gray-300 h-12">
-        {/* Previous month button */}
-        <button
-          onClick={prevMonth}
-          className="px-2 py-1 rounded hover:bg-gray-100 transition disabled:opacity-50"
-          disabled={monthIndex === 0}
-        >
-          &lt;
-        </button>
+    <section className="glass-panel-strong rounded-[2rem] p-4 sm:p-6">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="app-kicker">Calendar</p>
+          <h2 className="mt-2 text-2xl font-semibold sm:text-3xl">Due-date timeline</h2>
+          <p className="mt-2 text-sm leading-6 app-text-muted">
+            Track what lands this month, jump to today instantly, and inspect the full agenda for any date.
+          </p>
+        </div>
 
-        {/* Month label centered */}
-        <div className="font-semibold text-center flex-1">{currentMonth.format("MMMM YYYY")}</div>
-
-        {/* Next month button */}
-        <button
-          onClick={nextMonth}
-          className="px-2 py-1 rounded hover:bg-gray-100 transition disabled:opacity-50"
-          disabled={monthIndex === months.length - 1}
-        >
-          &gt;
-        </button>
-      </div>
-
-      {/* Days of week */}
-      <div className="grid grid-cols-7 border-b border-gray-300 bg-gray-100 text-center font-medium h-10">
-        {daysOfWeek.map((day) => (
-          <div key={day} className="p-2 flex items-center justify-center">
-            {day}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={prevMonth} className="glass-button !h-11 !w-11 !p-0" type="button">
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="glass-panel flex items-center gap-3 rounded-full px-4 py-3">
+            <CalendarDays className="h-4 w-4 text-[var(--app-accent)]" />
+            <span className="text-sm font-semibold sm:text-base">{currentMonth.format("MMMM YYYY")}</span>
           </div>
-        ))}
+          <button onClick={nextMonth} className="glass-button !h-11 !w-11 !p-0" type="button">
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button onClick={jumpToToday} className="glass-button" type="button">
+            Today
+          </button>
+        </div>
       </div>
 
-      {/* Calendar grid */}
-      <div className="flex-1 grid grid-cols-7 grid-rows-6">
-        {days.map((day, i) => {
-          const key = day.format("YYYY-MM-DD");
-          const todos = todosByDate[key] || [];
-          const isCurrentMonth = day.month() === currentMonth.month();
-          const isToday = day.isSame(today, "day");
-
-          return (
-            <div
-              key={i}
-              className={clsx(
-                "border border-gray-300 p-2 flex flex-col text-sm",
-                {
-                  "bg-white": isCurrentMonth,
-                  "bg-gray-50 text-gray-400": !isCurrentMonth,
-                  "bg-blue-100 border-blue-400": isToday,
-                }
-              )}
-            >
-              <div className={clsx("mb-1 font-semibold", { "text-blue-600": isToday })}>
-                {day.date()}
-              </div>
-              <div className="flex flex-col gap-1 overflow-hidden">
-                {todos.slice(0, 3).map((todo) => (
-                  <div key={todo.id} className="flex items-center truncate text-xs">
-                    <span
-                      className="inline-block w-2 h-2 rounded-full mr-1"
-                      style={{ backgroundColor: todo.color }}
-                    />
-                    {todo.text}
-                  </div>
-                ))}
-              </div>
+      <div
+        className="mt-6 rounded-[1.75rem] border border-[var(--app-border)] p-3 sm:p-4"
+        style={{
+          background: "color-mix(in srgb, var(--app-panel) 92%, transparent)",
+        }}
+      >
+        <div className="grid grid-cols-7 gap-2 text-center text-[0.68rem] font-semibold uppercase tracking-[0.18em] app-text-muted sm:text-[0.72rem]">
+          {daysOfWeek.map((day) => (
+            <div key={day} className="py-2">
+              {day}
             </div>
-          );
-        })}
+          ))}
+        </div>
+
+        <div className="mt-2 grid grid-cols-7 gap-2">
+	          {days.map((day, i) => {
+	            const key = day.format("YYYY-MM-DD");
+	            const todos = todosByDate[key] || [];
+	            const isCurrentMonth = day.month() === currentMonth.month();
+	            const isToday = day.isSame(today, "day");
+	            const isSelected = key === activeDate;
+	            const hasOverdue = day.isBefore(today, "day") && todos.some((todo) => !todo.isComplete);
+	            const dayClassName = clsx(
+	              "min-h-[7.75rem] rounded-[1.2rem] border p-3 text-left text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
+	              isToday || isSelected
+	                ? "border-[var(--app-accent)]"
+	                : isCurrentMonth
+	                  ? "border-[var(--app-border)] bg-white/10"
+	                  : "border-transparent bg-white/5 text-[var(--app-muted)]"
+	            );
+
+	            return (
+	              <button
+                type="button"
+                key={i}
+                onClick={() => {
+                  setCurrentMonth(day.startOf("month"));
+	                  onSelectDate?.(key);
+	                }}
+	                aria-pressed={isSelected}
+	                className={dayClassName}
+	                style={
+	                  isToday || isSelected
+	                    ? {
+                        background:
+                          "color-mix(in srgb, var(--app-accent) 16%, var(--app-panel-strong))",
+                        boxShadow: isSelected
+                          ? "0 22px 40px -32px color-mix(in srgb, var(--app-accent) 62%, transparent)"
+                          : undefined,
+                      }
+                    : undefined
+                }
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={clsx("text-sm font-semibold", {
+                      "text-[var(--app-accent)]": isToday || isSelected,
+                    })}
+                  >
+                    {day.date()}
+                  </span>
+                  {todos.length > 0 && <span className="app-badge">{todos.length}</span>}
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  {todos.slice(0, 2).map((todo) => (
+                    <div
+                      key={todo.id}
+                      className="rounded-xl border border-white/10 px-2.5 py-2 text-xs"
+                      style={{
+                        background: "color-mix(in srgb, var(--app-panel-strong) 82%, transparent)",
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: todo.color || "#2563eb" }}
+                        />
+                        <span className="truncate font-medium">{todo.title}</span>
+                      </div>
+                      {todo.boardName && (
+                        <span className="mt-1 block truncate app-text-muted">{todo.boardName}</span>
+                      )}
+                    </div>
+                  ))}
+
+                  {todos.length > 2 && (
+                    <div className="text-xs font-medium app-text-muted">+{todos.length - 2} more</div>
+                  )}
+
+                  {todos.length === 0 && (
+                    <div className="pt-2 text-xs app-text-muted">
+                      {hasOverdue ? "Overdue tasks" : "No due items"}
+                    </div>
+                  )}
+                </div>
+
+                {hasOverdue && (
+                  <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-rose-400">
+                    <span className="h-2 w-2 rounded-full bg-rose-400" />
+                    Past due
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      <div
+        className="mt-5 rounded-[1.5rem] border border-[var(--app-border)] p-4 sm:p-5"
+        style={{
+          background: "color-mix(in srgb, var(--app-panel) 88%, transparent)",
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="app-kicker">Selected Agenda</p>
+            <h3 className="mt-2 text-xl font-semibold">{dayjs(activeDate).format("dddd, MMMM D")}</h3>
+          </div>
+          <span className="app-badge">{selectedTodos.length} tasks</span>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {selectedTodos.length === 0 ? (
+            <p className="text-sm app-text-muted">No due items scheduled for this date.</p>
+          ) : (
+            selectedTodos.map((todo) => (
+              <div
+                key={todo.id}
+                className="glass-panel flex items-start gap-3 rounded-[1.15rem] p-4"
+              >
+                <span
+                  className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: todo.color || "#2563eb" }}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{todo.title}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {todo.boardName && <span className="app-badge">{todo.boardName}</span>}
+                    {todo.categoryName && <span className="app-badge">{todo.categoryName}</span>}
+                    {todo.isComplete && <span className="app-badge">Complete</span>}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </section>
   );
 }

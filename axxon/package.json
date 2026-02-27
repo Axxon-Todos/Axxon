@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n NEXT,WS -c \"blue.bold,green.bold\" \"next dev\" \"npx ts-node src/lib/server.ts\"",
+    "dev": "concurrently -n NEXT,WS -c \"blue.bold,green.bold\" \"pnpm dev-next\" \"pnpm dev-ws\"",
     "dev-next": "next dev",
-    "dev-ws": "npx ts-node src/lib/server.ts",
+    "dev-ws": "npx ts-node -r tsconfig-paths/register src/lib/server.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -74,6 +74,7 @@
     "tailwind-scrollbar": "^4.0.2",
     "tailwindcss": "^4",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.2",
     "typescript": "^5"
   }

@@ -52,9 +52,15 @@ export default function LabelSelector({
   }
 
   return (
-    <div className="w-64 max-h-80 flex flex-col">
+    <div className="flex max-h-80 w-72 flex-col">
       {/* Search Input */}
-      <div className="p-2 border-b sticky top-0 bg-white">
+      <div
+        className="sticky top-0 border-b p-3"
+        style={{
+          borderColor: 'var(--app-border)',
+          background: 'color-mix(in srgb, var(--app-panel-strong) 92%, transparent)',
+        }}
+      >
         <input
           type="text"
           value={searchQuery}
@@ -62,7 +68,7 @@ export default function LabelSelector({
           onKeyDown={handleKeyDown}
           onMouseDown={(e) => e.stopPropagation()}  // Prevent drag detection
           placeholder="Search labels..."
-          className="w-full px-2 py-1 text-sm border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="app-input text-sm"
           autoFocus
         />
       </div>
@@ -70,7 +76,7 @@ export default function LabelSelector({
       {/* Label List */}
       <div className="overflow-auto flex-1">
         {!Array.isArray(allLabels) ? (
-          <div className="px-3 py-4 text-sm text-gray-500 text-center">
+          <div className="px-3 py-4 text-center text-sm app-text-muted">
             Loading labels...
           </div>
         ) : (
@@ -83,15 +89,13 @@ export default function LabelSelector({
                   onMouseDown={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log('Label mouseDown:', label.name, label.id)
                   }}
                   onMouseUp={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    console.log('Label mouseUp:', label.name, label.id, !isSelected)
                     onToggleLabel(label.id, !isSelected)
                   }}
-                  className="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 cursor-pointer"
+                  className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-white/10"
                 >
                   <div className="w-4 h-4 flex items-center justify-center">
                     {isSelected && <Check className="w-4 h-4 text-blue-600" />}
@@ -103,7 +107,7 @@ export default function LabelSelector({
 
             {/* No results */}
             {filteredLabels.length === 0 && !searchQuery && (
-              <div className="px-3 py-4 text-sm text-gray-500 text-center">
+              <div className="px-3 py-4 text-center text-sm app-text-muted">
                 No labels yet
               </div>
             )}
@@ -119,11 +123,12 @@ export default function LabelSelector({
               onCreateLabel(searchQuery.trim())
               setSearchQuery('')
             }}
-            className="flex items-center gap-2 px-3 py-2 border-t hover:bg-gray-100 cursor-pointer mt-1"
+            className="mt-1 flex cursor-pointer items-center gap-2 border-t px-3 py-3 hover:bg-white/10"
+            style={{ borderColor: 'var(--app-border)' }}
           >
             <Plus className="w-4 h-4 text-blue-600" />
             <span className="text-sm text-blue-600">
-              Create <strong>"{searchQuery.trim()}"</strong>
+              Create <strong>&ldquo;{searchQuery.trim()}&rdquo;</strong>
             </span>
           </div>
         )}

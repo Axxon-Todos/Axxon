@@ -1,7 +1,7 @@
 // Manages global state for label popups - ensures only one popup open at a time and auto-closes when modals open
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'
 import { useModal } from './ModalManager'
 
 interface LabelPopupState {
@@ -33,19 +33,19 @@ export const LabelPopupProvider = ({ children }: { children: ReactNode }) => {
   // Auto-close popup when any modal opens
   const { modalState } = useModal()
 
+  const closePopup = useCallback(() => {
+    setPopupState({ todoId: null, anchorElement: null })
+  }, [])
+
   useEffect(() => {
     // When modal opens (type changes from null to any value), close any open popup
     if (modalState.type !== null && popupState.todoId !== null) {
       closePopup()
     }
-  }, [modalState.type])
+  }, [closePopup, modalState.type, popupState.todoId])
 
   const openPopup = (todoId: number, anchorElement: HTMLElement) => {
     setPopupState({ todoId, anchorElement })
-  }
-
-  const closePopup = () => {
-    setPopupState({ todoId: null, anchorElement: null })
   }
 
   const isPopupOpen = (todoId: number) => {

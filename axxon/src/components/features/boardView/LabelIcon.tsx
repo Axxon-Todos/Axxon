@@ -18,7 +18,7 @@ export default function LabelIcon({ labels, onClick, className = '' }: LabelIcon
     return (
       <button
         onClick={(e) => onClick(e)}
-        className={`text-gray-400 hover:text-gray-600 ${className}`}
+        className={`glass-button !h-9 !w-9 !p-0 ${className}`}
         aria-label="Add labels"
       >
         <Tag className="w-4 h-4" />
@@ -42,7 +42,7 @@ export default function LabelIcon({ labels, onClick, className = '' }: LabelIcon
     <div onClick={(e) => onClick(e)} className={`flex gap-1 cursor-pointer ${className}`}>
       <LabelBadge label={labels[0]} size="sm" />
       <LabelBadge label={labels[1]} size="sm" />
-      <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full">
+      <span className="app-badge text-xs">
         +{labelCount - 2} more
       </span>
     </div>
