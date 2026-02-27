@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { updateBoardById } from '@/lib/api/updateBoardById'
+import { updateBoardById } from '@/lib/api/boards/updateBoardById'
 import type { UpdateBoard } from '@/lib/types/boardTypes'
 
 type EditBoardModalProps = {

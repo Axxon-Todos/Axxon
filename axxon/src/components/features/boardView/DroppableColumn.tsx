@@ -20,7 +20,7 @@ export default function DroppableColumn({
   const { setNodeRef } = useDroppable({ id: categoryId })
 
   return (
-    <div ref={setNodeRef} className="bg-white shadow p-4 rounded-lg text-black">
+    <div ref={setNodeRef} className="bg-white shadow m-3 p-4 rounded-lg text-black">
       <h2 className="text-xl font-semibold mb-4">{categoryName}</h2>
       {todos?.length ? (
         todos.map((todo) => (

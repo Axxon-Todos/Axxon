@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getUserId } from '@/lib/api/getUserId'
+import { getUserId } from '@/lib/api/users/getUserId'
 
 export default function CreateBoardForm() {
   const [name, setName] = useState('')

@@ -1,6 +1,6 @@
 // hooks/useDeleteTodoMutation.ts
 import { useMutation } from "@tanstack/react-query";
-import { deleteTodoById } from "@/lib/api/deleteTodoById"; // your API call
+import { deleteTodoById } from "@/lib/api/todos/deleteTodoById"; // your API call
 
 export function useDeleteTodoMutation(boardId: string) {
 

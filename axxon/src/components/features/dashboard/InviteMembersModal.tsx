@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { inviteMembersByEmail } from "@/lib/api/inviteMembers";
+import { inviteMembersByEmail } from "@/lib/api/members/inviteMembers";
 
 type InviteMembersModalProps = {
   boardId: number

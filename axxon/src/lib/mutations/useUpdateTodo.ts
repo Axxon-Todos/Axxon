@@ -1,6 +1,6 @@
 // hooks/useUpdateTodoMutation.ts
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateTodoById } from "@/lib/api/updateTodoById";
+import { updateTodoById } from "@/lib/api/todos/updateTodoById";
 import { TodoWithLabels } from "@/lib/types/todoTypes";
 
 export function useUpdateTodoMutation(boardId: string) {

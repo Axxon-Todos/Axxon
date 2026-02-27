@@ -1,5 +1,7 @@
 import "./globals.css";
 import QueryProvider from "./QueryProvider";
+import { ModalProvider } from "@/context/ModalManager";
+import { LabelPopupProvider } from "@/context/LabelPopupManager";
 
 export const metadata = {
   title: "Create Next App",
@@ -14,7 +16,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          <ModalProvider>
+            <LabelPopupProvider>{children}</LabelPopupProvider>
+          </ModalProvider>
+        </QueryProvider>
       </body>
     </html>
   );

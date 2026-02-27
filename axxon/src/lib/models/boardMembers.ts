@@ -8,8 +8,8 @@ import { Conversations } from './conversations';
 
 export class BoardMembers {
 
-  //user_id destructures the data so that you can utilize it under where
-// Lists all boards that a user is a member of
+  // user_id destructures the data so that you can utilize it under where
+  // Lists all boards that a user is a member of
   static listBoardsForUser = async (data: ListBoardsForUser): Promise<BoardBaseData[]> => {
     return await knex('boards')//server as table A for join conditions
       .join('board_members', 'boards.id', 'board_members.board_id')//serves as correlation conditions in the following oerder: (B,A,B)

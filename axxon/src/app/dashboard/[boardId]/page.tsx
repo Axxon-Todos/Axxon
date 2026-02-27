@@ -1,9 +1,9 @@
 import { HydrationBoundary, dehydrate } from '@tanstack/react-query'
 import getQueryClient from '@/lib/utils/queryClient'
-import { fetchBoards } from '@/lib/api/getBoards'
-import { fetchCategories } from '@/lib/api/getCategories'
-import { fetchTodos } from '@/lib/api/getTodos'
-import { fetchLabels } from '@/lib/api/getLabels'
+import { fetchBoards } from '@/lib/api/boards/getBoards'
+import { fetchCategories } from '@/lib/api/categories/getCategories'
+import { fetchTodos } from '@/lib/api/todos/getTodos'
+import { fetchLabels } from '@/lib/api/labels/getLabels'
 import BoardView from '../../../components/features/boardView/BoardView'
 import { notFound } from 'next/navigation' 
 
