@@ -53,14 +53,15 @@ export function createWsServer(server: http.Server) {
       const token = getSessionTokenFromCookieHeader(socket.request.headers.cookie);
 
       if (!token) {
+        console.warn('[WS] Unauthorized handshake rejected: missing token');
         return next(new Error('Unauthorized'));
       }
 
       const session = await verifySessionToken(token);
       socket.data.userId = session.userId;
       next();
-    } catch (error) {
-      console.error('WebSocket authentication failed:', error);
+    } catch {
+      console.warn('[WS] Unauthorized handshake rejected: invalid or expired token');
       next(new Error('Unauthorized'));
     }
   });

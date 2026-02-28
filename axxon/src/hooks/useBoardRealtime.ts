@@ -12,7 +12,7 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
     const socket = socketRef.current;
     if (!socket) return;
 
-    let currentBoard = boardId;
+    const currentBoard = boardId;
 
     // --- Event handlers ---
     const handleTodoCreated = (todo: any) => {
@@ -81,17 +81,6 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
     socket.on("board:label:updated", handleLabelUpdated);
     socket.on("board:label:deleted", handleLabelDeleted);
 
-    // --- Join the board ---
-    socket.emit("joinBoard", boardId);
-
-    // --- Handle boardId changes (switching boards) ---
-    const prevBoard = currentBoard;
-    currentBoard = boardId;
-    if (prevBoard !== currentBoard) {
-      socket.emit("leaveBoard", prevBoard);
-      socket.emit("joinBoard", currentBoard);
-    }
-
     // --- Cleanup ---
     return () => {
       socket.off("board:todo:created", handleTodoCreated);
@@ -100,7 +89,6 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
       socket.off("board:label:created", handleLabelCreated);
       socket.off("board:label:updated", handleLabelUpdated);
       socket.off("board:label:deleted", handleLabelDeleted);
-      socket.emit("leaveBoard", currentBoard);
     };
   }, [boardId, queryClient, socketRef]);
 }

@@ -30,6 +30,6 @@ Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate
 - Maintain proper organization with the rest of the codebase 
 - Ensure functions and components are organized correctly in their respected areas
 - frontend components on the ui layer should be used as global components such as my modals which is a global component that gets data placed into it depending on the usecase
-- add comments to code to briefly explain it purpose
+- add comments on the code that summarize their purpose when neede
 - aim For concise and minimal code
 - types implemented should be aimed to be under the type directory and imported but if smaller it can go directly in the file
