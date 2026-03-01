@@ -29,7 +29,7 @@ export default function LabelIcon({ labels, onClick, className = '' }: LabelIcon
   // 1-2 labels: Show actual badges
   if (labelCount <= 2) {
     return (
-      <div onClick={(e) => onClick(e)} className={`flex gap-1 cursor-pointer ${className}`}>
+      <div onClick={(e) => onClick(e)} className={`flex max-w-[11rem] flex-wrap gap-1 cursor-pointer ${className}`}>
         {labels.map(label => (
           <LabelBadge key={label.id} label={label} size="sm" />
         ))}
@@ -39,10 +39,10 @@ export default function LabelIcon({ labels, onClick, className = '' }: LabelIcon
 
   // 3+ labels: Show first 2 + count
   return (
-    <div onClick={(e) => onClick(e)} className={`flex gap-1 cursor-pointer ${className}`}>
+    <div onClick={(e) => onClick(e)} className={`flex max-w-[11rem] flex-wrap gap-1 cursor-pointer ${className}`}>
       <LabelBadge label={labels[0]} size="sm" />
       <LabelBadge label={labels[1]} size="sm" />
-      <span className="app-badge text-xs">
+      <span className="app-badge rounded-full px-2.5 py-0.5 text-[11px] leading-4">
         +{labelCount - 2} more
       </span>
     </div>

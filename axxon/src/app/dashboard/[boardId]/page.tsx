@@ -1,4 +1,4 @@
-import BoardView from '../../../components/features/boardView/BoardView'
+import BoardWorkspace from '../../../components/features/boardView/BoardWorkspace'
 
 type BoardPageProps = {
   params: Promise<{
@@ -15,7 +15,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <BoardView boardId={boardId} />
+      <BoardWorkspace boardId={boardId} />
     </div>
   )
 }

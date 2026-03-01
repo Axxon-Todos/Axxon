@@ -143,6 +143,17 @@ export class Categories {
             throw new Error('A board can have at most 9 done categories');
           }
         }
+
+        if (is_done === false) {
+          const completedTodoCount = await trx('todos')
+            .where({ board_id, category_id: id, is_complete: true })
+            .count<{ count: string }>('id as count')
+            .first();
+
+          if (completedTodoCount && Number(completedTodoCount.count) > 0) {
+            throw new Error('Cannot mark category as active while it contains completed todos');
+          }
+        }
       }
 
       // --- Perform the update ---

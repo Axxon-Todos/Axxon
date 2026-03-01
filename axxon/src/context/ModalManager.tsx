@@ -1,18 +1,28 @@
-// src/context/ModalContext.tsx
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
 
-type ModalType = 'ADD_TODO' | 'UPDATE_TODO' | 'CATEGORY' | null
+import type { CategoryBaseData } from '@/lib/types/categoryTypes'
+import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
-interface ModalState {
-  type: ModalType
-  payload?: any
+export type ModalType = 'ADD_TODO' | 'UPDATE_TODO' | 'CATEGORY'
+export type ModalVariant = 'modal' | 'drawer'
+
+type ModalPayloadMap = {
+  ADD_TODO: { boardId: number }
+  UPDATE_TODO: { boardId: number; todo: TodoWithLabels }
+  CATEGORY: CategoryBaseData
 }
+
+export type ModalState =
+  | { type: null; variant: null; payload?: undefined }
+  | { type: 'ADD_TODO'; variant: 'drawer'; payload: ModalPayloadMap['ADD_TODO'] }
+  | { type: 'UPDATE_TODO'; variant: 'drawer'; payload: ModalPayloadMap['UPDATE_TODO'] }
+  | { type: 'CATEGORY'; variant: 'modal'; payload: ModalPayloadMap['CATEGORY'] }
 
 interface ModalContextType {
   modalState: ModalState
-  openModal: (type: ModalType, payload?: any) => void
+  openModal: <T extends ModalType>(type: T, payload: ModalPayloadMap[T]) => void
   closeModal: () => void
 }
 
@@ -25,13 +35,19 @@ export const useModal = () => {
 }
 
 export const ModalProvider = ({ children }: { children: ReactNode }) => {
-  const [modalState, setModalState] = useState<ModalState>({ type: null })
+  const [modalState, setModalState] = useState<ModalState>({ type: null, variant: null })
 
-  const openModal = (type: ModalType, payload?: any) => {
-    setModalState({ type, payload })
+  const openModal = <T extends ModalType>(type: T, payload: ModalPayloadMap[T]) => {
+    const variantMap: Record<ModalType, ModalVariant> = {
+      ADD_TODO: 'drawer',
+      UPDATE_TODO: 'drawer',
+      CATEGORY: 'modal',
+    }
+
+    setModalState({ type, variant: variantMap[type], payload } as ModalState)
   }
 
-  const closeModal = () => setModalState({ type: null, payload: undefined })
+  const closeModal = () => setModalState({ type: null, variant: null, payload: undefined })
 
   return (
     <ModalContext.Provider value={{ modalState, openModal, closeModal }}>

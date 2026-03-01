@@ -7,6 +7,7 @@ export type NewTodoInput = {
   assignee_id?: number;
   priority?: number;
   category_id?: number;
+  is_complete?: boolean;
 };
 
 export const createTodo = async (

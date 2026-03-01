@@ -12,6 +12,11 @@ export type CalendarTodo = {
   boardName?: string;
   boardId?: string;
   categoryName?: string;
+  categoryId?: number;
+  description?: string;
+  priority?: number;
+  dueDate?: string;
+  assigneeId?: number;
   isComplete?: boolean;
 };
 
@@ -21,11 +26,17 @@ type CalendarProps = {
   todosByDate: TodosByDate;
   selectedDate?: string | null;
   onSelectDate?: (date: string) => void;
+  onSelectTodo?: (todo: CalendarTodo) => void;
 };
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export default function Calendar({ todosByDate, selectedDate, onSelectDate }: CalendarProps) {
+export default function Calendar({
+  todosByDate,
+  selectedDate,
+  onSelectDate,
+  onSelectTodo,
+}: CalendarProps) {
   const today = dayjs();
   const [currentMonth, setCurrentMonth] = useState(today.startOf("month"));
   const activeDate = selectedDate ?? today.format("YYYY-MM-DD");
@@ -86,35 +97,35 @@ export default function Calendar({ todosByDate, selectedDate, onSelectDate }: Ca
         </div>
 
         <div className="mt-2 grid grid-cols-7 gap-2">
-	          {days.map((day, i) => {
-	            const key = day.format("YYYY-MM-DD");
-	            const todos = todosByDate[key] || [];
-	            const isCurrentMonth = day.month() === currentMonth.month();
-	            const isToday = day.isSame(today, "day");
-	            const isSelected = key === activeDate;
-	            const hasOverdue = day.isBefore(today, "day") && todos.some((todo) => !todo.isComplete);
-	            const dayClassName = clsx(
-	              "min-h-[7.75rem] rounded-[1.2rem] border p-3 text-left text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
-	              isToday || isSelected
-	                ? "border-[var(--app-accent)]"
-	                : isCurrentMonth
-	                  ? "border-[var(--app-border)] bg-white/10"
-	                  : "border-transparent bg-white/5 text-[var(--app-muted)]"
-	            );
+          {days.map((day, i) => {
+            const key = day.format("YYYY-MM-DD");
+            const todos = todosByDate[key] || [];
+            const isCurrentMonth = day.month() === currentMonth.month();
+            const isToday = day.isSame(today, "day");
+            const isSelected = key === activeDate;
+            const hasOverdue = day.isBefore(today, "day") && todos.some((todo) => !todo.isComplete);
+            const dayClassName = clsx(
+              "min-h-[7.75rem] rounded-[1.2rem] border p-3 text-left text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]",
+              isToday || isSelected
+                ? "border-[var(--app-accent)]"
+                : isCurrentMonth
+                  ? "border-[var(--app-border)] bg-white/10"
+                  : "border-transparent bg-white/5 text-[var(--app-muted)]"
+            );
 
-	            return (
-	              <button
+            return (
+              <button
                 type="button"
                 key={i}
                 onClick={() => {
                   setCurrentMonth(day.startOf("month"));
-	                  onSelectDate?.(key);
-	                }}
-	                aria-pressed={isSelected}
-	                className={dayClassName}
-	                style={
-	                  isToday || isSelected
-	                    ? {
+                  onSelectDate?.(key);
+                }}
+                aria-pressed={isSelected}
+                className={dayClassName}
+                style={
+                  isToday || isSelected
+                    ? {
                         background:
                           "color-mix(in srgb, var(--app-accent) 16%, var(--app-panel-strong))",
                         boxShadow: isSelected
@@ -132,7 +143,7 @@ export default function Calendar({ todosByDate, selectedDate, onSelectDate }: Ca
                   >
                     {day.date()}
                   </span>
-                  {todos.length > 0 && <span className="app-badge">{todos.length}</span>}
+                  {todos.length > 0 ? <span className="app-badge">{todos.length}</span> : null}
                 </div>
 
                 <div className="mt-3 space-y-2">
@@ -151,29 +162,29 @@ export default function Calendar({ todosByDate, selectedDate, onSelectDate }: Ca
                         />
                         <span className="truncate font-medium">{todo.title}</span>
                       </div>
-                      {todo.boardName && (
+                      {todo.boardName ? (
                         <span className="mt-1 block truncate app-text-muted">{todo.boardName}</span>
-                      )}
+                      ) : null}
                     </div>
                   ))}
 
-                  {todos.length > 2 && (
+                  {todos.length > 2 ? (
                     <div className="text-xs font-medium app-text-muted">+{todos.length - 2} more</div>
-                  )}
+                  ) : null}
 
-                  {todos.length === 0 && (
+                  {todos.length === 0 ? (
                     <div className="pt-2 text-xs app-text-muted">
                       {hasOverdue ? "Overdue tasks" : "No due items"}
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
-                {hasOverdue && (
+                {hasOverdue ? (
                   <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-rose-400">
                     <span className="h-2 w-2 rounded-full bg-rose-400" />
                     Past due
                   </div>
-                )}
+                ) : null}
               </button>
             );
           })}
@@ -199,9 +210,11 @@ export default function Calendar({ todosByDate, selectedDate, onSelectDate }: Ca
             <p className="text-sm app-text-muted">No due items scheduled for this date.</p>
           ) : (
             selectedTodos.map((todo) => (
-              <div
+              <button
                 key={todo.id}
-                className="glass-panel flex items-start gap-3 rounded-[1.15rem] p-4"
+                type="button"
+                onClick={() => onSelectTodo?.(todo)}
+                className="glass-panel flex w-full items-start gap-3 rounded-[1.15rem] p-4 text-left hover:-translate-y-0.5"
               >
                 <span
                   className="mt-1 h-3 w-3 shrink-0 rounded-full"
@@ -210,12 +223,13 @@ export default function Calendar({ todosByDate, selectedDate, onSelectDate }: Ca
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{todo.title}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {todo.boardName && <span className="app-badge">{todo.boardName}</span>}
-                    {todo.categoryName && <span className="app-badge">{todo.categoryName}</span>}
-                    {todo.isComplete && <span className="app-badge">Complete</span>}
+                    {todo.boardName ? <span className="app-badge">{todo.boardName}</span> : null}
+                    {todo.categoryName ? <span className="app-badge">{todo.categoryName}</span> : null}
+                    {todo.dueDate ? <span className="app-badge">{dayjs(todo.dueDate).format("MMM D")}</span> : null}
+                    {todo.isComplete ? <span className="app-badge">Complete</span> : null}
                   </div>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>

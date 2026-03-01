@@ -30,7 +30,7 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
   const shouldReduceMotion = useReducedMotion()
   const [editingBoard, setEditingBoard] = useState<UpdateBoard | null>(null)
   const [selectedBoard, setSelectedBoard] = useState<UpdateBoard | null>(null)
-  const [isInviteModalOpen, setInviteModalOpen] = useState(false)
+  const [inviteBoard, setInviteBoard] = useState<UpdateBoard | null>(null)
   const isSidebar = variant === 'sidebar'
 
   const { data: id, error: userError, isLoading: isUserLoading } = useQuery({
@@ -159,7 +159,7 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
                     <button
                       type="button"
                       onClick={() => openBoardOptions(board)}
-                      className="pointer-events-auto relative z-10 translate-x-1 opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100"
+                      className="pointer-events-auto relative z-10 translate-x-1 opacity-0 transition-[opacity,transform] duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100"
                     >
                       <span className="glass-button !h-8 !w-8 !p-0">
                         <MoreHorizontal className="h-4 w-4" />
@@ -263,14 +263,14 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
           onClose={() => setSelectedBoard(null)}
           onEdit={() => setEditingBoard(selectedBoard)}
           onDelete={() => deleteMutation.mutate(String(selectedBoard.id))}
-          onInvite={() => setInviteModalOpen(true)}
+          onInvite={() => setInviteBoard(selectedBoard)}
         />
       )}
 
-      {isInviteModalOpen && selectedBoard && (
+      {inviteBoard && (
         <InviteMembersModal
-          boardId={Number(selectedBoard.id)}
-          onClose={() => setInviteModalOpen(false)}
+          boardId={Number(inviteBoard.id)}
+          onClose={() => setInviteBoard(null)}
         />
       )}
     </>
