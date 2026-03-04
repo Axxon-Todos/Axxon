@@ -16,6 +16,9 @@ Run commands from `axxon/`.
 ## Coding Style & Naming Conventions
 Use TypeScript throughout and prefer the `@/` import alias for internal modules. Follow the existing 2-space indentation and avoid reformatting unrelated files. Name React components and context providers in PascalCase (`CreateBoardForm.tsx`), hooks in camelCase with a `use` prefix (`useSocket.ts`), and Next route handlers as `route.ts`. Run `pnpm lint` before opening a PR. ESLint extends `next/core-web-vitals` and `next/typescript`.
 
+## Backend Coding
+Knex is used at the model and migrations layer. Ensure proper use of transactions and commpents to explain methods. Models are typically static methods. Ensure you maintain ACID complaince and use proper security measures.
+
 ## Testing Guidelines
 No automated test runner or coverage gate is configured yet. Until one is added, every change should include `pnpm lint` and manual verification of the affected flow, especially auth, board CRUD, migrations, and websocket behavior. If you introduce tests, place them near the feature in `src/` and use `*.test.ts` or `*.test.tsx`.
 
@@ -33,3 +36,5 @@ Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate
 - add comments on the code that summarize their purpose when neede
 - aim For concise and minimal code
 - types implemented should be aimed to be under the type directory and imported but if smaller it can go directly in the file
+- whenever a new major feature is complete revise this agents.md file and improve its documentation
+- when working on a new feature create a new branch of the current branch for whatever is being planned and commit/push out the changes when complete. 
