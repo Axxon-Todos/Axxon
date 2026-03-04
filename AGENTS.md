@@ -37,4 +37,4 @@ Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate
 - aim For concise and minimal code
 - types implemented should be aimed to be under the type directory and imported but if smaller it can go directly in the file
 - whenever a new major feature is complete revise this agents.md file and improve its documentation
-- when working on a new feature create a new branch of the current branch for whatever is being planned and commit/push out the changes when complete.
+- when working on a new feature create a new branch of the current branch for whatever is being planned and commit/push out the changes when complete. 
