@@ -1,10 +1,8 @@
 'use client'
 
-import dayjs from 'dayjs'
 import { useDraggable } from '@dnd-kit/core'
 import { useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, Clock3, UserRound } from 'lucide-react'
 
 import { useBoardView } from '@/context/BoardViewContext'
 import { useLabelPopup } from '@/context/LabelPopupManager'
@@ -17,13 +15,7 @@ import type { TodoWithLabels } from '@/lib/types/todoTypes'
 import LabelIcon from './LabelIcon'
 import LabelPopup from './LabelPopup'
 import LabelSelector from './LabelSelector'
-
-const priorityMap: Record<number, { label: string; color: string }> = {
-  1: { label: 'None', color: '#94a3b8' },
-  2: { label: 'Low', color: '#22c55e' },
-  3: { label: 'Medium', color: '#f59e0b' },
-  4: { label: 'High', color: '#ef4444' },
-}
+import TodoCard from './TodoCard'
 
 export default function DraggableTodo({
   todo,
@@ -32,7 +24,7 @@ export default function DraggableTodo({
   todo: TodoWithLabels
   onClick: () => void
 }) {
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: todo.id,
     data: { todo },
   })
@@ -121,10 +113,6 @@ export default function DraggableTodo({
     )
   }
 
-  const priority = priorityMap[todo.priority || 1]
-  const dueDate = todo.due_date ? dayjs(todo.due_date) : null
-  const isOverdue = Boolean(dueDate && !todo.is_complete && dueDate.isBefore(dayjs(), 'day'))
-
   return (
     <article
       ref={setNodeRef}
@@ -133,67 +121,38 @@ export default function DraggableTodo({
       style={style}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
-      className={`${hideTodos ? 'hidden' : 'glass-panel cursor-grab rounded-[1.35rem] p-4 hover:-translate-y-0.5 active:cursor-grabbing'}`}
+      className={`${hideTodos ? 'hidden' : 'cursor-grab hover:-translate-y-0.5 active:cursor-grabbing'}`}
     >
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold">{todo.title}</h3>
-              {todo.is_complete && <span className="app-badge">Complete</span>}
-              {isOverdue && <span className="app-badge text-rose-400">Overdue</span>}
-            </div>
-            {todo.description && (
-              <p className="mt-2 line-clamp-2 text-sm leading-6 app-text-muted">{todo.description}</p>
-            )}
-          </div>
-
+      <TodoCard
+        todo={todo}
+        isDragging={isDragging}
+        labelControl={
           <div
             ref={labelIconRef}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="self-start"
           >
             <LabelIcon labels={todo.labels || []} onClick={handleLabelClick} />
           </div>
-        </div>
+        }
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <span className="app-badge" style={{ color: priority.color }}>
-            <AlertCircle className="h-3.5 w-3.5" />
-            {priority.label} priority
-          </span>
-          {dueDate && (
-            <span className="app-badge" style={isOverdue ? { color: '#f87171' } : undefined}>
-              <Clock3 className="h-3.5 w-3.5" />
-              {dueDate.format('MMM D')}
-            </span>
-          )}
-          {todo.assignee_id && (
-            <span className="app-badge">
-              <UserRound className="h-3.5 w-3.5" />
-              Assignee #{todo.assignee_id}
-            </span>
-          )}
-        </div>
-
-        {isPopupOpen(todo.id) && (
-          <LabelPopup
-            isOpen={isPopupOpen(todo.id)}
-            onClose={closePopup}
-            anchorRef={labelIconRef}
-          >
-            <LabelSelector
-              boardId={String(todo.board_id)}
-              todoId={todo.id}
-              currentLabels={todo.labels || []}
-              allLabels={Array.isArray(allLabels) ? allLabels : []}
-              onToggleLabel={handleToggleLabel}
-              onCreateLabel={handleCreateLabel}
-            />
-          </LabelPopup>
-        )}
-      </div>
+      {isPopupOpen(todo.id) && (
+        <LabelPopup
+          isOpen={isPopupOpen(todo.id)}
+          onClose={closePopup}
+          anchorRef={labelIconRef}
+        >
+          <LabelSelector
+            boardId={String(todo.board_id)}
+            todoId={todo.id}
+            currentLabels={todo.labels || []}
+            allLabels={Array.isArray(allLabels) ? allLabels : []}
+            onToggleLabel={handleToggleLabel}
+            onCreateLabel={handleCreateLabel}
+          />
+        </LabelPopup>
+      )}
     </article>
   )
 }

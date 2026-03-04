@@ -97,7 +97,7 @@ export default function BoardOptionsModal({
                 </p>
                 <h2
                   id="board-options-title"
-                  className="mt-1 truncate text-2xl font-semibold tracking-tight text-slate-950"
+                  className="mt-1 break-words text-2xl font-semibold tracking-tight text-slate-950"
                 >
                   {boardName}
                 </h2>
@@ -117,7 +117,7 @@ export default function BoardOptionsModal({
             </button>
           </div>
 
-          <div className="mt-6 grid gap-3">
+          <div className="mt-6 grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
             <ActionButton
               title="Edit board"
               description="Rename the board, change its color, or update its details."
@@ -192,7 +192,7 @@ function ActionButton({
         {icon}
       </span>
 
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span
           className={`block text-sm font-semibold ${
             danger ? "text-rose-700" : "text-slate-950"
@@ -201,7 +201,7 @@ function ActionButton({
           {title}
         </span>
         <span
-          className={`mt-1 block text-sm leading-6 ${
+          className={`mt-1 block break-words text-sm leading-6 ${
             danger ? "text-rose-600/85" : "text-slate-600"
           }`}
         >

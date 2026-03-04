@@ -44,6 +44,12 @@ type GetTodoByIdInput = {
   sessionUserId: number;
 };
 
+function throwTodoRuleError(error: unknown) {
+  if (error instanceof Error && error.message.includes('Completed todos must belong to a done category')) {
+    throw new BadRequestError(error.message);
+  }
+}
+
 // Creates a todo in a board.
 export async function createTodo({
   boardId,
@@ -56,7 +62,13 @@ export async function createTodo({
 
   await requireBoardMember(boardId, sessionUserId);
 
-  const todo = await Todos.createTodo({ ...data, board_id: boardId });
+  let todo;
+  try {
+    todo = await Todos.createTodo({ ...data, board_id: boardId });
+  } catch (error) {
+    throwTodoRuleError(error);
+    throw error;
+  }
 
   // Publish the hydrated todo to keep realtime clients in sync.
   const fullTodo = await TodoLabels.getTodosWithLabels(boardId);
@@ -108,7 +120,13 @@ export async function updateTodo({
     Object.entries(data ?? {}).filter(([key]) => allowedKeys.includes(key as keyof UpdateTodoPayload))
   );
 
-  const updated = await Todos.updateTodo({ ...filteredBody, id: todoId, board_id: boardId });
+  let updated;
+  try {
+    updated = await Todos.updateTodo({ ...filteredBody, id: todoId, board_id: boardId });
+  } catch (error) {
+    throwTodoRuleError(error);
+    throw error;
+  }
   if (!updated) {
     throw new NotFoundError('Todo not found');
   }

@@ -4,6 +4,7 @@ import QueryProvider from "./QueryProvider";
 import { ModalProvider } from "@/context/ModalManager";
 import { LabelPopupProvider } from "@/context/LabelPopupManager";
 import { ThemeProvider } from "@/context/ThemeProvider";
+import GlobalOverlayHost from "@/components/ui/GlobalOverlayHost";
 
 export const metadata: Metadata = {
   title: 'Axxon | Modular Project Management Platform',
@@ -28,7 +29,10 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <ModalProvider>
-              <LabelPopupProvider>{children}</LabelPopupProvider>
+              <LabelPopupProvider>
+                {children}
+                <GlobalOverlayHost />
+              </LabelPopupProvider>
             </ModalProvider>
           </QueryProvider>
         </ThemeProvider>

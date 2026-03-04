@@ -1,6 +1,11 @@
 // server.ts
+import dotenv from "dotenv";
 import http from "http";
 import { createWsServer } from "./wsServer";
+
+// Keep the standalone WS process aligned with Next's local env loading.
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const PORT = process.env.WS_PORT || 4000;
 

@@ -117,6 +117,7 @@ export async function updateCategory({
       'backlog category',
       'done categories',
       'Invalid position',
+      'contains completed todos',
     ]);
     throw error;
   }

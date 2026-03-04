@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently -n NEXT,WS -c \"blue.bold,green.bold\" \"pnpm dev-next\" \"pnpm dev-ws\"",
     "dev-next": "next dev",
-    "dev-ws": "npx ts-node -r tsconfig-paths/register src/lib/server.ts",
+    "dev-ws": "pnpm exec tsx watch src/lib/server.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -13,10 +13,14 @@
     "migrate:latest": "ts-node --esm ./node_modules/knex/bin/cli.js migrate:latest --knexfile knexfile.ts",
     "seed": "ts-node --esm ./node_modules/knex/bin/cli.js seed:run --knexfile ./knexfile.ts --env development",
     "rollback": "ts-node --esm ./node_modules/knex/bin/cli.js migrate:rollback --knexfile ./knexfile.ts --env development",
+    "docker:dev": "docker compose --env-file .env.local up --build -d",
+    "docker:dev:down": "docker compose --env-file .env.local down",
+    "docker:prod": "docker compose --env-file .env.local -f docker-compose.prod.yml up --build -d",
+    "docker:prod:down": "docker compose --env-file .env.local -f docker-compose.prod.yml down",
     "redis:start": "docker compose up -d redis",
     "redis:stop": "docker compose down",
     "redis:logs": "docker compose logs -f redis",
-    "redis:cli": "docker exec -it axxon-redis redis-cli"
+    "redis:cli": "docker compose exec redis redis-cli"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

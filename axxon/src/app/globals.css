@@ -69,6 +69,7 @@
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, var(--app-glow-1), transparent 28%),
     radial-gradient(circle at top right, var(--app-glow-2), transparent 26%),
@@ -106,6 +107,7 @@ select {
 .app-shell-bg {
   position: relative;
   isolation: isolate;
+  overflow-x: hidden;
 }
 
 .app-shell-bg::before {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
 import * as Separator from "@radix-ui/react-separator";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -22,7 +22,7 @@ import Modal from "@/components/ui/Modal";
 import { useTheme } from "@/context/ThemeProvider";
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
-export const SIDEBAR_COLLAPSED_WIDTH = 72;
+export const SIDEBAR_COLLAPSED_WIDTH = 84;
 export const SIDEBAR_TRANSITION = {
   type: "spring",
   stiffness: 240,
@@ -30,8 +30,10 @@ export const SIDEBAR_TRANSITION = {
   mass: 0.9,
 } as const;
 
+const SIDEBAR_COLLAPSED_BUTTON_SIZE = 52;
+const SIDEBAR_COLLAPSED_ICON_SIZE = 32;
 const CONTENT_TRANSITION = {
-  duration: 0.22,
+  duration: 0.26,
   ease: [0.16, 1, 0.3, 1] as const,
 };
 
@@ -55,6 +57,12 @@ export default function Sidebar({
     ? { duration: 0 }
     : CONTENT_TRANSITION;
   const isDashboardActive = pathname === "/dashboard";
+  const collapsedButtonStyle = collapsed
+    ? {
+        width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+        height: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+      }
+    : undefined;
 
   async function handleLogout() {
     if (isLoggingOut) return;
@@ -88,44 +96,39 @@ export default function Sidebar({
           className="glass-panel-strong fixed inset-y-0 left-0 z-30 flex h-screen flex-col overflow-hidden border-r border-[var(--app-border)] text-[var(--app-foreground)] shadow-[var(--app-shadow)] backdrop-blur-xl"
         >
           <motion.div
-            layout
-            className={`${
-              collapsed
-                ? "flex flex-col items-center gap-2 px-2 pb-3 pt-4"
-                : "flex items-start gap-3 px-3 pb-3 pt-4"
-            }`}
+            className={`px-3 pb-3 pt-4 ${collapsed ? "flex justify-center" : ""}`}
           >
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.div
-                  key="sidebar-title"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -8 }}
-                  transition={contentTransition}
-                  className="min-w-0 flex-1"
-                >
-                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] app-text-muted">
-                    Workspace
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)] shadow-lg">
-                      <Sparkles className="h-4 w-4" />
-                    </span>
-                    <p className="truncate text-lg font-semibold tracking-tight">
-                      Axxon
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             <motion.div
-              layout
-              className={`${
+              initial={false}
+              animate={{
+                opacity: collapsed ? 0 : 1,
+                y: collapsed ? -10 : 0,
+                maxHeight: collapsed ? 0 : 88,
+                marginBottom: collapsed ? 0 : 12,
+              }}
+              transition={contentTransition}
+              aria-hidden={collapsed}
+              className="min-w-0 overflow-hidden"
+              style={{ pointerEvents: collapsed ? "none" : "auto" }}
+            >
+              <p className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] app-text-muted">
+                Workspace
+              </p>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)] shadow-lg">
+                  <Sparkles className="h-4 w-4" />
+                </span>
+                <p className="truncate text-lg font-semibold tracking-tight">
+                  Axxon
+                </p>
+              </div>
+            </motion.div>
+
+            <div
+              className={`flex shrink-0 gap-2 ${
                 collapsed
-                  ? "flex flex-col items-center gap-2"
-                  : "ml-auto flex items-center gap-2"
+                  ? "w-full flex-col items-center justify-center"
+                  : "w-full items-center justify-end"
               }`}
             >
               <SidebarTooltip label="Create board">
@@ -138,7 +141,10 @@ export default function Sidebar({
                     shouldReduceMotion ? undefined : { scale: 1.03, y: -1 }
                   }
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                  className="glass-button glass-button-primary !h-10 !w-10 !p-0 focus-visible:outline-none"
+                  className={`glass-button glass-button-primary flex shrink-0 items-center justify-center !p-0 focus-visible:outline-none ${
+                    collapsed ? "" : "!h-10 !w-10"
+                  }`}
+                  style={collapsedButtonStyle}
                 >
                   <Plus className="h-4 w-4" />
                 </motion.button>
@@ -155,7 +161,10 @@ export default function Sidebar({
                     shouldReduceMotion ? undefined : { scale: 1.02, y: -1 }
                   }
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                  className="glass-button !h-10 !w-10 !p-0 focus-visible:outline-none"
+                  className={`glass-button flex items-center justify-center !p-0 focus-visible:outline-none ${
+                    collapsed ? "" : "!h-10 !w-10"
+                  }`}
+                  style={collapsedButtonStyle}
                 >
                   <motion.span
                     animate={{ rotate: collapsed ? 180 : 0 }}
@@ -166,10 +175,10 @@ export default function Sidebar({
                   </motion.span>
                 </motion.button>
               </SidebarTooltip>
-            </motion.div>
+            </div>
           </motion.div>
 
-          <div className="px-3">
+          <div className={`px-3 ${collapsed ? "flex justify-center" : ""}`}>
             <SidebarNavItem
               href="/dashboard"
               label="Dashboard"
@@ -187,52 +196,52 @@ export default function Sidebar({
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col px-3 pb-4">
-            <AnimatePresence initial={false}>
-              {!collapsed && (
-                <motion.div
-                  key="boards-panel"
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={contentTransition}
-                  className="glass-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px]"
+            <motion.div
+              initial={false}
+              animate={{
+                opacity: collapsed ? 0 : 1,
+                y: collapsed ? 12 : 0,
+                scale: collapsed ? 0.98 : 1,
+                maxHeight: collapsed ? 0 : 999,
+              }}
+              transition={contentTransition}
+              aria-hidden={collapsed}
+              className="glass-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px]"
+              style={{ pointerEvents: collapsed ? "none" : "auto" }}
+            >
+              <motion.div
+                animate={{ opacity: collapsed ? 0 : 1, y: collapsed ? -6 : 0 }}
+                transition={contentTransition}
+                className="px-4 pb-3 pt-4"
+              >
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] app-text-muted">
+                  Boards
+                </p>
+                <p className="mt-1 text-sm app-text-muted">
+                  Move between boards without breaking flow.
+                </p>
+              </motion.div>
+
+              <Separator.Root
+                decorative
+                orientation="horizontal"
+                className="h-px bg-[var(--app-border)]"
+              />
+
+              <ScrollArea.Root className="min-h-0 flex-1">
+                <ScrollArea.Viewport className="h-full w-full">
+                  <div className="px-3 py-3">
+                    <BoardList variant="sidebar" />
+                  </div>
+                </ScrollArea.Viewport>
+                <ScrollArea.Scrollbar
+                  orientation="vertical"
+                  className="flex touch-none select-none p-1"
                 >
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={contentTransition}
-                    className="px-4 pb-3 pt-4"
-                  >
-                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] app-text-muted">
-                      Boards
-                    </p>
-                    <p className="mt-1 text-sm app-text-muted">
-                      Move between boards without breaking flow.
-                    </p>
-                  </motion.div>
-
-                  <Separator.Root
-                    decorative
-                    orientation="horizontal"
-                    className="h-px bg-[var(--app-border)]"
-                  />
-
-                  <ScrollArea.Root className="min-h-0 flex-1">
-                    <ScrollArea.Viewport className="h-full w-full">
-                      <div className="px-3 py-3">
-                        <BoardList variant="sidebar" />
-                      </div>
-                    </ScrollArea.Viewport>
-                    <ScrollArea.Scrollbar
-                      orientation="vertical"
-                      className="flex touch-none select-none p-1"
-                    >
-                      <ScrollArea.Thumb className="relative flex-1 rounded-full bg-[var(--app-border)]" />
-                    </ScrollArea.Scrollbar>
-                  </ScrollArea.Root>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  <ScrollArea.Thumb className="relative flex-1 rounded-full bg-[var(--app-border)]" />
+                </ScrollArea.Scrollbar>
+              </ScrollArea.Root>
+            </motion.div>
           </div>
 
           <div className="px-3 pb-4">
@@ -242,7 +251,7 @@ export default function Sidebar({
               className="mb-3 h-px bg-[var(--app-border)]"
             />
 
-            <div className="grid gap-2">
+            <div className={`grid gap-2 ${collapsed ? "justify-items-center" : ""}`}>
               <SidebarUtilityButton
                 label={theme === "light" ? "Dark mode" : "Light mode"}
                 collapsed={collapsed}
@@ -294,18 +303,56 @@ function SidebarNavItem({
   const contentTransition = shouldReduceMotion
     ? { duration: 0 }
     : CONTENT_TRANSITION;
+  const iconContent = (
+    <div
+      className="flex items-center justify-center rounded-full"
+      style={{
+        width: SIDEBAR_COLLAPSED_ICON_SIZE,
+        height: SIDEBAR_COLLAPSED_ICON_SIZE,
+        color: active ? "var(--app-accent)" : "var(--app-foreground)",
+      }}
+    >
+      <LayoutDashboard className="h-[1.15rem] w-[1.15rem]" />
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <SidebarTooltip label={label}>
+        <Link href={href} aria-current={active ? "page" : undefined} className="block">
+          <motion.div
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
+            className="glass-button mx-auto flex min-h-12 min-w-12 items-center justify-center rounded-[20px] px-0 transition-colors"
+            style={{
+              width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+              height: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+              ...(active
+                ? {
+                    borderColor:
+                      "color-mix(in srgb, var(--app-accent) 28%, var(--app-border))",
+                    background:
+                      "color-mix(in srgb, var(--app-accent) 12%, var(--app-panel-strong))",
+                    boxShadow:
+                      "0 18px 32px -24px color-mix(in srgb, var(--app-accent) 55%, transparent)",
+                  }
+                : null),
+            }}
+          >
+            {iconContent}
+          </motion.div>
+        </Link>
+      </SidebarTooltip>
+    );
+  }
 
   const content = (
     <Link href={href} aria-current={active ? "page" : undefined} className="block">
       <motion.div
-        layout
         whileHover={shouldReduceMotion ? undefined : { x: collapsed ? 0 : 4 }}
         whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
-        className={`glass-button flex min-h-14 items-center rounded-[20px] transition-colors ${
-          collapsed ? "justify-center px-0" : "justify-between px-3.5"
-        }`}
-        style={
-          active
+        className="glass-button flex min-h-14 items-center justify-between rounded-[20px] px-3.5 transition-colors"
+        style={{
+          ...(active
             ? {
                 borderColor: "color-mix(in srgb, var(--app-accent) 28%, var(--app-border))",
                 background:
@@ -313,8 +360,8 @@ function SidebarNavItem({
                 boxShadow:
                   "0 18px 32px -24px color-mix(in srgb, var(--app-accent) 55%, transparent)",
               }
-            : undefined
-        }
+            : null),
+        }}
       >
         <div className="flex min-w-0 items-center gap-3">
           <div
@@ -323,8 +370,7 @@ function SidebarNavItem({
               active
                 ? {
                     borderColor: "color-mix(in srgb, var(--app-accent) 30%, var(--app-border))",
-                    background:
-                      "color-mix(in srgb, var(--app-accent) 16%, var(--app-panel))",
+                    background: "color-mix(in srgb, var(--app-accent) 16%, var(--app-panel))",
                     color: "var(--app-accent)",
                   }
                 : {
@@ -337,45 +383,30 @@ function SidebarNavItem({
             <LayoutDashboard className="h-5 w-5" />
           </div>
 
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.span
-                key="dashboard-label"
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -6 }}
-                transition={contentTransition}
-                className="truncate text-sm font-medium"
-              >
-                {label}
-              </motion.span>
-            )}
-          </AnimatePresence>
+          <SidebarLabel collapsed={collapsed} transition={contentTransition}>
+            {label}
+          </SidebarLabel>
         </div>
 
-        <AnimatePresence initial={false}>
-          {!collapsed && active && (
-            <motion.span
-              key="dashboard-indicator"
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.7 }}
-              transition={contentTransition}
-              className="h-2 w-2 rounded-full"
-              style={{
-                backgroundColor: 'var(--app-accent)',
-                boxShadow: '0 0 16px var(--app-accent)',
-              }}
-            />
-          )}
-        </AnimatePresence>
+        {!collapsed ? (
+          <motion.span
+            animate={{
+              opacity: active ? 1 : 0,
+              scale: active ? 1 : 0.7,
+            }}
+            transition={contentTransition}
+            aria-hidden={!active}
+            className="h-2 w-2 rounded-full"
+            style={{
+              backgroundColor: "var(--app-accent)",
+              boxShadow: "0 0 16px var(--app-accent)",
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
       </motion.div>
     </Link>
   );
-
-  if (collapsed) {
-    return <SidebarTooltip label={label}>{content}</SidebarTooltip>;
-  }
 
   return content;
 }
@@ -393,14 +424,44 @@ function SidebarUtilityButton({
   disabled?: boolean;
   children: React.ReactNode;
 }) {
+  const shouldReduceMotion = useReducedMotion();
+  const contentTransition = shouldReduceMotion
+    ? { duration: 0 }
+    : CONTENT_TRANSITION;
+
+  if (collapsed) {
+    return (
+      <SidebarTooltip label={label}>
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={disabled}
+          className="glass-button mx-auto flex min-h-12 min-w-12 items-center justify-center px-0 disabled:cursor-not-allowed disabled:opacity-60"
+          style={{
+            width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+            height: SIDEBAR_COLLAPSED_BUTTON_SIZE,
+          }}
+        >
+          <span
+            className="flex items-center justify-center rounded-full"
+            style={{
+              width: SIDEBAR_COLLAPSED_ICON_SIZE,
+              height: SIDEBAR_COLLAPSED_ICON_SIZE,
+            }}
+          >
+            {children}
+          </span>
+        </button>
+      </SidebarTooltip>
+    );
+  }
+
   const content = (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`glass-button w-full min-h-12 disabled:cursor-not-allowed disabled:opacity-60 ${
-        collapsed ? "justify-center px-0" : "justify-start px-3.5"
-      }`}
+      className="glass-button w-full min-h-12 justify-start px-3.5 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span
         className="flex h-9 w-9 items-center justify-center rounded-2xl border"
@@ -411,15 +472,40 @@ function SidebarUtilityButton({
       >
         {children}
       </span>
-      {!collapsed && <span className="truncate text-sm font-medium">{label}</span>}
+      <SidebarLabel collapsed={collapsed} transition={contentTransition}>
+        {label}
+      </SidebarLabel>
     </button>
   );
 
-  if (collapsed) {
-    return <SidebarTooltip label={label}>{content}</SidebarTooltip>;
-  }
-
   return content;
+}
+
+function SidebarLabel({
+  collapsed,
+  transition,
+  children,
+}: {
+  collapsed: boolean;
+  transition: { duration: number; ease?: readonly [number, number, number, number] };
+  children: React.ReactNode;
+}) {
+  return (
+    <motion.span
+      initial={false}
+      animate={{
+        opacity: collapsed ? 0 : 1,
+        x: collapsed ? -8 : 0,
+        maxWidth: collapsed ? 0 : 160,
+      }}
+      transition={transition}
+      aria-hidden={collapsed}
+      className="min-w-0 truncate text-sm font-medium"
+      style={{ pointerEvents: collapsed ? "none" : "auto", overflow: "hidden" }}
+    >
+      {children}
+    </motion.span>
+  );
 }
 
 function SidebarTooltip({

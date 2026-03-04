@@ -15,17 +15,17 @@ export default function LabelBadge({
   size = 'md',
   className = ''
 }: LabelBadgeProps) {
-  const sizeClasses = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-xs px-3 py-1'
+  const sizeClasses = size === 'sm' ? 'text-[11px] px-2.5 py-0.5 leading-4' : 'text-xs px-3 py-1'
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full ${sizeClasses} ${className}`}
+      className={`inline-flex max-w-full items-center gap-1 rounded-full border border-white/15 font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] ${sizeClasses} ${className}`}
       style={{
         backgroundColor: label.color,
         color: '#fff',
       }}
     >
-      <span>{label.name}</span>
+      <span className="truncate">{label.name}</span>
       {onRemove && (
         <button
           onClick={(e) => {
