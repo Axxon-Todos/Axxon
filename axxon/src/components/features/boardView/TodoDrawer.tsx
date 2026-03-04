@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CalendarDays, CheckCircle2, FolderKanban, Sparkles, Tags, Trash2 } from 'lucide-react'
+import { CalendarDays, CheckCircle2, FolderKanban, Sparkles, Tags, Trash2, UserRound } from 'lucide-react'
 
 import LabelSelector from '@/components/features/boardView/LabelSelector'
+import { fetchBoardMembers } from '@/lib/api/boardMembers/getBoardMembers'
 import { fetchCategories } from '@/lib/api/categories/getCategories'
 import { fetchLabels } from '@/lib/api/labels/getLabels'
 import { createTodo } from '@/lib/api/todos/createTodo'
@@ -16,6 +17,7 @@ import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 import type { LabelBaseData } from '@/lib/types/labelTypes'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
+import type { User } from '@/lib/types/users'
 
 interface TodoDrawerProps {
   mode: 'create' | 'edit'
@@ -31,6 +33,10 @@ const priorityOptions = [
   { value: '4', label: 'High' },
 ]
 
+function formatMemberName(member: User) {
+  return [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email
+}
+
 export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerProps) {
   const queryClient = useQueryClient()
   const boardIdKey = String(boardId)
@@ -39,6 +45,10 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
   const { data: categories = [] } = useQuery<CategoryBaseData[]>({
     queryKey: ['categories', boardIdKey],
     queryFn: () => fetchCategories(boardIdKey),
+  })
+  const { data: boardMembers = [] } = useQuery<User[]>({
+    queryKey: ['board-members', boardIdKey],
+    queryFn: () => fetchBoardMembers(boardIdKey),
   })
   const { data: allLabels = [] } = useQuery<LabelBaseData[]>({
     queryKey: ['labels', boardIdKey],
@@ -50,6 +60,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
   const [priority, setPriority] = useState(todo?.priority ? String(todo.priority) : '3')
   const [dueDate, setDueDate] = useState(todo?.due_date ? todo.due_date.slice(0, 10) : '')
   const [categoryId, setCategoryId] = useState(todo?.category_id ? String(todo.category_id) : '')
+  const [assigneeId, setAssigneeId] = useState(todo?.assignee_id ? String(todo.assignee_id) : '')
   const [isComplete, setIsComplete] = useState(Boolean(todo?.is_complete))
   const [currentLabels, setCurrentLabels] = useState<LabelBaseData[]>(todo?.labels || [])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -60,6 +71,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
     setPriority(todo?.priority ? String(todo.priority) : '3')
     setDueDate(todo?.due_date ? todo.due_date.slice(0, 10) : '')
     setCategoryId(todo?.category_id ? String(todo.category_id) : '')
+    setAssigneeId(todo?.assignee_id ? String(todo.assignee_id) : '')
     setIsComplete(Boolean(todo?.is_complete))
     setCurrentLabels(todo?.labels || [])
     setErrorMessage(null)
@@ -71,6 +83,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
         title,
         description: description || undefined,
         due_date: dueDate || undefined,
+        assignee_id: assigneeId ? Number(assigneeId) : null,
         priority: Number(priority),
         category_id: categoryId ? Number(categoryId) : undefined,
         is_complete: isComplete,
@@ -90,6 +103,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
         title,
         description: description || undefined,
         due_date: dueDate || undefined,
+        assignee_id: assigneeId ? Number(assigneeId) : null,
         priority: Number(priority),
         category_id: categoryId ? Number(categoryId) : null,
         is_complete: isComplete,
@@ -121,6 +135,39 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
     () => categories.find((category) => String(category.id) === categoryId),
     [categories, categoryId]
   )
+  const selectedAssigneeName = useMemo(() => {
+    if (!assigneeId) {
+      return null
+    }
+
+    const selectedMember = boardMembers.find((member) => String(member.id) === assigneeId)
+    if (selectedMember) {
+      return formatMemberName(selectedMember)
+    }
+
+    return todo?.assignee?.name || `Former member (#${assigneeId})`
+  }, [assigneeId, boardMembers, todo?.assignee?.name])
+  const sortedBoardMembers = useMemo(
+    () =>
+      [...boardMembers].sort((left, right) => formatMemberName(left).localeCompare(formatMemberName(right))),
+    [boardMembers]
+  )
+  const missingAssigneeOption = useMemo(() => {
+    if (!assigneeId) {
+      return null
+    }
+
+    const member = boardMembers.find((item) => String(item.id) === assigneeId)
+    if (member) {
+      return null
+    }
+
+    const fallbackName = todo?.assignee?.name || `Former member (#${assigneeId})`
+    return {
+      value: assigneeId,
+      label: `${fallbackName} (not on this board)`,
+    }
+  }, [assigneeId, boardMembers, todo?.assignee?.name])
 
   const isPending =
     createMutation.isPending ||
@@ -199,7 +246,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
         </div>
       </section>
 
-      <form onSubmit={handleSubmit} className="mt-5 flex flex-1 flex-col gap-5">
+      <form noValidate onSubmit={handleSubmit} className="mt-5 flex flex-1 flex-col gap-5">
         <section className="glass-panel rounded-[1.7rem] p-5">
           <div className="space-y-2">
             <label className="text-sm font-medium">Title</label>
@@ -246,6 +293,29 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Assignee</label>
+                <select
+                  value={assigneeId}
+                  onChange={(e) => setAssigneeId(e.target.value)}
+                  className="app-input"
+                  aria-label="Assignee"
+                >
+                  <option value="">Unassigned</option>
+                  {missingAssigneeOption ? (
+                    <option value={missingAssigneeOption.value} disabled>
+                      {missingAssigneeOption.label}
+                    </option>
+                  ) : null}
+                  {sortedBoardMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {formatMemberName(member)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm app-text-muted">Assignments are limited to current board members.</p>
               </div>
 
               <label className="glass-panel flex items-center justify-between rounded-[1.3rem] p-4">
@@ -334,11 +404,19 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
                 {selectedCategory ? selectedCategory.name : 'Not assigned to a category'}
               </p>
             </div>
-            {selectedCategory ? (
-              <span className="app-badge" style={{ color: selectedCategory.color }}>
-                {selectedCategory.name}
-              </span>
-            ) : null}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {selectedAssigneeName ? (
+                <span className="app-badge">
+                  <UserRound className="h-3.5 w-3.5" />
+                  {selectedAssigneeName}
+                </span>
+              ) : null}
+              {selectedCategory ? (
+                <span className="app-badge" style={{ color: selectedCategory.color }}>
+                  {selectedCategory.name}
+                </span>
+              ) : null}
+            </div>
           </div>
         </section>
 

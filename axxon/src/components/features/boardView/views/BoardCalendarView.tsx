@@ -14,6 +14,16 @@ import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 const TODAY_KEY = dayjs().format('YYYY-MM-DD')
 
+function calendarCardStyle(color?: string) {
+  const accent = color || '#2563eb'
+
+  return {
+    borderColor: `color-mix(in srgb, ${accent} 28%, var(--app-border))`,
+    background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 16%, var(--app-panel-strong)), color-mix(in srgb, var(--app-panel-strong) 94%, white 6%))`,
+    boxShadow: `0 18px 35px -28px color-mix(in srgb, ${accent} 45%, transparent)`,
+  }
+}
+
 export default function BoardCalendarView({
   board,
   categoriesById,
@@ -90,7 +100,8 @@ export default function BoardCalendarView({
                 key={todo.id}
                 type="button"
                 onClick={() => onTodoClick(todo.sourceTodo)}
-                className="glass-panel w-full rounded-[1.4rem] p-4 text-left hover:-translate-y-0.5"
+                className="w-full rounded-[1.4rem] border p-4 text-left hover:-translate-y-0.5"
+                style={calendarCardStyle(todo.color)}
               >
                 <div className="flex items-start gap-3">
                   <span

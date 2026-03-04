@@ -1,6 +1,18 @@
 import type { Knex } from 'knex'
 import knex from '@/lib/db/db'
-import { CreateTodoData, DeleteTodoData, GetTodoByIdData, GetTodoByNameData, ListAllTodosData, TodoBaseData, UpdateTodoData, GetTodoByCompletionData, GetTodoByAssigneeData, GetTodoByStatusData, SearchTodoByTitle} from '../types/todoTypes'
+import type {
+  CreateTodoData,
+  DeleteTodoData,
+  GetTodoByIdData,
+  GetTodoByNameData,
+  ListAllTodosData,
+  TodoBaseData,
+  UpdateTodoData,
+  GetTodoByCompletionData,
+  GetTodoByAssigneeData,
+  GetTodoByStatusData,
+  SearchTodoByTitle,
+} from '../types/todoTypes'
 
 export class Todos {
     static validateCompletionCategory = async (
@@ -23,6 +35,24 @@ export class Todos {
 
         if (!category || !category.is_done) {
             throw new Error('Completed todos must belong to a done category');
+        }
+    };
+
+    static validateAssigneeMembership = async (
+        trx: Knex.Transaction,
+        boardId: number,
+        assigneeId: number | null | undefined
+    ) => {
+        if (typeof assigneeId !== 'number') {
+            return;
+        }
+
+        const membership = await trx('board_members')
+            .where({ board_id: boardId, user_id: assigneeId })
+            .first();
+
+        if (!membership) {
+            throw new Error('Assignee must be a member of the board');
         }
     };
     
@@ -55,6 +85,7 @@ export class Todos {
             }
 
             await this.validateCompletionCategory(trx, board_id, finalCategoryId, is_complete);
+            await this.validateAssigneeMembership(trx, board_id, assignee_id);
 
             const [todo] = await trx('todos')
                 .insert({
@@ -94,8 +125,12 @@ export class Todos {
 
             const nextCategoryId = updateData.category_id ?? currentTodo.category_id;
             const nextIsComplete = updateData.is_complete ?? currentTodo.is_complete;
+            const nextAssigneeId = Object.prototype.hasOwnProperty.call(updateData, 'assignee_id')
+                ? updateData.assignee_id
+                : currentTodo.assignee_id;
 
             await this.validateCompletionCategory(trx, board_id, nextCategoryId, nextIsComplete);
+            await this.validateAssigneeMembership(trx, board_id, nextAssigneeId);
 
             const [todo] = await trx('todos')
                 .where({id, board_id})

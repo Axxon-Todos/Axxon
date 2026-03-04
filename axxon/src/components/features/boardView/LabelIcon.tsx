@@ -1,6 +1,6 @@
 'use client'
 
-import { LabelBaseData } from '@/lib/types/labelTypes'
+import type { LabelBaseData } from '@/lib/types/labelTypes'
 import LabelBadge from './LabelBadge'
 import { Tag } from 'lucide-react'
 
@@ -13,38 +13,45 @@ interface LabelIconProps {
 export default function LabelIcon({ labels, onClick, className = '' }: LabelIconProps) {
   const labelCount = labels.length
 
-  // No labels: Show base icon
   if (labelCount === 0) {
     return (
       <button
+        type="button"
         onClick={(e) => onClick(e)}
-        className={`glass-button !h-9 !w-9 !p-0 ${className}`}
+        className={`inline-flex items-center gap-2 rounded-full border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_88%,white_12%)] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--app-muted)] ${className}`}
         aria-label="Add labels"
       >
-        <Tag className="w-4 h-4" />
+        <Tag className="h-3.5 w-3.5" />
+        Add label
       </button>
     )
   }
 
-  // 1-2 labels: Show actual badges
   if (labelCount <= 2) {
     return (
-      <div onClick={(e) => onClick(e)} className={`flex max-w-[11rem] flex-wrap gap-1 cursor-pointer ${className}`}>
-        {labels.map(label => (
+      <button
+        type="button"
+        onClick={(e) => onClick(e)}
+        className={`flex max-w-full flex-wrap items-center gap-1.5 text-left ${className}`}
+      >
+        {labels.map((label) => (
           <LabelBadge key={label.id} label={label} size="sm" />
         ))}
-      </div>
+      </button>
     )
   }
 
-  // 3+ labels: Show first 2 + count
   return (
-    <div onClick={(e) => onClick(e)} className={`flex max-w-[11rem] flex-wrap gap-1 cursor-pointer ${className}`}>
+    <button
+      type="button"
+      onClick={(e) => onClick(e)}
+      className={`flex max-w-full flex-wrap items-center gap-1.5 text-left ${className}`}
+    >
       <LabelBadge label={labels[0]} size="sm" />
       <LabelBadge label={labels[1]} size="sm" />
-      <span className="app-badge rounded-full px-2.5 py-0.5 text-[11px] leading-4">
+      <span className="app-badge rounded-full px-2.5 py-1 text-[11px] leading-none">
         +{labelCount - 2} more
       </span>
-    </div>
+    </button>
   )
 }

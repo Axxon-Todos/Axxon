@@ -4,7 +4,7 @@ export type NewTodoInput = {
   title: string;
   description?: string;
   due_date?: string;
-  assignee_id?: number;
+  assignee_id?: number | null;
   priority?: number;
   category_id?: number;
   is_complete?: boolean;

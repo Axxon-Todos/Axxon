@@ -1,5 +1,5 @@
 import db from "@/lib/db/db";
-import { User, createUserData, findByEmailData } from "../types/users";
+import type { User, createUserData, findByEmailData } from "../types/users";
 
 export class Users  {
     static findByEmail = async(data: findByEmailData): Promise<User | undefined> => {
@@ -16,6 +16,16 @@ export class Users  {
             .returning('*');
 
         return user;
+    };
+
+    static listUsersByIds = async (ids: number[]): Promise<User[]> => {
+        if (ids.length === 0) {
+            return [];
+        }
+
+        return db('users')
+            .whereIn('id', ids)
+            .select('*');
     };
 
     static findOrCreateByGoogle = async (data: createUserData): Promise<User> => { 

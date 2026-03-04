@@ -3,7 +3,7 @@ export type User = {
   email: string;
   first_name: string;
   last_name: string;
-  avatar_url: string;
+  avatar_url: string | null;
 };
 
 export type findByEmailData = Pick<User, 'email'>;

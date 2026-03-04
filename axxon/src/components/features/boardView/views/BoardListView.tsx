@@ -1,6 +1,7 @@
 'use client'
 
-import { DndContext, DragOverlay, DragEndEvent, DragStartEvent, closestCenter } from '@dnd-kit/core'
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragCancelEvent, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Save } from 'lucide-react'
@@ -12,7 +13,7 @@ import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 import DraggableCategory from '../DraggableCategory'
 import DroppableColumn from '../DroppableColumn'
-import TodoCard from '../TodoCard'
+import TodoDragOverlay from '../TodoDragOverlay'
 
 export default function BoardListView({
   categoryOrder,
@@ -38,6 +39,12 @@ export default function BoardListView({
   hasUnsavedCategoryChanges: boolean
 }) {
   const [activeTodo, setActiveTodo] = useState<TodoWithLabels | null>(null)
+  const [activeTodoWidth, setActiveTodoWidth] = useState<number | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  )
 
   const orderedCategories = useMemo(
     () =>
@@ -50,6 +57,7 @@ export default function BoardListView({
   const handleDragStart = (event: DragStartEvent) => {
     const todo = event.active.data.current?.todo as TodoWithLabels | undefined
     setActiveTodo(todo ?? null)
+    setActiveTodoWidth(event.active.rect.current.initial?.width ?? null)
   }
 
   const handleTodoDragEnd = (event: DragEndEvent) => {
@@ -61,6 +69,7 @@ export default function BoardListView({
     }
 
     setActiveTodo(null)
+    setActiveTodoWidth(null)
   }
 
   const handleCategoryDragEnd = (event: DragEndEvent) => {
@@ -72,6 +81,13 @@ export default function BoardListView({
     if (activeIndex === -1 || overIndex === -1) return
 
     onStageCategoryOrder(arrayMove(categoryOrder, activeIndex, overIndex))
+    setActiveTodo(null)
+    setActiveTodoWidth(null)
+  }
+
+  const handleDragCancel = (_event?: DragCancelEvent) => {
+    setActiveTodo(null)
+    setActiveTodoWidth(null)
   }
 
   return (
@@ -96,9 +112,10 @@ export default function BoardListView({
         ) : null}
 
         <DndContext
+          sensors={sensors}
           collisionDetection={closestCenter}
-          onDragStart={isManagingCategories ? () => {} : handleDragStart}
-          onDragCancel={() => setActiveTodo(null)}
+          onDragStart={isManagingCategories ? undefined : handleDragStart}
+          onDragCancel={handleDragCancel}
           onDragEnd={isManagingCategories ? handleCategoryDragEnd : handleTodoDragEnd}
           modifiers={[restrictToVerticalAxis]}
         >
@@ -130,13 +147,7 @@ export default function BoardListView({
             )}
           </div>
 
-          <DragOverlay>
-            {activeTodo ? (
-              <div className="w-[min(100%,420px)] cursor-grabbing">
-                <TodoCard todo={activeTodo} elevated />
-              </div>
-            ) : null}
-          </DragOverlay>
+          <TodoDragOverlay todo={activeTodo} width={activeTodoWidth} />
         </DndContext>
       </div>
     </BoardViewContext.Provider>
