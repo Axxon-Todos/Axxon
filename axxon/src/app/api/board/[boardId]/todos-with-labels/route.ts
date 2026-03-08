@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { TodoLabels } from '@/lib/models/todoLabels';
 import { handleApiError } from '@/lib/utils/apiErrors';
 import { requireSession } from '@/lib/utils/auth';
-import { parseNumericRouteParam, RouteContext } from '@/lib/utils/apiRoute';
+import { parseNumericRouteParam, type RouteContext } from '@/lib/utils/apiRoute';
 import { requireBoardMember } from '@/lib/utils/authorization';
 
 type TodoWithLabelsRouteParams = {

@@ -1,5 +1,5 @@
-import { BoardBaseData } from '@/lib/types/boardTypes';
 import { apiFetch } from '@/lib/api/apiFetch';
+import type { BoardBaseData } from '@/lib/types/boardTypes';
 
 export type DashboardData = {
   id: string | null;

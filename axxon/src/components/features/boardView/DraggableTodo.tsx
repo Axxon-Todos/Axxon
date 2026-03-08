@@ -1,7 +1,7 @@
 'use client'
 
 import { useDraggable } from '@dnd-kit/core'
-import { useRef, useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { useBoardView } from '@/context/BoardViewContext'
@@ -38,8 +38,6 @@ export default function DraggableTodo({
   const { hideTodos } = useBoardView()
   const { openPopup, closePopup, isPopupOpen } = useLabelPopup()
 
-  const dragStartRef = useRef<{ x: number; y: number; target: HTMLElement } | null>(null)
-  const clickTimeout = useRef<NodeJS.Timeout | null>(null)
   const labelIconRef = useRef<HTMLDivElement>(null)
 
   const { data: allLabels } = useQuery({
@@ -57,39 +55,6 @@ export default function DraggableTodo({
       }
     }
   }, [closePopup, isPopupOpen, todo.id])
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    dragStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      target: e.target as HTMLElement,
-    }
-  }
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!dragStartRef.current) return
-
-    const clickedElement = dragStartRef.current.target
-    const labelIconElement = labelIconRef.current
-
-    if (labelIconElement && labelIconElement.contains(clickedElement)) {
-      dragStartRef.current = null
-      return
-    }
-
-    if (isPopupOpen(todo.id)) {
-      dragStartRef.current = null
-      return
-    }
-
-    const dx = Math.abs(e.clientX - dragStartRef.current.x)
-    const dy = Math.abs(e.clientY - dragStartRef.current.y)
-
-    const isClick = dx < 5 && dy < 5
-    if (isClick) clickTimeout.current = setTimeout(onClick, 0)
-
-    dragStartRef.current = null
-  }
 
   const handleLabelClick = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -119,13 +84,13 @@ export default function DraggableTodo({
       {...listeners}
       {...attributes}
       style={style}
-      onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      className={`${hideTodos ? 'hidden' : 'cursor-grab hover:-translate-y-0.5 active:cursor-grabbing'}`}
+      onClick={onClick}
+      className={`${hideTodos ? 'hidden' : 'cursor-grab hover:-translate-y-0.5 active:cursor-grabbing'} ${
+        isDragging ? 'opacity-0 pointer-events-none' : ''
+      }`}
     >
       <TodoCard
         todo={todo}
-        isDragging={isDragging}
         labelControl={
           <div
             ref={labelIconRef}
@@ -138,11 +103,7 @@ export default function DraggableTodo({
       />
 
       {isPopupOpen(todo.id) && (
-        <LabelPopup
-          isOpen={isPopupOpen(todo.id)}
-          onClose={closePopup}
-          anchorRef={labelIconRef}
-        >
+        <LabelPopup isOpen={isPopupOpen(todo.id)} onClose={closePopup} anchorRef={labelIconRef}>
           <LabelSelector
             boardId={String(todo.board_id)}
             todoId={todo.id}

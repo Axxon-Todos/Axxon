@@ -1,6 +1,7 @@
 'use client'
 //Label popup when clicked directly
-import { useEffect, useRef, RefObject, ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 interface LabelPopupProps {

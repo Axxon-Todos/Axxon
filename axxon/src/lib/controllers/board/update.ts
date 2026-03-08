@@ -1,5 +1,5 @@
 import { Board } from '@/lib/models/board';
-import { UpdateBoard } from '@/lib/types/boardTypes';
+import type { UpdateBoard } from '@/lib/types/boardTypes';
 import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
 import { requireBoardCreator } from '@/lib/utils/authorization';
 

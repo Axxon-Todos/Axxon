@@ -45,7 +45,13 @@ type GetTodoByIdInput = {
 };
 
 function throwTodoRuleError(error: unknown) {
-  if (error instanceof Error && error.message.includes('Completed todos must belong to a done category')) {
+  if (
+    error instanceof Error &&
+    (
+      error.message.includes('Completed todos must belong to a done category') ||
+      error.message.includes('Assignee must be a member of the board')
+    )
+  ) {
     throw new BadRequestError(error.message);
   }
 }

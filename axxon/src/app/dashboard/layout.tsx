@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
@@ -15,10 +14,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const pathname = usePathname();
   const shouldReduceMotion = useReducedMotion();
   const transition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
-  const isAnalyticsPage = pathname.includes('/analytics');
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
   useEffect(() => {
@@ -38,9 +35,7 @@ export default function DashboardLayout({
           width: `calc(100vw - ${sidebarWidth}px)`,
         }}
         transition={transition}
-        className={`box-border min-w-0 max-w-full overflow-x-hidden px-4 pb-10 pt-6 sm:px-6 lg:px-8 ${
-          isAnalyticsPage ? 'h-screen overflow-hidden' : 'min-h-screen overflow-auto'
-        }`}
+        className="box-border min-h-screen min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-4 pb-10 pt-6 sm:px-6 lg:px-8"
       >
         {children}
       </motion.main>

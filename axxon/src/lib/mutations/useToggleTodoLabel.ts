@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addLabelToTodo } from '@/lib/api/todoLabels/addLabelToTodo'
 import { removeLabelFromTodo } from '@/lib/api/todoLabels/removeLabelFromTodo'
-import { TodoWithLabels } from '@/lib/types/todoTypes'
-import { LabelBaseData } from '@/lib/types/labelTypes'
+import type { TodoWithLabels } from '@/lib/types/todoTypes'
+import type { LabelBaseData } from '@/lib/types/labelTypes'
 
 // mutation hook to add and remove labels from a todo (toggle)
 export function useToggleTodoLabel(boardId: string) {

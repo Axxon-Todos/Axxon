@@ -16,7 +16,7 @@ export type CalendarTodo = {
   description?: string;
   priority?: number;
   dueDate?: string;
-  assigneeId?: number;
+  assigneeId?: number | null;
   isComplete?: boolean;
 };
 
@@ -30,6 +30,16 @@ type CalendarProps = {
 };
 
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function todoSurfaceStyle(color?: string) {
+  const accent = color || "#2563eb";
+
+  return {
+    borderColor: `color-mix(in srgb, ${accent} 28%, var(--app-border))`,
+    background: `linear-gradient(140deg, color-mix(in srgb, ${accent} 14%, var(--app-panel-strong)), color-mix(in srgb, var(--app-panel-strong) 94%, white 6%))`,
+    boxShadow: `0 16px 34px -26px color-mix(in srgb, ${accent} 42%, transparent)`,
+  };
+}
 
 export default function Calendar({
   todosByDate,
@@ -150,10 +160,8 @@ export default function Calendar({
                   {todos.slice(0, 2).map((todo) => (
                     <div
                       key={todo.id}
-                      className="rounded-xl border border-white/10 px-2.5 py-2 text-xs"
-                      style={{
-                        background: "color-mix(in srgb, var(--app-panel-strong) 82%, transparent)",
-                      }}
+                      className="rounded-xl border px-2.5 py-2 text-xs"
+                      style={todoSurfaceStyle(todo.color)}
                     >
                       <div className="flex items-center gap-2">
                         <span
@@ -214,7 +222,8 @@ export default function Calendar({
                 key={todo.id}
                 type="button"
                 onClick={() => onSelectTodo?.(todo)}
-                className="glass-panel flex w-full items-start gap-3 rounded-[1.15rem] p-4 text-left hover:-translate-y-0.5"
+                className="flex w-full items-start gap-3 rounded-[1.15rem] border p-4 text-left hover:-translate-y-0.5"
+                style={todoSurfaceStyle(todo.color)}
               >
                 <span
                   className="mt-1 h-3 w-3 shrink-0 rounded-full"

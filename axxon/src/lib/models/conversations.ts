@@ -1,5 +1,10 @@
 import knex from '@/lib/db/db';
-import { ConversationsBaseData, CreateConversation, DeleteConversation, GetConversationById, ListConversationsInBoard } from '../types/conversationTypes';
+import type {
+  ConversationsBaseData,
+  CreateConversation,
+  DeleteConversation,
+  ListConversationsInBoard,
+} from '../types/conversationTypes';
 
 export class Conversations {
     static createConversation = async (data:CreateConversation): Promise<ConversationsBaseData> => {
@@ -14,11 +19,12 @@ export class Conversations {
         return conversation;
     };
 
-    //gets a conv by its id for opening a chat
-    static getConversationById = async (data: GetConversationById): Promise<ConversationsBaseData | null> =>{
+    // Resolves the default board conversation used for member sync.
+    static getConversationByBoardId = async (boardId: number): Promise<ConversationsBaseData | null> =>{
         const conversation = await knex('conversations')
-        .where({id: data.board_id})
-        .first()
+        .where({ board_id: boardId })
+        .orderBy('created_at', 'asc')
+        .first();
 
         return conversation || null;
     };

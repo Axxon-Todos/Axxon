@@ -1,12 +1,75 @@
 import knex from '@/lib/db/db'
-import { AddLabelToTodo, FilterTodosByLabel, GetLabelsOnTodo, RemoveLabelFromTodo, TodoLabelsBaseData } from '../types/todoLabelTypes'
-import { LabelBaseData } from '../types/labelTypes';
-import { TodoBaseData } from '../types/todoTypes';
+import type {
+  AddLabelToTodo,
+  FilterTodosByLabel,
+  GetLabelsOnTodo,
+  RemoveLabelFromTodo,
+  TodoLabelsBaseData,
+} from '../types/todoLabelTypes'
+import type { LabelBaseData } from '../types/labelTypes';
+import type { TodoAssigneeSummary, TodoBaseData, TodoWithLabels } from '../types/todoTypes';
+import { Users } from './users';
 import { Labels } from './labels';
 import { Todos } from './todos';
 
 //class for handling joined todos and labels
 export class TodoLabels { 
+  private static buildAssigneeSummary = (user: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    avatar_url: string | null;
+  }): TodoAssigneeSummary => {
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || user.email;
+
+    return {
+      id: user.id,
+      name,
+      avatar_url: user.avatar_url,
+    };
+  };
+
+  private static hydrateTodos = async (boardId: number, todos: TodoBaseData[]): Promise<TodoWithLabels[]> => {
+    if (!todos.length) {
+      return [];
+    }
+
+    const todoIds = todos.map((todo) => todo.id);
+    const assigneeIds = Array.from(
+      new Set(
+        todos
+          .map((todo) => todo.assignee_id)
+          .filter((assigneeId): assigneeId is number => typeof assigneeId === 'number')
+      )
+    );
+
+    const [todoLabels, allLabels, assignees] = await Promise.all([
+      knex('todo_labels').whereIn('todo_id', todoIds),
+      Labels.listAllLabelsInBoard({ board_id: boardId }),
+      Users.listUsersByIds(assigneeIds),
+    ]);
+
+    const labelMap = allLabels.reduce((acc, label) => {
+      acc[label.id] = label;
+      return acc;
+    }, {} as Record<number, LabelBaseData>);
+
+    const assigneeMap = assignees.reduce((acc, user) => {
+      acc[user.id] = TodoLabels.buildAssigneeSummary(user);
+      return acc;
+    }, {} as Record<number, TodoAssigneeSummary>);
+
+    return todos.map((todo) => ({
+      ...todo,
+      labels: todoLabels
+        .filter((relation) => relation.todo_id === todo.id)
+        .map((relation) => labelMap[relation.label_id])
+        .filter((label): label is LabelBaseData => Boolean(label)),
+      assignee: typeof todo.assignee_id === 'number' ? assigneeMap[todo.assignee_id] ?? null : null,
+    }));
+  };
+
   static addLabelToTodo = async (data: AddLabelToTodo ): Promise<TodoLabelsBaseData> => {
         const [todoLabel] = await knex('todo_labels')
         .insert({
@@ -46,50 +109,21 @@ export class TodoLabels {
   };
 
   // Fetch todos with their labels for a specific board
-  static async getTodosWithLabels(boardId: number): Promise<(TodoBaseData & { labels: LabelBaseData[] })[]> {
-    // 1. Fetch todos for this board
+  static async getTodosWithLabels(boardId: number): Promise<TodoWithLabels[]> {
     const todos = await Todos.listTodosInBoard({ board_id: boardId });
-      
-    if (!todos.length) return [];
-    
-    const todoIds = todos.map(todo => todo.id);
-
-    // 2. Fetch todo-label relations
-    const todoLabels = await knex('todo_labels').whereIn('todo_id', todoIds);
-
-    // 3. Fetch all labels for this board using Labels model
-    const allLabels = await Labels.listAllLabelsInBoard({ board_id: boardId });
-
-    // 4. Build a label map for quick lookup
-    const labelMap = allLabels.reduce((acc, label) => {
-      acc[label.id] = label;
-      return acc;
-    }, {} as Record<number, LabelBaseData>);
-
-    // 5. Attach labels to each todo
-    return todos.map(todo => ({
-      ...todo,
-      labels: todoLabels
-        .filter(rel => rel.todo_id === todo.id)
-        .map(rel => labelMap[rel.label_id])
-        .filter(Boolean),
-    }));
+    return TodoLabels.hydrateTodos(boardId, todos);
   };
 
   // Fetch todo by ID with labels
   static async getTodoByIdWithLabels(
     todoId: number,
     boardId: number
-  ): Promise<(TodoBaseData & { labels: LabelBaseData[] }) | null> {
+  ): Promise<TodoWithLabels | null> {
     const todo = await Todos.getTodoById({ id: todoId, board_id: boardId });
     if (!todo) return null;
 
-    const labels = await TodoLabels.getLabelsForTodo({ todo_id: todoId });
-
-    return {
-      ...todo,
-      labels,
-    };
+    const [hydratedTodo] = await TodoLabels.hydrateTodos(boardId, [todo]);
+    return hydratedTodo ?? null;
   }
 
 }

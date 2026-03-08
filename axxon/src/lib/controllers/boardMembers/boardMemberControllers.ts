@@ -1,5 +1,5 @@
 import { BoardMembers } from '@/lib/models/boardMembers';
-import { AddBoardMembersByEmail } from '@/lib/types/boardMemberTypes';
+import type { AddBoardMembersByEmail } from '@/lib/types/boardMemberTypes';
 import {
   BadRequestError,
   NotFoundError,

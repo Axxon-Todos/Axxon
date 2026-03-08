@@ -53,7 +53,7 @@ export class BoardMembers {
     await knex('board_members').insert(memberInserts);
 
     // Find the main conversation for the board
-    const mainConvo = await Conversations.getConversationById({ board_id: data.board_id });
+    const mainConvo = await Conversations.getConversationByBoardId(data.board_id);
 
     if (!mainConvo) return;
 

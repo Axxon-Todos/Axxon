@@ -1,6 +1,7 @@
 'use client'
 
-import { DndContext, DragOverlay, DragEndEvent, DragStartEvent, closestCenter, useDroppable } from '@dnd-kit/core'
+import { DndContext, PointerSensor, closestCenter, useDroppable, useSensor, useSensors } from '@dnd-kit/core'
+import type { DragCancelEvent, DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Save } from 'lucide-react'
@@ -12,7 +13,7 @@ import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 import DraggableTodo from '../DraggableTodo'
-import TodoCard from '../TodoCard'
+import TodoDragOverlay from '../TodoDragOverlay'
 
 export default function BoardKanbanView({
   boardColor,
@@ -38,6 +39,12 @@ export default function BoardKanbanView({
   hasUnsavedCategoryChanges: boolean
 }) {
   const [activeTodo, setActiveTodo] = useState<TodoWithLabels | null>(null)
+  const [activeTodoWidth, setActiveTodoWidth] = useState<number | null>(null)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    })
+  )
 
   const orderedCategories = useMemo(
     () =>
@@ -50,6 +57,7 @@ export default function BoardKanbanView({
   const handleDragStart = (event: DragStartEvent) => {
     const todo = event.active.data.current?.todo as TodoWithLabels | undefined
     setActiveTodo(todo ?? null)
+    setActiveTodoWidth(event.active.rect.current.initial?.width ?? null)
   }
 
   const handleCategoryDragEnd = (event: DragEndEvent) => {
@@ -61,6 +69,8 @@ export default function BoardKanbanView({
     if (activeIndex === -1 || overIndex === -1) return
 
     onStageCategoryOrder(arrayMove(categoryOrder, activeIndex, overIndex))
+    setActiveTodo(null)
+    setActiveTodoWidth(null)
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -72,68 +82,71 @@ export default function BoardKanbanView({
     }
 
     setActiveTodo(null)
+    setActiveTodoWidth(null)
+  }
+
+  const handleDragCancel = (_event?: DragCancelEvent) => {
+    setActiveTodo(null)
+    setActiveTodoWidth(null)
   }
 
   return (
     <BoardViewContext.Provider value={{ hideTodos: false, setHideTodos: () => {} }}>
-      {isManagingCategories ? (
-        <section className="glass-panel mb-5 flex flex-col gap-4 rounded-[1.75rem] p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="app-kicker">Category Management</p>
-            <p className="mt-2 text-sm leading-6 app-text-muted">
-              Drag lanes horizontally to reorder them, then click a lane to edit its details without leaving kanban.
-            </p>
-          </div>
-          {hasUnsavedCategoryChanges ? (
-            <button onClick={onSaveCategoryChanges} className="glass-button glass-button-primary">
-              <Save className="h-4 w-4" />
-              Save Changes
-            </button>
-          ) : null}
-        </section>
-      ) : null}
+      <div className="space-y-5">
+        {isManagingCategories ? (
+          <section className="glass-panel flex flex-col gap-4 rounded-[1.75rem] p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="app-kicker">Category Management</p>
+              <p className="mt-2 text-sm leading-6 app-text-muted">
+                Drag lanes horizontally to reorder them, then click a lane to edit its details without leaving kanban.
+              </p>
+            </div>
+            {hasUnsavedCategoryChanges ? (
+              <button onClick={onSaveCategoryChanges} className="glass-button glass-button-primary">
+                <Save className="h-4 w-4" />
+                Save Changes
+              </button>
+            ) : null}
+          </section>
+        ) : null}
 
-      <DndContext
-        collisionDetection={closestCenter}
-        onDragStart={isManagingCategories ? () => {} : handleDragStart}
-        onDragCancel={() => setActiveTodo(null)}
-        onDragEnd={isManagingCategories ? handleCategoryDragEnd : handleDragEnd}
-      >
-        <div className="-mx-1 overflow-x-auto px-1 pb-2">
-          <div className="flex min-w-max items-start gap-7 px-2 py-1">
-            {isManagingCategories ? (
-              <SortableContext items={categoryOrder} strategy={horizontalListSortingStrategy}>
-                {orderedCategories.map((category) => (
-                  <SortableKanbanCategory
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={isManagingCategories ? undefined : handleDragStart}
+          onDragCancel={handleDragCancel}
+          onDragEnd={isManagingCategories ? handleCategoryDragEnd : handleDragEnd}
+        >
+          <div className="-mx-1 overflow-x-auto px-1 pb-2">
+            <div className="flex min-w-max items-start gap-7 px-2 py-1">
+              {isManagingCategories ? (
+                <SortableContext items={categoryOrder} strategy={horizontalListSortingStrategy}>
+                  {orderedCategories.map((category) => (
+                    <SortableKanbanCategory
+                      key={category.id}
+                      category={category}
+                      boardColor={boardColor}
+                      todoCount={categorizedTodos[category.id]?.length ?? 0}
+                    />
+                  ))}
+                </SortableContext>
+              ) : (
+                orderedCategories.map((category) => (
+                  <KanbanColumn
                     key={category.id}
                     category={category}
                     boardColor={boardColor}
-                    todoCount={categorizedTodos[category.id]?.length ?? 0}
+                    todos={categorizedTodos[category.id] || []}
+                    onTodoClick={onTodoClick}
                   />
-                ))}
-              </SortableContext>
-            ) : (
-              orderedCategories.map((category) => (
-                <KanbanColumn
-                  key={category.id}
-                  category={category}
-                  boardColor={boardColor}
-                  todos={categorizedTodos[category.id] || []}
-                  onTodoClick={onTodoClick}
-                />
-              ))
-            )}
-          </div>
-        </div>
-
-        <DragOverlay>
-          {activeTodo && !isManagingCategories ? (
-            <div className="w-[320px] cursor-grabbing">
-              <TodoCard todo={activeTodo} elevated />
+                ))
+              )}
             </div>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+          </div>
+
+          {!isManagingCategories ? <TodoDragOverlay todo={activeTodo} width={activeTodoWidth} /> : null}
+        </DndContext>
+      </div>
     </BoardViewContext.Provider>
   )
 }

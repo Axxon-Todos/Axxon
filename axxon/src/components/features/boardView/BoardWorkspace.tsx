@@ -234,18 +234,18 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
         </Modal>
       ) : null}
 
-      <div className="glass-panel relative rounded-[2rem] p-4 sm:p-5">
-        <AnimatePresence initial={false} mode="wait" custom={transitionDirection}>
-          <motion.div
-            key={activeView}
-            custom={transitionDirection}
-            variants={motionVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          >
-            {activeView === 'list' ? (
+      <AnimatePresence initial={false} mode="wait" custom={transitionDirection}>
+        <motion.div
+          key={activeView}
+          custom={transitionDirection}
+          variants={motionVariants}
+          initial="initial"
+          animate="animate"
+          exit="exit"
+          transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {activeView === 'list' ? (
+            <div className="glass-panel relative rounded-[2rem] p-4 sm:p-5">
               <BoardListView
                 categoryOrder={categoryOrder}
                 categoryMap={categoryMap}
@@ -261,37 +261,39 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
                 onSaveCategoryChanges={handleSaveCategoryChanges}
                 hasUnsavedCategoryChanges={hasUnsavedCategoryChanges}
               />
-            ) : null}
+            </div>
+          ) : null}
 
-            {activeView === 'kanban' ? (
-              <BoardKanbanView
-                boardColor={board.color || '#2563eb'}
-                categoryOrder={categoryOrder}
-                categoryMap={categoryMap}
-                categorizedTodos={categorizedTodos}
-                isManagingCategories={isManagingCategories}
-                onTodoClick={handleOpenTodo}
-                onTodoMove={handleMoveTodo}
-                onStageCategoryOrder={(nextOrder) => {
-                  setCategoryOrder(nextOrder)
-                  setUnsavedOrder(nextOrder)
-                }}
-                onSaveCategoryChanges={handleSaveCategoryChanges}
-                hasUnsavedCategoryChanges={hasUnsavedCategoryChanges}
-              />
-            ) : null}
+          {activeView === 'kanban' ? (
+            <BoardKanbanView
+              boardColor={board.color || '#2563eb'}
+              categoryOrder={categoryOrder}
+              categoryMap={categoryMap}
+              categorizedTodos={categorizedTodos}
+              isManagingCategories={isManagingCategories}
+              onTodoClick={handleOpenTodo}
+              onTodoMove={handleMoveTodo}
+              onStageCategoryOrder={(nextOrder) => {
+                setCategoryOrder(nextOrder)
+                setUnsavedOrder(nextOrder)
+              }}
+              onSaveCategoryChanges={handleSaveCategoryChanges}
+              hasUnsavedCategoryChanges={hasUnsavedCategoryChanges}
+            />
+          ) : null}
 
-            {activeView === 'calendar' ? (
+          {activeView === 'calendar' ? (
+            <div className="glass-panel relative rounded-[2rem] p-4 sm:p-5">
               <BoardCalendarView
                 board={board}
                 categoriesById={categoryMap}
                 todos={todos}
                 onTodoClick={handleOpenTodo}
               />
-            ) : null}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+            </div>
+          ) : null}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }

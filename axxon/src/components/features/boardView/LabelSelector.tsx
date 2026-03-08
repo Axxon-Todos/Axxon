@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { LabelBaseData } from '@/lib/types/labelTypes'
+import type { LabelBaseData } from '@/lib/types/labelTypes'
 import LabelBadge from './LabelBadge'
 import { Check, Plus } from 'lucide-react'
 

@@ -1,4 +1,10 @@
-import { LabelBaseData } from "./labelTypes";
+import type { LabelBaseData } from "./labelTypes";
+
+export type TodoAssigneeSummary = {
+  id: number;
+  name: string;
+  avatar_url: string | null;
+};
 
 export type TodoBaseData = {
     id: number
@@ -6,7 +12,7 @@ export type TodoBaseData = {
     title: string
     description?: string
     due_date?: string
-    assignee_id?: number
+    assignee_id?: number | null
     priority?: number
     category_id?: number
     is_complete?: boolean
@@ -19,7 +25,7 @@ export type CreateTodoData = {
   title: string;
   description?: string;
   due_date?: string;
-  assignee_id?: number;
+  assignee_id?: number | null;
   priority?: number;
   category_id?: number;
   is_complete?: boolean;
@@ -37,4 +43,7 @@ export type GetTodoByCompletionData = Pick<TodoBaseData, 'is_complete'>;
 export type GetTodoByAssigneeData = Pick<TodoBaseData, 'assignee_id' | 'board_id'>;
 export type GetTodoByStatusData = Pick<TodoBaseData, 'category_id' | 'board_id'>;
 export type SearchTodoByTitle = Pick<TodoBaseData,'board_id'> & {keyword: string}
-export type TodoWithLabels = TodoBaseData & LabelBaseData;
+export type TodoWithLabels = TodoBaseData & {
+  labels: LabelBaseData[];
+  assignee?: TodoAssigneeSummary | null;
+};

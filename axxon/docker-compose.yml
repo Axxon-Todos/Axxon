@@ -1,4 +1,41 @@
 services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASS}
+      POSTGRES_DB: ${PG_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: app-dev
+    command: ["pnpm", "db:bootstrap"]
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: development
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_CONNECTION_STRING: ""
+    volumes:
+      - .:/app
+      - db_init_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   # Next.js runs separately from the websocket process so each service can restart independently.
   app:
     build:
@@ -13,6 +50,9 @@ services:
       NODE_ENV: development
       HOSTNAME: 0.0.0.0
       PORT: 3000
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_CONNECTION_STRING: ""
       REDIS_URL: redis://redis:6379
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:4000}
     ports:
@@ -24,6 +64,10 @@ services:
       - app_node_modules:/app/node_modules
       - app_next:/app/.next
     depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -51,6 +95,9 @@ services:
     environment:
       NODE_ENV: development
       WS_PORT: 4000
+      PG_HOST: db
+      PG_PORT: 5432
+      PG_CONNECTION_STRING: ""
       REDIS_URL: redis://redis:6379
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
     ports:
@@ -61,6 +108,10 @@ services:
       - .:/app
       - ws_node_modules:/app/node_modules
     depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -68,4 +119,7 @@ volumes:
   app_node_modules:
   app_next:
   ws_node_modules:
+  db_init_node_modules:
   redis_data:
+  postgres_data:
+    name: axxon_postgres_data
