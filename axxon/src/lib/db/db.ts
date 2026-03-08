@@ -1,7 +1,8 @@
 'use server';
 
 import dotenv from 'dotenv';
-import knex, { Knex } from 'knex';
+import knex from 'knex';
+import type { Knex } from 'knex';
 
 // Load the same local env values for standalone processes like the WS server.
 dotenv.config({ path: '.env.local' });

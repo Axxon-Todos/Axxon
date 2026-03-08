@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createLabel } from '@/lib/api/labels/createLabel'
-import { LabelBaseData } from '@/lib/types/labelTypes'
+import type { LabelBaseData } from '@/lib/types/labelTypes'
 
 export function useCreateLabel(boardId: string) {
   const queryClient = useQueryClient()

@@ -12,6 +12,7 @@ export class Board {
             .insert({
             name: data.name,
             created_by: data.created_by,
+            color: data.color,
             created_at: knex.fn.now(),
             updated_at: knex.fn.now(),
             })

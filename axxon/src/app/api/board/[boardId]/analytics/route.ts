@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getBoardAnalytics } from '@/lib/controllers/boardAnalytics/getBoardAnalytics';
 import { handleApiError } from '@/lib/utils/apiErrors';
 import { requireSession } from '@/lib/utils/auth';
-import { parseNumericRouteParam, RouteContext } from '@/lib/utils/apiRoute';
+import { parseNumericRouteParam, type RouteContext } from '@/lib/utils/apiRoute';
 
 type BoardAnalyticsRouteParams = {
   boardId: string;

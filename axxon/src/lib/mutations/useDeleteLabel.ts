@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { deleteLabel } from '@/lib/api/labels/deleteLabel'
-import { LabelBaseData } from '@/lib/types/labelTypes'
+import type { LabelBaseData } from '@/lib/types/labelTypes'
 
 export function useDeleteLabel(boardId: string) {
   const queryClient = useQueryClient()

@@ -1,7 +1,8 @@
 // Manages global state for label popups - ensures only one popup open at a time and auto-closes when modals open
 'use client'
 
-import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { useModal } from './ModalManager'
 
 interface LabelPopupState {

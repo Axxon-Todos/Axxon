@@ -53,27 +53,48 @@ Axxon is a modern productivity platform designed to help individuals and teams p
 
 ### Prerequisites
 - Node.js >= 18
-- PostgreSQL database
+- Docker Desktop
 - Google Cloud OAuth credentials
 - pnpm
 
 ### Setup
 
 ```bash
+cd axxon
+
 # Install dependencies
 pnpm install
 
-# Setup your environment
-cp .env.example .env
-# Fill in DB credentials and Google OAuth keys
+# Create .env.local with your PG_*, auth, and public URL values.
+# For host-based development, keep PG_HOST=localhost and PG_PORT=5432.
+```
 
-# Run migrations and seed data
-npm run migrate:make
-npm run migrate:latest
+### Containerized Dev Database
 
-# Start Development 
+```bash
+# Start the full local stack: app, websocket server, redis, postgres, and DB bootstrap
+pnpm docker:dev
+
+# Stop the stack but keep the database data
+pnpm docker:dev:down
+
+# Reset only the Postgres volume and recreate a fresh migrated + seeded database
+pnpm docker:dev:reset-db
+```
+
+On the first boot, Docker starts Postgres, waits for it to become healthy, runs your Knex migrations, and then runs the seed script. Later boots keep your data and only rerun migrations. The app and websocket containers wait for that bootstrap step to finish before they start.
+
+### Host Development Against the Containerized DB
+
+```bash
+# Start only postgres, redis, and the DB bootstrap step in Docker
+docker compose --env-file .env.local up -d db db-init redis
+
+# Then run the app and websocket server on the host
 pnpm dev
 ```
+
+The containerized Postgres instance is exposed on `localhost:5432`, so the host workflow continues to work with `.env.local` unchanged.
 
 📈 Status
 

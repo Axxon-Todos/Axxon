@@ -10,7 +10,7 @@ import { requireSession } from '@/lib/utils/auth';
 import {
   parseJsonBody,
   parseNumericRouteParam,
-  RouteContext,
+  type RouteContext,
 } from '@/lib/utils/apiRoute';
 
 type CategoryRouteParams = {

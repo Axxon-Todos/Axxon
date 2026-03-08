@@ -1,5 +1,11 @@
 import knex  from '@/lib/db/db'
-import { CreateMessageData, DeleteMessageData, EditMessageData, GetAllMessagesData, MessageBaseData } from '../types/ConversationMessageTypes';
+import type {
+  CreateMessageData,
+  DeleteMessageData,
+  EditMessageData,
+  GetAllMessagesData,
+  MessageBaseData,
+} from '../types/ConversationMessageTypes';
 
 export class Messages {
     

@@ -1,7 +1,7 @@
 import { getTodoLabels } from '@/lib/controllers/todoLabels/todoLabelControllers';
 import { handleApiError } from '@/lib/utils/apiErrors';
 import { requireSession } from '@/lib/utils/auth';
-import { parseNumericRouteParam, RouteContext } from '@/lib/utils/apiRoute';
+import { parseNumericRouteParam, type RouteContext } from '@/lib/utils/apiRoute';
 import { NextRequest, NextResponse } from 'next/server';
 
 type TodoLabelRouteParams = {

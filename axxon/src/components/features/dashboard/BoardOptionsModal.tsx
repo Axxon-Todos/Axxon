@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { PencilLine, Trash2, UserPlus, X } from "lucide-react";
-import { UpdateBoard } from "@/lib/types/boardTypes";
+import type { UpdateBoard } from "@/lib/types/boardTypes";
 
 type BoardOptionsModalProps = {
   board: UpdateBoard;

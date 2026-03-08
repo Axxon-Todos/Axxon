@@ -11,6 +11,8 @@ import {
 let pub: Redis | null = null;
 let sub: Redis | null = null;
 let isSubscribed = false;
+let isRedisForwarderRegistered = false;
+const activeIoServers = new Set<Server>();
 
 function createRedisClient(role: 'publisher' | 'subscriber') {
   const client = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
@@ -36,6 +38,31 @@ function getSubscriber() {
   return sub;
 }
 
+function emitRedisMessageToBoards(channel: string, message: string) {
+  try {
+    const [, boardId] = channel.split(":");
+    const parsed = JSON.parse(message);
+    const { type, payload } = parsed;
+
+    if (!type) {
+      console.warn("Redis message missing type field, defaulting to board:update");
+      for (const io of activeIoServers) {
+        io.to(boardId).emit("board:update", parsed);
+      }
+      return;
+    }
+
+    const normalizedType = type.replace(/([a-z])([A-Z])/g, "$1:$2").toLowerCase();
+    const eventName = `board:${normalizedType}`;
+
+    for (const io of activeIoServers) {
+      io.to(boardId).emit(eventName, payload);
+    }
+  } catch (error) {
+    console.error("Failed to forward Redis message:", error);
+  }
+}
+
 // Initialize WebSocket server with Socket.IO
 export function createWsServer(server: http.Server) {
 
@@ -47,6 +74,7 @@ export function createWsServer(server: http.Server) {
       methods: ["GET", "POST"],
     },
   });
+  activeIoServers.add(io);
 
   io.use(async (socket, next) => {
     try {
@@ -68,6 +96,13 @@ export function createWsServer(server: http.Server) {
 
   const subscriber = getSubscriber();
 
+  if (!isRedisForwarderRegistered) {
+    isRedisForwarderRegistered = true;
+    subscriber.on("pmessage", (_pattern, channel, message) => {
+      emitRedisMessageToBoards(channel, message);
+    });
+  }
+
   if (!isSubscribed) {
     isSubscribed = true;
 
@@ -77,33 +112,6 @@ export function createWsServer(server: http.Server) {
       else console.log("Subscribed to Redis channels: board:*");
     });
   }
-
-  // On Redis publish, forward the message to the correct board room
-  subscriber.on("pmessage", (pattern, channel, message) => {
-    console.log("🔔 Redis pmessage received:", { pattern, channel, message });
-
-    try {
-      const [, boardId] = channel.split(":"); // channel = board:<boardId>
-      const parsed = JSON.parse(message);
-      const { type, payload } = parsed;
-
-      if (!type) {
-        console.warn("⚠️ Redis message missing type field, defaulting to board:update");
-        io.to(boardId).emit("board:update", parsed);
-        return;
-      }
-
-      // Normalize type to colon-separated lowercase
-      const normalizedType = type.replace(/([a-z])([A-Z])/g, "$1:$2").toLowerCase();
-      const eventName = `board:${normalizedType}`;
-
-      console.log(`➡️ Emitting event "${eventName}" to room ${boardId}`, payload);
-
-      io.to(boardId).emit(eventName, payload);
-    } catch (err) {
-      console.error("❌ Failed to forward Redis message:", err);
-    }
-  });
 
   io.on("connection", (socket) => {
     console.log(`Client connected: ${socket.id}`);
@@ -169,7 +177,41 @@ export function createWsServer(server: http.Server) {
 }
 
 // Helper to publish events into Redis for cross-instance broadcast
-export async function publishBoardUpdate(boardId: string, payload: any) {
+export async function publishBoardUpdate(boardId: string, payload: unknown) {
   console.log(`Publishing update to Redis board:${boardId}`, payload);
   await getPublisher().publish(`board:${boardId}`, JSON.stringify(payload));
+}
+
+export async function closeWsInfrastructure() {
+  for (const io of activeIoServers) {
+    await new Promise<void>((resolve) => {
+      io.close(() => resolve());
+    });
+  }
+  activeIoServers.clear();
+
+  if (sub) {
+    try {
+      if (isSubscribed) {
+        await sub.punsubscribe("board:*");
+      }
+      sub.removeAllListeners("pmessage");
+      await sub.quit();
+    } catch {
+      sub.disconnect();
+    }
+    sub = null;
+  }
+
+  if (pub) {
+    try {
+      await pub.quit();
+    } catch {
+      pub.disconnect();
+    }
+    pub = null;
+  }
+
+  isSubscribed = false;
+  isRedisForwarderRegistered = false;
 }

@@ -1,5 +1,13 @@
 import knex from '@/lib/db/db'
-import { LabelBaseData, CreateLabelData, DeleteLabelData, UpdateLabelData, ListAllLabelsData, GetLabelByNameData, GetLabelByIdData} from "../types/labelTypes"
+import type {
+  LabelBaseData,
+  CreateLabelData,
+  DeleteLabelData,
+  UpdateLabelData,
+  ListAllLabelsData,
+  GetLabelByNameData,
+  GetLabelByIdData,
+} from "../types/labelTypes"
 import { getAvailableColor} from '../utils/colorPicker'
 
 export class Labels {

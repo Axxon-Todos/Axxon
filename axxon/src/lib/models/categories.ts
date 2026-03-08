@@ -96,24 +96,35 @@ export class Categories {
     return await knex.transaction(async (trx) => {
       // --- Reorder positions if needed ---
       if (position !== undefined) {
-        const otherCategories = await trx('categories')
+        const categories = await trx('categories')
           .where({ board_id })
-          .andWhereNot({ id })
           .orderBy('position', 'asc');
 
-        const newPositions: Record<number, number> = {};
-        let currentPos = 1;
+        const currentCategory = categories.find((category) => category.id === id);
 
-        for (const cat of otherCategories) {
-          if (currentPos === position) currentPos++;
-          newPositions[cat.id] = currentPos;
-          currentPos++;
+        if (!currentCategory) {
+          throw new Error('Category not found');
         }
 
-        for (const [catId, newPos] of Object.entries(newPositions)) {
+        const otherCategories = categories.filter((category) => category.id !== id);
+        const minPosition = Math.min(...categories.map((category) => Number(category.position)));
+        const maxPosition = minPosition + categories.length - 1;
+        const targetPosition = Math.min(Math.max(position, minPosition), maxPosition);
+        const targetIndex = targetPosition - minPosition;
+        const reorderedCategories = [...otherCategories];
+
+        reorderedCategories.splice(targetIndex, 0, currentCategory);
+
+        await trx('categories')
+          .where({ board_id })
+          .update({
+            position: trx.raw('position + ?', [categories.length + 10]),
+          });
+
+        for (const [index, category] of reorderedCategories.entries()) {
           await trx('categories')
-            .where({ id: Number(catId) })
-            .update({ position: newPos });
+            .where({ id: category.id })
+            .update({ position: minPosition + index });
         }
       }
 
