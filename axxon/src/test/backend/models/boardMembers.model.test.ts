@@ -4,6 +4,7 @@ import { BoardMembers } from '@/lib/models/boardMembers';
 
 import { db, resetDatabase } from '../db';
 import {
+  addOrganizationMember,
   addBoardMember,
   createBoardRecord,
   createConversationRecord,
@@ -21,6 +22,8 @@ describe('BoardMembers model', () => {
     const invitee = await createUser({ email: 'invitee@example.com' });
 
     const board = await createBoardRecord({ createdBy: creator.id });
+    await addOrganizationMember(board.organization_id, existingMember.id);
+    await addOrganizationMember(board.organization_id, invitee.id);
     await addBoardMember(board.id, creator.id);
     await addBoardMember(board.id, existingMember.id);
 
@@ -36,6 +39,7 @@ describe('BoardMembers model', () => {
 
     await BoardMembers.addMembersByEmail({
       board_id: board.id,
+      organization_id: board.organization_id,
       emails: [existingMember.email, invitee.email, 'missing@example.com'],
     });
 

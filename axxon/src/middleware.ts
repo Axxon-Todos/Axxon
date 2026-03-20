@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getSessionTokenFromRequest, verifySessionToken } from '@/lib/utils/auth';
 
-const PUBLIC_API_PATHS = new Set(['/api/auth', '/api/auth/google/callback']);
+const PUBLIC_API_PATHS = new Set(['/api/auth', '/api/auth/google', '/api/auth/google/callback']);
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;

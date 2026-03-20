@@ -10,6 +10,10 @@ vi.mock('@/lib/api/boards/getBoardAnalytics', () => ({
   fetchBoardAnalytics: mockedFetchBoardAnalytics,
 }));
 
+vi.mock('@/hooks/useOrganizationRouteParams', () => ({
+  useOrganizationRouteParams: () => ({ organizationId: '12', boardId: '7' }),
+}));
+
 vi.mock('recharts', async () => {
   const ReactModule = await import('react');
 
@@ -165,7 +169,10 @@ describe('BoardAnalyticsView', () => {
     expect(screen.getByText('Tracked Todos')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Members' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back to Board' })).toHaveAttribute('href', '/dashboard/7');
+    expect(screen.getByRole('link', { name: 'Back to Board' })).toHaveAttribute(
+      'href',
+      '/dashboard/orgs/12/boards/7'
+    );
   });
 
   it('updates section content when category and scope filters change', async () => {

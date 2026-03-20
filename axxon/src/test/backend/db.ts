@@ -10,6 +10,8 @@ export const TEST_TABLES = [
   'categories',
   'board_members',
   'boards',
+  'organization_members',
+  'organizations',
   'users',
 ];
 

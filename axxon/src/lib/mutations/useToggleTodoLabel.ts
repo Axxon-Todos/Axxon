@@ -1,61 +1,73 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { addLabelToTodo } from '@/lib/api/todoLabels/addLabelToTodo'
-import { removeLabelFromTodo } from '@/lib/api/todoLabels/removeLabelFromTodo'
-import type { TodoWithLabels } from '@/lib/types/todoTypes'
-import type { LabelBaseData } from '@/lib/types/labelTypes'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { addLabelToTodo } from '@/lib/api/todoLabels/addLabelToTodo';
+import { removeLabelFromTodo } from '@/lib/api/todoLabels/removeLabelFromTodo';
+import type { LabelBaseData } from '@/lib/types/labelTypes';
+import type { TodoWithLabels } from '@/lib/types/todoTypes';
 
-// mutation hook to add and remove labels from a todo (toggle)
-export function useToggleTodoLabel(boardId: string) {
-  const queryClient = useQueryClient()
+export function useToggleTodoLabel(organizationId: string, boardId: string) {
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async ({
       todoId,
       labelId,
-      isAdding
+      isAdding,
     }: {
-      todoId: number
-      labelId: number
-      isAdding: boolean
+      todoId: number;
+      labelId: number;
+      isAdding: boolean;
     }) => {
       if (isAdding) {
-        return await addLabelToTodo(boardId, todoId, labelId)
-      } else {
-        return await removeLabelFromTodo(boardId, todoId, labelId)
+        return addLabelToTodo(organizationId, boardId, todoId, labelId);
       }
-    },
 
+      return removeLabelFromTodo(organizationId, boardId, todoId, labelId);
+    },
     onMutate: async ({ todoId, labelId, isAdding }) => {
-      await queryClient.cancelQueries({ queryKey: ['todos', boardId] })
-      const prevTodos = queryClient.getQueryData<TodoWithLabels[]>(['todos', boardId])
-      const allLabels = queryClient.getQueryData<LabelBaseData[]>(['labels', boardId])
+      await queryClient.cancelQueries({ queryKey: ['todos', organizationId, boardId] });
+      const prevTodos = queryClient.getQueryData<TodoWithLabels[]>([
+        'todos',
+        organizationId,
+        boardId,
+      ]);
+      const allLabels = queryClient.getQueryData<LabelBaseData[]>([
+        'labels',
+        organizationId,
+        boardId,
+      ]);
 
-      queryClient.setQueryData<TodoWithLabels[]>(['todos', boardId], (old) =>
-        old ? old.map(todo => {
-          if (todo.id !== todoId) return todo
-          const label = allLabels?.find(l => l.id === labelId)
-          if (!label) return todo
+      queryClient.setQueryData<TodoWithLabels[]>(
+        ['todos', organizationId, boardId],
+        (old) =>
+          old
+            ? old.map((todo) => {
+                if (todo.id !== todoId) return todo;
 
-          return {
-            ...todo,
-            labels: isAdding
-              ? [...(todo.labels || []), label]
-              : (todo.labels || []).filter(l => l.id !== labelId)
-          }
-        }) : []
-      )
+                const label = allLabels?.find((entry) => entry.id === labelId);
+                if (!label) return todo;
 
-      return { prevTodos }
+                return {
+                  ...todo,
+                  labels: isAdding
+                    ? [...(todo.labels || []), label]
+                    : (todo.labels || []).filter((entry) => entry.id !== labelId),
+                };
+              })
+            : []
+      );
+
+      return { prevTodos };
     },
-
     onError: (_err, _vars, context) => {
       if (context?.prevTodos) {
-        queryClient.setQueryData(['todos', boardId], context.prevTodos)
+        queryClient.setQueryData(
+          ['todos', organizationId, boardId],
+          context.prevTodos
+        );
       }
     },
-
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', boardId] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, boardId] });
     },
-  })
+  });
 }

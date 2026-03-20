@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { Board } from '@/lib/models/board';
 
 import { db, resetDatabase } from '../db';
-import { createUser } from '../factories';
+import {
+  addOrganizationMember,
+  createOrganizationRecord,
+  createUser,
+} from '../factories';
 
 describe('Board model', () => {
   beforeEach(async () => {
@@ -13,9 +17,12 @@ describe('Board model', () => {
   it('creates a board with color, default categories, and invited members', async () => {
     const creator = await createUser({ email: 'creator@example.com' });
     const invitee = await createUser({ email: 'invitee@example.com' });
+    const organization = await createOrganizationRecord({ createdBy: creator.id });
+    await addOrganizationMember(organization.id, invitee.id);
 
     const board = await Board.createBoard({
       name: 'Product Roadmap',
+      organization_id: organization.id,
       created_by: creator.id,
       color: '#123456',
       member_emails: [invitee.email, 'missing@example.com'],
@@ -43,8 +50,10 @@ describe('Board model', () => {
 
   it('deletes a board and cascades related rows', async () => {
     const creator = await createUser();
+    const organization = await createOrganizationRecord({ createdBy: creator.id });
     const board = await Board.createBoard({
       name: 'Cleanup Test',
+      organization_id: organization.id,
       created_by: creator.id,
       color: '#0f172a',
       member_emails: [],

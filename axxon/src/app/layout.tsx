@@ -7,13 +7,13 @@ import { ThemeProvider } from "@/context/ThemeProvider";
 import GlobalOverlayHost from "@/components/ui/GlobalOverlayHost";
 
 export const metadata: Metadata = {
-  title: 'Axxon | Modular Project Management Platform',
+  title: 'Axxon | Agent Work Orchestration Platform',
   description:
-    'Axxon is a customizable project management platform for teams that need modular workflows, real-time collaboration, and scalable execution.',
+    'Axxon helps software teams organize boards, members, repo context, and AI-assisted execution under one structured operating layer.',
   openGraph: {
-    title: 'Axxon | Modular Project Management Platform',
+    title: 'Axxon | Agent Work Orchestration Platform',
     description:
-      'Design your own project operating system with composable boards, categories, labels, and collaboration flows.',
+      'Coordinate engineering organizations, boards, and agent workflows with one structured control layer.',
     type: 'website',
   },
 };

@@ -1,13 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reorderCategories } from '@/lib/api/categories/reorderCategories';
 
-export function useReorderCategories(boardId: string) {
+export function useReorderCategories(organizationId: string, boardId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (newOrder: string[]) => reorderCategories(boardId, newOrder),
+    mutationFn: (newOrder: string[]) =>
+      reorderCategories(organizationId, boardId, newOrder),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['categories', boardId] });
+      queryClient.invalidateQueries({
+        queryKey: ['categories', organizationId, boardId],
+      });
     },
   });
 }

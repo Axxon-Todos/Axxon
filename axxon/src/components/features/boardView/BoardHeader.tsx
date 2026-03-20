@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { BarChart3, CalendarClock, Layers3, ListTodo, Settings2, Tags } from 'lucide-react'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
+import { buildOrganizationBoardAnalyticsPath } from '@/lib/utils/routes'
 
 import BoardViewSwitcher from './BoardViewSwitcher'
 
@@ -35,6 +37,7 @@ export default function BoardHeader({
   isManagingCategories: boolean
   onToggleManageCategories: () => void
 }) {
+  const { organizationId } = useOrganizationRouteParams()
   const accentColor = board.color || '#2563eb'
 
   return (
@@ -84,7 +87,10 @@ export default function BoardHeader({
               <ListTodo className="h-4 w-4" />
               Add Todo
             </button>
-            <Link href={`/dashboard/${boardId}/analytics`} className="glass-button">
+            <Link
+              href={buildOrganizationBoardAnalyticsPath(organizationId, boardId)}
+              className="glass-button"
+            >
               <BarChart3 className="h-4 w-4" />
               Analytics
             </Link>

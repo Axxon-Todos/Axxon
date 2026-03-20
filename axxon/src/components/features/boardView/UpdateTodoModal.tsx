@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 import { updateTodoById } from '@/lib/api/todos/updateTodoById'
 import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
@@ -15,6 +16,7 @@ interface UpdateTodoModalProps {
 
 
 export default function UpdateTodoModal({ todo, boardId, onClose }: UpdateTodoModalProps) {
+  const { organizationId } = useOrganizationRouteParams()
   const [title, setTitle] = useState(todo.title)
   const [description, setDescription] = useState(todo.description || '')
   const [priority, setPriority] = useState(todo.priority ? String(todo.priority) : '3') // default medium (assuming 3)
@@ -30,11 +32,11 @@ const numericTodoId = !isNaN(Number(todo.id)) ? Number(todo.id) : null;
 const updateMutation = useMutation({
   mutationFn: (updatedData: any) =>
     numericBoardId !== null && numericTodoId !== null
-      ? updateTodoById(numericBoardId, numericTodoId, updatedData)
+      ? updateTodoById(organizationId, numericBoardId, numericTodoId, updatedData)
       : Promise.reject('Invalid IDs'),
   onSuccess: () => {
     if (numericBoardId !== null) {
-      queryClient.invalidateQueries({ queryKey: ['todos', numericBoardId] });
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(numericBoardId)] });
     }
     onClose();
   },
@@ -43,11 +45,11 @@ const updateMutation = useMutation({
 const deleteMutation = useMutation({
   mutationFn: () =>
     numericBoardId !== null && numericTodoId !== null
-      ? deleteTodoById(numericBoardId, numericTodoId)
+      ? deleteTodoById(organizationId, numericBoardId, numericTodoId)
       : Promise.reject('Invalid IDs'),
   onSuccess: () => {
     if (numericBoardId !== null) {
-      queryClient.invalidateQueries({ queryKey: ['todos', numericBoardId] });
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(numericBoardId)] });
     }
     onClose();
   },

@@ -1,20 +1,12 @@
-// hooks/useDeleteTodoMutation.ts
-import { useMutation } from "@tanstack/react-query";
-import { deleteTodoById } from "@/lib/api/todos/deleteTodoById"; // your API call
+import { useMutation } from '@tanstack/react-query';
+import { deleteTodoById } from '@/lib/api/todos/deleteTodoById';
 
-export function useDeleteTodoMutation(boardId: string) {
-
+export function useDeleteTodoMutation(organizationId: string, boardId: string) {
   return useMutation({
-    mutationFn: async (todoId: number) => {
-      // Sends DELETE request to server
-      return await deleteTodoById(boardId, todoId);
-    },
-    // No onMutate; no optimistic deletion
+    mutationFn: async (todoId: number) =>
+      deleteTodoById(organizationId, boardId, todoId),
     onError: (err) => {
-      console.error("Failed to delete todo:", err);
-    },
-    onSuccess: () => {
-      // Does NOT manually remove from cache; WebSocket will handle it
+      console.error('Failed to delete todo:', err);
     },
   });
 }

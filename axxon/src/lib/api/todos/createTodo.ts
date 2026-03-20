@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/apiFetch';
+import { buildOrganizationBoardApiPath } from '@/lib/utils/routes';
 
 export type NewTodoInput = {
   title: string;
@@ -11,14 +12,18 @@ export type NewTodoInput = {
 };
 
 export const createTodo = async (
-  boardId: number,
+  organizationId: string | number,
+  boardId: string | number,
   data: NewTodoInput
 ): Promise<any> => {
-  const res = await apiFetch(`/api/board/${boardId}/todos`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  });
+  const res = await apiFetch(
+    buildOrganizationBoardApiPath(organizationId, boardId, '/todos'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }
+  );
 
   if (!res.ok) {
     const error = await res.json();

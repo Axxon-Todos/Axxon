@@ -95,7 +95,7 @@ export async function addBoardMembersByEmail({
     throw new BadRequestError('Invalid board id');
   }
 
-  await requireBoardCreator(boardId, sessionUserId);
+  const board = await requireBoardCreator(boardId, sessionUserId);
 
   if (!Array.isArray(data.emails)) {
     throw new BadRequestError('emails must be an array');
@@ -103,6 +103,7 @@ export async function addBoardMembersByEmail({
 
   const input: AddBoardMembersByEmail = {
     board_id: boardId,
+    organization_id: board.organization_id,
     emails: data.emails,
   };
 

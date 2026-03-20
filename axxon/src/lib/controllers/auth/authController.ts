@@ -1,5 +1,3 @@
-'use server';
-
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { Users } from '@/lib/models/users';
 import type { User } from '@/lib/types/users';
@@ -25,16 +23,50 @@ type CompleteGoogleOAuthLoginInput = {
   code: string;
 };
 
-function getGoogleOAuthConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI;
+const GOOGLE_OAUTH_SCOPE = 'openid email profile';
 
-  if (!clientId || !clientSecret || !redirectUri) {
+function getGoogleOAuthRedirectUri() {
+  return process.env.GOOGLE_REDIRECT_URI ?? process.env.NEXT_PUBLIC_REDIRECT_URI;
+}
+
+function getGoogleOAuthRuntimeConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const redirectUri = getGoogleOAuthRedirectUri();
+
+  if (!clientId || !redirectUri) {
     throw new Error('Google OAuth configuration is incomplete');
   }
 
-  return { clientId, clientSecret, redirectUri };
+  return { clientId, redirectUri };
+}
+
+function getGoogleOAuthTokenExchangeConfig() {
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const runtimeConfig = getGoogleOAuthRuntimeConfig();
+
+  if (!clientSecret) {
+    throw new Error('Google OAuth configuration is incomplete');
+  }
+
+  return {
+    ...runtimeConfig,
+    clientSecret,
+  };
+}
+
+// Keep OAuth URL construction on the server so container env quirks do not corrupt browser redirects.
+export function buildGoogleOAuthAuthorizationUrl(): string {
+  const { clientId, redirectUri } = getGoogleOAuthRuntimeConfig();
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+
+  authUrl.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: GOOGLE_OAUTH_SCOPE,
+  }).toString();
+
+  return authUrl.toString();
 }
 
 // Exchanges the Google authorization code and resolves the local user.
@@ -45,7 +77,7 @@ export async function completeGoogleOAuthLogin({
     throw new BadRequestError('Authorization code not provided');
   }
 
-  const { clientId, clientSecret, redirectUri } = getGoogleOAuthConfig();
+  const { clientId, clientSecret, redirectUri } = getGoogleOAuthTokenExchangeConfig();
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

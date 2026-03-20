@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { useBoardView } from '@/context/BoardViewContext'
 import { useLabelPopup } from '@/context/LabelPopupManager'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 import { fetchLabels } from '@/lib/api/labels/getLabels'
 import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
 import { useCreateLabel } from '@/lib/mutations/useCreateLabel'
@@ -24,6 +25,7 @@ export default function DraggableTodo({
   todo: TodoWithLabels
   onClick: () => void
 }) {
+  const { organizationId } = useOrganizationRouteParams()
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: todo.id,
     data: { todo },
@@ -41,12 +43,12 @@ export default function DraggableTodo({
   const labelIconRef = useRef<HTMLDivElement>(null)
 
   const { data: allLabels } = useQuery({
-    queryKey: ['labels', String(todo.board_id)],
-    queryFn: () => fetchLabels(String(todo.board_id)),
+    queryKey: ['labels', organizationId, String(todo.board_id)],
+    queryFn: () => fetchLabels(organizationId, String(todo.board_id)),
   })
 
-  const toggleLabel = useToggleTodoLabel(String(todo.board_id))
-  const createLabel = useCreateLabel(String(todo.board_id))
+  const toggleLabel = useToggleTodoLabel(organizationId, String(todo.board_id))
+  const createLabel = useCreateLabel(organizationId, String(todo.board_id))
 
   useEffect(() => {
     return () => {

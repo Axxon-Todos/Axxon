@@ -54,6 +54,10 @@ vi.mock('@/lib/mutations/useCreateLabel', () => ({
   useCreateLabel: mockedUseCreateLabel,
 }));
 
+vi.mock('@/hooks/useOrganizationRouteParams', () => ({
+  useOrganizationRouteParams: () => ({ organizationId: '12', boardId: '1' }),
+}));
+
 vi.mock('@/components/features/boardView/LabelSelector', () => ({
   default: () => <div>Label selector</div>,
 }));
@@ -161,6 +165,7 @@ describe('TodoDrawer', () => {
 
     await waitFor(() => {
       expect(mockedCreateTodo).toHaveBeenCalledWith(
+        '12',
         1,
         expect.objectContaining({
           assignee_id: 3,
@@ -194,7 +199,7 @@ describe('TodoDrawer', () => {
 
     await waitFor(() => {
       expect(mockedUpdateTodoById).toHaveBeenCalled();
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos', '1'] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos', '12', '1'] });
       expect(onClose).toHaveBeenCalled();
     });
   });
@@ -222,8 +227,8 @@ describe('TodoDrawer', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete Todo' }));
 
     await waitFor(() => {
-      expect(mockedDeleteTodoById).toHaveBeenCalledWith(1, 8);
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos', '1'] });
+      expect(mockedDeleteTodoById).toHaveBeenCalledWith('12', 1, 8);
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['todos', '12', '1'] });
     });
   });
 });
