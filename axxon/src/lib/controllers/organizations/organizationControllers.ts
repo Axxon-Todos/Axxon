@@ -2,9 +2,15 @@ import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
 import { Organizations } from '@/lib/models/organizations';
-import type { OrganizationCreation } from '@/lib/types/organizationTypes';
+import type {
+  OrganizationCreation,
+  OrganizationUpdate,
+} from '@/lib/types/organizationTypes';
 import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
-import { requireOrganizationMember } from '@/lib/utils/authorization';
+import {
+  requireOrganizationMember,
+  requireOrganizationOwner,
+} from '@/lib/utils/authorization';
 
 type CreateOrganizationInput = {
   sessionUserId: number;
@@ -25,6 +31,12 @@ type CreateOrganizationBoardInput = {
   };
 };
 
+type UpdateOrganizationInput = {
+  organizationId: number;
+  sessionUserId: number;
+  data: OrganizationUpdate;
+};
+
 function normalizeRequiredName(value: string | undefined, label: string) {
   const normalizedValue = value?.trim();
 
@@ -33,6 +45,26 @@ function normalizeRequiredName(value: string | undefined, label: string) {
   }
 
   return normalizedValue;
+}
+
+function normalizeOrganizationUpdate(
+  data: OrganizationUpdate
+): OrganizationUpdate {
+  const updateData: OrganizationUpdate = {};
+
+  if ('name' in data) {
+    updateData.name = normalizeRequiredName(data.name, 'Organization name');
+  }
+
+  if ('description' in data) {
+    updateData.description = data.description?.trim() || null;
+  }
+
+  if ('color' in data) {
+    updateData.color = data.color?.trim() || null;
+  }
+
+  return updateData;
 }
 
 export async function createOrganization({
@@ -69,6 +101,24 @@ export async function getOrganization({
   }
 
   return organization;
+}
+
+export async function updateOrganization({
+  organizationId,
+  sessionUserId,
+  data,
+}: UpdateOrganizationInput) {
+  if (!Number.isFinite(organizationId)) {
+    throw new BadRequestError('Invalid organization id');
+  }
+
+  await requireOrganizationOwner(organizationId, sessionUserId);
+  await Organizations.updateOrganization(
+    organizationId,
+    normalizeOrganizationUpdate(data)
+  );
+
+  return getOrganization({ organizationId, sessionUserId });
 }
 
 export async function getOrganizationMembers({

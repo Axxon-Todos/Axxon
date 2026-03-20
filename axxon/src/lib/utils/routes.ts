@@ -1,3 +1,7 @@
+export function buildOrganizationApiPath(organizationId: string | number) {
+  return `/api/organizations/${organizationId}`;
+}
+
 export function buildOrganizationPath(organizationId: string | number) {
   return `/dashboard/orgs/${organizationId}`;
 }
@@ -19,7 +23,7 @@ export function buildOrganizationBoardAnalyticsPath(
 export function buildOrganizationBoardsApiPath(
   organizationId: string | number
 ) {
-  return `/api/organizations/${organizationId}/boards`;
+  return `${buildOrganizationApiPath(organizationId)}/boards`;
 }
 
 export function buildOrganizationBoardApiPath(

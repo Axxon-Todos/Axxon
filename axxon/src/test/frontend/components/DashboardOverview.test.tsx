@@ -18,6 +18,10 @@ vi.mock('@/lib/api/organizations/getOrganizations', () => ({
   fetchOrganizations: mockedFetchOrganizations,
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard',
+}));
+
 import DashboardOverview from '@/components/features/dashboard/DashboardOverview';
 
 import { renderWithProviders } from '../renderWithProviders';
@@ -52,11 +56,17 @@ describe('DashboardOverview', () => {
 
     expect(
       await screen.findByText(
-        'Organize engineering work around teams, repos, and execution boundaries.'
+        'Choose the organization boundary before you dive into boards.'
       )
     ).toBeInTheDocument();
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getAllByText('Organizations')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Create Organization' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View All Orgs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open directory' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Engineering/i })).toHaveAttribute(
+      'href',
+      '/dashboard/orgs/11'
+    );
     expect(screen.getByText('Accessible Boards')).toBeInTheDocument();
   });
 });

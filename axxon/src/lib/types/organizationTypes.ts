@@ -13,6 +13,10 @@ export type OrganizationCreation = Pick<
   'name' | 'description' | 'color' | 'created_by'
 >;
 
+export type OrganizationUpdate = Partial<
+  Pick<OrganizationBaseData, 'name' | 'description' | 'color'>
+>;
+
 export type OrganizationSummary = OrganizationBaseData & {
   member_count: number;
   accessible_board_count: number;

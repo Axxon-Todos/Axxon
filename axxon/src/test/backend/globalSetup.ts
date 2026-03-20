@@ -1,6 +1,7 @@
 import path from 'node:path';
 import knex from 'knex';
 import type { Knex } from 'knex';
+import { register } from 'ts-node';
 
 import { applyBackendTestEnv, getBackendTestDbConfig } from './env';
 
@@ -19,6 +20,15 @@ function createTestKnex(): Knex {
 
 export default async function globalSetup() {
   applyBackendTestEnv();
+  register({
+    transpileOnly: true,
+    compilerOptions: {
+      module: 'CommonJS',
+      moduleResolution: 'node10',
+      verbatimModuleSyntax: false,
+    },
+  });
+
   const dbConfig = getBackendTestDbConfig();
 
   const adminDb = knex({
