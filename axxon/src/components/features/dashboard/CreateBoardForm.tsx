@@ -1,30 +1,37 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useCreateBoard } from '@/lib/mutations/useCreateBoard'
+import { useState } from 'react';
+import { useCreateBoard } from '@/lib/mutations/useCreateBoard';
 
 interface CreateBoardFormProps {
-  onClose: () => void
+  organizationId: string;
+  onClose: () => void;
 }
 
-export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
-  const [name, setName] = useState('')
-  const [color, setColor] = useState('#2563eb')
+export default function CreateBoardForm({
+  organizationId,
+  onClose,
+}: CreateBoardFormProps) {
+  const [name, setName] = useState('');
+  const [color, setColor] = useState('#2563eb');
 
-  const createMutation = useCreateBoard()
+  const createMutation = useCreateBoard(organizationId);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!name.trim()) {
+      return;
+    }
 
     createMutation.mutate(
       { name, color },
       {
         onSuccess: () => {
-          onClose()
-        }
+          onClose();
+        },
       }
-    )
+    );
   }
 
   return (
@@ -34,8 +41,8 @@ export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Enter board name"
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Agent Work Queue"
           className="app-input"
           autoFocus
         />
@@ -44,7 +51,9 @@ export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
       <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
         <div>
           <p className="text-sm font-medium">Board Accent</p>
-          <p className="mt-1 text-sm app-text-muted">Used as the board’s visual identifier.</p>
+          <p className="mt-1 text-sm app-text-muted">
+            Used as the board’s visual identifier inside the org.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <span
@@ -54,18 +63,14 @@ export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
           <input
             type="color"
             value={color}
-            onChange={(e) => setColor(e.target.value)}
+            onChange={(event) => setColor(event.target.value)}
             className="h-10 w-14 cursor-pointer rounded-xl border-0 bg-transparent"
           />
         </div>
       </div>
 
       <div className="flex justify-end gap-2 mt-6">
-        <button
-          type="button"
-          onClick={onClose}
-          className="glass-button"
-        >
+        <button type="button" onClick={onClose} className="glass-button">
           Cancel
         </button>
         <button
@@ -77,11 +82,11 @@ export default function CreateBoardForm({ onClose }: CreateBoardFormProps) {
         </button>
       </div>
 
-      {createMutation.isError && (
+      {createMutation.isError ? (
         <p className="text-sm text-rose-400">
           {createMutation.error?.message || 'Failed to create board'}
         </p>
-      )}
+      ) : null}
     </form>
-  )
+  );
 }

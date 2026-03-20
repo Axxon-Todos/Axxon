@@ -23,7 +23,10 @@ vi.mock('@/lib/models/users', () => ({
   },
 }));
 
-import { completeGoogleOAuthLogin } from '@/lib/controllers/auth/authController';
+import {
+  buildGoogleOAuthAuthorizationUrl,
+  completeGoogleOAuthLogin,
+} from '@/lib/controllers/auth/authController';
 
 describe('authController', () => {
   beforeEach(() => {
@@ -32,6 +35,31 @@ describe('authController', () => {
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
     process.env.NEXT_PUBLIC_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback';
+    delete process.env.GOOGLE_REDIRECT_URI;
+  });
+
+  it('builds the Google authorization URL from runtime config', () => {
+    const authUrl = new URL(buildGoogleOAuthAuthorizationUrl());
+
+    expect(`${authUrl.origin}${authUrl.pathname}`).toBe(
+      'https://accounts.google.com/o/oauth2/v2/auth'
+    );
+    expect(authUrl.searchParams.get('client_id')).toBe('google-client-id');
+    expect(authUrl.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3000/api/auth/google/callback'
+    );
+    expect(authUrl.searchParams.get('response_type')).toBe('code');
+    expect(authUrl.searchParams.get('scope')).toBe('openid email profile');
+  });
+
+  it('prefers GOOGLE_REDIRECT_URI when it is set', () => {
+    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback/server';
+
+    const authUrl = new URL(buildGoogleOAuthAuthorizationUrl());
+
+    expect(authUrl.searchParams.get('redirect_uri')).toBe(
+      'http://localhost:3000/api/auth/google/callback/server'
+    );
   });
 
   it('rejects missing authorization codes', async () => {
@@ -102,5 +130,13 @@ describe('authController', () => {
       avatar_url: 'https://example.com/avatar.png',
     });
     expect(user).toEqual({ id: 9, email: 'user@example.com' });
+  });
+
+  it('fails when the runtime redirect URI is missing', () => {
+    delete process.env.NEXT_PUBLIC_REDIRECT_URI;
+
+    expect(() => buildGoogleOAuthAuthorizationUrl()).toThrow(
+      'Google OAuth configuration is incomplete'
+    );
   });
 });

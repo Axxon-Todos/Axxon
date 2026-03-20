@@ -1,6 +1,7 @@
 import db from '@/lib/db/db';
 
 let userSequence = 1;
+let organizationSequence = 1;
 let boardSequence = 1;
 let categorySequence = 1;
 let labelSequence = 1;
@@ -21,19 +22,74 @@ export async function createUser(overrides: Partial<Record<'first_name' | 'last_
   return user;
 }
 
+export async function createOrganizationRecord({
+  createdBy,
+  name,
+  description = null,
+  color = '#0f766e',
+}: {
+  createdBy: number;
+  name?: string;
+  description?: string | null;
+  color?: string | null;
+}) {
+  const sequence = organizationSequence++;
+  const [organization] = await db('organizations')
+    .insert({
+      name: name ?? `Organization ${sequence}`,
+      description,
+      color,
+      created_by: createdBy,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  await db('organization_members').insert({
+    organization_id: organization.id,
+    user_id: createdBy,
+    role: 'owner',
+    created_at: db.fn.now(),
+  });
+
+  return organization;
+}
+
+export async function addOrganizationMember(
+  organizationId: number,
+  userId: number,
+  role: 'owner' | 'member' = 'member'
+) {
+  const [membership] = await db('organization_members')
+    .insert({
+      organization_id: organizationId,
+      user_id: userId,
+      role,
+      created_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return membership;
+}
+
 export async function createBoardRecord({
   createdBy,
+  organizationId,
   name,
   color = '#2563eb',
 }: {
   createdBy: number;
+  organizationId?: number;
   name?: string;
   color?: string;
 }) {
   const sequence = boardSequence++;
+  const resolvedOrganizationId =
+    organizationId ?? (await createOrganizationRecord({ createdBy })).id;
   const [board] = await db('boards')
     .insert({
       name: name ?? `Board ${sequence}`,
+      organization_id: resolvedOrganizationId,
       created_by: createdBy,
       color,
       created_at: db.fn.now(),

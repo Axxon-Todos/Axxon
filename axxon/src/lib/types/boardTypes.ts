@@ -1,14 +1,17 @@
 export type BoardBaseData = {
   id: string;
   name: string;
+  organization_id: number;
   created_by: number;
   created_at: string;
   updated_at: string;
   color: string;
 };
 
-//pick<> can be used to pick out specific things within type declaration
-export type BoardCreation = Pick<BoardBaseData, 'name' | 'created_by' | 'color'> & {
+export type BoardCreation = Pick<
+  BoardBaseData,
+  'name' | 'created_by' | 'color' | 'organization_id'
+> & {
   member_emails:  string [];
 };
 

@@ -1,87 +1,86 @@
-'use client'
+'use client';
 
-import clsx from 'clsx'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { MoreHorizontal } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { MoreHorizontal } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getUserId } from '@/lib/api/users/getUserId'
-import { fetchBoards } from '@/lib/api/boards/getBoards'
-import { deleteBoardById } from '@/lib/api/boards/deleteBoardById'
+import { fetchBoards } from '@/lib/api/boards/getBoards';
+import { deleteBoardById } from '@/lib/api/boards/deleteBoardById';
+import { buildOrganizationBoardPath } from '@/lib/utils/routes';
 
-import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal'
-import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal'
-import EditBoardModal from '@/components/features/dashboard/EditBoardModal'
+import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal';
+import EditBoardModal from '@/components/features/dashboard/EditBoardModal';
+import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal';
 
-import type { UpdateBoard } from '@/lib/types/boardTypes'
+import type { UpdateBoard } from '@/lib/types/boardTypes';
 
 interface BoardListProps {
-  variant?: 'default' | 'sidebar'
+  organizationId: string;
+  variant?: 'default' | 'sidebar';
 }
 
-const ITEM_EASE = [0.16, 1, 0.3, 1] as const
+const ITEM_EASE = [0.16, 1, 0.3, 1] as const;
 
-export default function BoardList({ variant = 'default' }: BoardListProps) {
-  const queryClient = useQueryClient()
-  const pathname = usePathname()
-  const shouldReduceMotion = useReducedMotion()
-  const [editingBoard, setEditingBoard] = useState<UpdateBoard | null>(null)
-  const [selectedBoard, setSelectedBoard] = useState<UpdateBoard | null>(null)
-  const [inviteBoard, setInviteBoard] = useState<UpdateBoard | null>(null)
-  const isSidebar = variant === 'sidebar'
+export default function BoardList({
+  organizationId,
+  variant = 'default',
+}: BoardListProps) {
+  const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const shouldReduceMotion = useReducedMotion();
+  const [editingBoard, setEditingBoard] = useState<(UpdateBoard & { organization_id: number }) | null>(null);
+  const [selectedBoard, setSelectedBoard] = useState<(UpdateBoard & { organization_id: number }) | null>(null);
+  const [inviteBoard, setInviteBoard] = useState<{ id: number; organization_id: number } | null>(null);
+  const isSidebar = variant === 'sidebar';
 
-  const { data: id, error: userError, isLoading: isUserLoading } = useQuery({
-    queryKey: ['id'],
-    queryFn: getUserId,
+  const { data: boards = [], error, isLoading } = useQuery({
+    queryKey: ['boards', organizationId],
+    queryFn: () => fetchBoards(organizationId),
+    enabled: Boolean(organizationId),
     staleTime: 5 * 60 * 1000,
-  })
-
-  const { data: boards = [], error: boardsError, isLoading: isBoardsLoading } = useQuery({
-    queryKey: ['boards', id],
-    queryFn: () => fetchBoards(id!),
-    enabled: !!id,
-    staleTime: 5 * 60 * 1000,
-  })
+  });
 
   const deleteMutation = useMutation({
-    mutationFn: (boardId: string) => deleteBoardById(boardId),
+    mutationFn: (boardId: string) => deleteBoardById(organizationId, boardId),
     onSuccess: () => {
-      if (id) queryClient.invalidateQueries({ queryKey: ['boards', id] })
+      queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
     },
-  })
+  });
 
   const itemTransition = shouldReduceMotion
     ? { duration: 0 }
-    : { duration: 0.24, ease: ITEM_EASE }
+    : { duration: 0.24, ease: ITEM_EASE };
 
   const statusClassName = clsx(
     'text-sm',
     isSidebar
       ? 'glass-panel rounded-2xl px-4 py-3 app-text-muted'
       : 'glass-panel rounded-2xl px-4 py-3 text-center app-text-muted'
-  )
+  );
 
-  if (isUserLoading || isBoardsLoading) {
-    return <div className={statusClassName}>Loading dashboard...</div>
+  if (!organizationId) {
+    return <div className={statusClassName}>Select an organization to view boards.</div>;
   }
 
-  if (userError) {
-    return <div className={statusClassName}>Error loading user info</div>
+  if (isLoading) {
+    return <div className={statusClassName}>Loading boards...</div>;
   }
 
-  if (boardsError) {
-    return <div className={statusClassName}>Error loading boards</div>
+  if (error) {
+    return <div className={statusClassName}>Error loading boards.</div>;
   }
 
-  if (!id) {
-    return <div className={statusClassName}>Please log in to view your dashboard.</div>
-  }
-
-  function openBoardOptions(board: UpdateBoard) {
-    setSelectedBoard(board)
+  if (boards.length === 0) {
+    return (
+      <div className={statusClassName}>
+        No boards yet. Create the first control surface for this organization.
+      </div>
+    );
   }
 
   return (
@@ -92,37 +91,30 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
           isSidebar ? 'w-full' : 'w-full overflow-y-auto p-3'
         )}
       >
-        {!isSidebar && <h1 className="mb-6 text-center text-4xl font-bold">Boards</h1>}
+        {!isSidebar ? (
+          <h2 className="mb-6 text-center text-4xl font-bold">Boards</h2>
+        ) : null}
 
-        {boards.length === 0 ? (
-          <p className={statusClassName}>No boards yet.</p>
-        ) : isSidebar ? (
+        {isSidebar ? (
           <div className="space-y-2">
-            {boards.map((board, index) => {
-              const boardName = board.name || 'Untitled Board'
-              const href = `/dashboard/${board.id}`
-              const isActive = pathname === href
+            {boards.map((board: any, index) => {
+              const href = buildOrganizationBoardPath(organizationId, board.id);
+              const isActive = pathname === href;
 
               return (
                 <motion.div
                   key={board.id}
-                  initial={{
-                    opacity: 0,
-                    y: shouldReduceMotion ? 0 : 10,
-                    scale: shouldReduceMotion ? 1 : 0.985,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                  }}
+                  initial={
+                    shouldReduceMotion
+                      ? false
+                      : { opacity: 0, y: 10, scale: 0.985 }
+                  }
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{
                     ...itemTransition,
-                    delay: shouldReduceMotion ? 0 : index * 0.045,
+                    delay: shouldReduceMotion ? 0 : index * 0.04,
                   }}
-                  className={clsx(
-                    'group glass-panel relative rounded-2xl transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5'
-                  )}
+                  className="group glass-panel relative rounded-2xl"
                   style={
                     isActive
                       ? {
@@ -130,149 +122,118 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
                             'color-mix(in srgb, var(--app-accent) 28%, var(--app-border))',
                           background:
                             'color-mix(in srgb, var(--app-accent) 12%, var(--app-panel-strong))',
-                          boxShadow:
-                            '0 18px 30px -26px color-mix(in srgb, var(--app-accent) 55%, transparent)',
                         }
                       : undefined
                   }
                 >
-                  <Link
-                    href={href}
-                    aria-label={`Open ${boardName}`}
-                    aria-current={isActive ? 'page' : undefined}
-                    className="absolute inset-0 rounded-2xl focus-visible:outline-none"
-                  />
-
+                  <Link href={href} className="absolute inset-0 rounded-2xl" />
                   <div className="pointer-events-none relative flex items-center gap-3 px-3 py-3">
                     <span
                       className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{
-                        backgroundColor: board.color || '#94a3b8',
-                        boxShadow: `0 0 0 6px color-mix(in srgb, ${board.color || '#94a3b8'} 18%, transparent)`,
-                      }}
+                      style={{ backgroundColor: board.color || '#94a3b8' }}
                     />
-
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                      {boardName}
+                      {board.name || 'Untitled Board'}
                     </span>
 
                     <button
                       type="button"
-                      onClick={() => openBoardOptions(board)}
-                      className="pointer-events-auto relative z-10 translate-x-1 opacity-0 transition-[opacity,transform] duration-200 ease-out group-hover:translate-x-0 group-hover:opacity-100 group-focus-within:translate-x-0 group-focus-within:opacity-100 focus-visible:translate-x-0 focus-visible:opacity-100"
+                      onClick={() => setSelectedBoard(board)}
+                      className="pointer-events-auto relative z-10 translate-x-1 opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100"
                     >
                       <span className="glass-button !h-8 !w-8 !p-0">
                         <MoreHorizontal className="h-4 w-4" />
                       </span>
-                      <span className="sr-only">Open options for {boardName}</span>
                     </button>
                   </div>
                 </motion.div>
-              )
+              );
             })}
           </div>
         ) : (
-          <div className="h-[30%] overflow-y-auto pr-2 scrollbar-hidden space-y-3">
-            {boards.map((board, index) => {
-              const boardName = board.name || 'Untitled Board'
-
-              return (
-                <motion.div
-                  key={board.id}
-                  initial={{
-                    opacity: 0,
-                    y: shouldReduceMotion ? 0 : 12,
-                    scale: shouldReduceMotion ? 1 : 0.985,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                  }}
-                  transition={{
-                    ...itemTransition,
-                    delay: shouldReduceMotion ? 0 : index * 0.05,
-                  }}
-                  className="group glass-panel relative rounded-[1.5rem] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5"
-                >
-                  <Link
-                    href={`/dashboard/${board.id}`}
-                    aria-label={`Open ${boardName}`}
-                    className="absolute inset-0 rounded-[1.5rem] focus-visible:outline-none"
-                  />
-
-                  <div className="pointer-events-none relative flex items-start justify-between gap-3 p-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{
-                            backgroundColor: board.color || '#2563eb',
-                            boxShadow: `0 0 0 6px color-mix(in srgb, ${board.color || '#2563eb'} 18%, transparent)`,
-                          }}
-                        />
-                        <span className="block truncate text-lg font-semibold">
-                          {boardName}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm app-text-muted">Board workspace</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => openBoardOptions(board)}
-                      className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">Open options for {boardName}</span>
-                    </button>
-                  </div>
-
-                  <div className="pointer-events-none px-4 pb-4">
-                    <div className="h-2 rounded-full bg-white/20">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: '42%',
-                          backgroundColor: board.color || '#2563eb',
-                        }}
+          <div className="grid gap-4 xl:grid-cols-2">
+            {boards.map((board: any, index) => (
+              <motion.article
+                key={board.id}
+                initial={
+                  shouldReduceMotion
+                    ? false
+                    : { opacity: 0, y: 14, scale: 0.985 }
+                }
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  ...itemTransition,
+                  delay: shouldReduceMotion ? 0 : index * 0.04,
+                }}
+                className="group glass-panel relative rounded-[1.8rem] p-5"
+              >
+                <Link
+                  href={buildOrganizationBoardPath(organizationId, board.id)}
+                  className="absolute inset-0 rounded-[1.8rem]"
+                />
+                <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: board.color || '#2563eb' }}
                       />
+                      <span className="truncate text-lg font-semibold">
+                        {board.name || 'Untitled Board'}
+                      </span>
                     </div>
+                    <p className="mt-2 text-sm app-text-muted">
+                      Execution layer for scoped work inside this organization.
+                    </p>
                   </div>
-                </motion.div>
-              )
-            })}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBoard(board)}
+                    className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.article>
+            ))}
           </div>
         )}
       </div>
 
-      {editingBoard && (
+      {editingBoard ? (
         <EditBoardModal
           board={editingBoard}
           onClose={() => setEditingBoard(null)}
           onSuccess={() => {
-            if (id) queryClient.invalidateQueries({ queryKey: ['boards', id] })
-            setEditingBoard(null)
+            queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
+            setEditingBoard(null);
           }}
         />
-      )}
+      ) : null}
 
-      {selectedBoard && (
+      {selectedBoard ? (
         <BoardOptionsModal
           board={selectedBoard}
           onClose={() => setSelectedBoard(null)}
           onEdit={() => setEditingBoard(selectedBoard)}
           onDelete={() => deleteMutation.mutate(String(selectedBoard.id))}
-          onInvite={() => setInviteBoard(selectedBoard)}
+          onInvite={() =>
+            setInviteBoard({
+              id: Number(selectedBoard.id),
+              organization_id: selectedBoard.organization_id,
+            })
+          }
         />
-      )}
+      ) : null}
 
-      {inviteBoard && (
+      {inviteBoard ? (
         <InviteMembersModal
-          boardId={Number(inviteBoard.id)}
+          boardId={inviteBoard.id}
+          organizationId={inviteBoard.organization_id}
           onClose={() => setInviteBoard(null)}
         />
-      )}
+      ) : null}
     </>
-  )
+  );
 }

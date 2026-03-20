@@ -1,113 +1,111 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-
-import Modal from '@/components/ui/Modal'
-import { inviteMembersByEmail } from '@/lib/api/members/inviteMembers'
+import { useState } from 'react';
+import Modal from '@/components/ui/Modal';
+import { inviteMembersByEmail } from '@/lib/api/members/inviteMembers';
 
 type InviteMembersModalProps = {
-  boardId: number
-  onClose: () => void
-}
+  organizationId: number;
+  boardId: number;
+  onClose: () => void;
+};
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export default function InviteMembersModal({ boardId, onClose }: InviteMembersModalProps) {
-  const [emails, setEmails] = useState<string[]>([])
-  const [input, setInput] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export default function InviteMembersModal({
+  organizationId,
+  boardId,
+  onClose,
+}: InviteMembersModalProps) {
+  const [emails, setEmails] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function normalizeEmails(rawValue: string) {
     return rawValue
       .split(',')
       .map((value) => value.trim())
-      .filter(Boolean)
+      .filter(Boolean);
   }
 
   function appendEmails(rawValue: string) {
-    const parsedEmails = normalizeEmails(rawValue)
+    const parsedEmails = normalizeEmails(rawValue);
     if (parsedEmails.length === 0) {
-      return
+      return;
     }
 
-    const nextEmails = [...emails]
-    const seenEmails = new Set(emails.map((email) => email.toLowerCase()))
-    const invalidEmails: string[] = []
+    const nextEmails = [...emails];
+    const seenEmails = new Set(emails.map((email) => email.toLowerCase()));
+    const invalidEmails: string[] = [];
 
     for (const email of parsedEmails) {
       if (!EMAIL_PATTERN.test(email)) {
-        invalidEmails.push(email)
-        continue
+        invalidEmails.push(email);
+        continue;
       }
 
-      const normalized = email.toLowerCase()
+      const normalized = email.toLowerCase();
       if (seenEmails.has(normalized)) {
-        continue
+        continue;
       }
 
-      seenEmails.add(normalized)
-      nextEmails.push(email)
+      seenEmails.add(normalized);
+      nextEmails.push(email);
     }
 
-    setEmails(nextEmails)
-    setInput('')
-    setSuccessMessage('')
+    setEmails(nextEmails);
+    setInput('');
 
     if (invalidEmails.length > 0) {
-      setErrorMessage(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`)
-      return
+      setErrorMessage(
+        `Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`
+      );
+      return;
     }
 
-    setErrorMessage('')
-  }
-
-  function removeEmail(emailToRemove: string) {
-    setEmails((current) => current.filter((email) => email !== emailToRemove))
-    setErrorMessage('')
-    setSuccessMessage('')
+    setErrorMessage('');
   }
 
   async function handleSubmit() {
     if (isSubmitting) {
-      return
+      return;
     }
 
-    const pendingEmails = normalizeEmails(input)
-    const combinedEmails = pendingEmails.length > 0 ? [...emails, ...pendingEmails] : emails
-    const dedupedEmails = Array.from(new Map(combinedEmails.map((email) => [email.toLowerCase(), email])).values())
-    const invalidEmails = dedupedEmails.filter((email) => !EMAIL_PATTERN.test(email))
+    const pendingEmails = normalizeEmails(input);
+    const combinedEmails = pendingEmails.length > 0 ? [...emails, ...pendingEmails] : emails;
+    const dedupedEmails = Array.from(
+      new Map(combinedEmails.map((email) => [email.toLowerCase(), email])).values()
+    );
+    const invalidEmails = dedupedEmails.filter((email) => !EMAIL_PATTERN.test(email));
 
     if (invalidEmails.length > 0) {
-      setErrorMessage(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`)
-      return
+      setErrorMessage(
+        `Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`
+      );
+      return;
     }
 
     if (dedupedEmails.length === 0) {
-      setErrorMessage('Add at least one valid email before sending invites.')
-      return
+      setErrorMessage('Add at least one valid org member email before sending invites.');
+      return;
     }
 
-    setIsSubmitting(true)
-    setErrorMessage('')
-    setSuccessMessage('')
+    setIsSubmitting(true);
+    setErrorMessage('');
 
     try {
-      const result = await inviteMembersByEmail({ boardId, emails: dedupedEmails })
-      setSuccessMessage(result.message || 'Invites sent successfully.')
-      setEmails([])
-      setInput('')
-      onClose()
+      await inviteMembersByEmail({ organizationId, boardId, emails: dedupedEmails });
+      onClose();
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to send invites.')
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to send invites.');
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
   }
 
   return (
-    <Modal isOpen onClose={onClose} title="Invite Members">
+    <Modal isOpen onClose={onClose} title="Invite Org Members to Board">
       <div className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="invite-members-input" className="text-sm font-medium">
@@ -120,15 +118,15 @@ export default function InviteMembersModal({ boardId, onClose }: InviteMembersMo
             onBlur={() => appendEmails(input)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' || event.key === ',') {
-                event.preventDefault()
-                appendEmails(input)
+                event.preventDefault();
+                appendEmails(input);
               }
             }}
-            placeholder="Enter emails and press Enter"
+            placeholder="Enter org member emails and press Enter"
             className="app-input"
           />
           <p className="text-xs app-text-muted">
-            Add one or more teammate emails. Separate multiple addresses with commas.
+            Only members already inside this organization can be added to the board.
           </p>
         </div>
 
@@ -138,7 +136,7 @@ export default function InviteMembersModal({ boardId, onClose }: InviteMembersMo
               <button
                 key={email}
                 type="button"
-                onClick={() => removeEmail(email)}
+                onClick={() => setEmails((current) => current.filter((value) => value !== email))}
                 className="app-badge"
                 aria-label={`Remove ${email}`}
               >
@@ -149,7 +147,6 @@ export default function InviteMembersModal({ boardId, onClose }: InviteMembersMo
         ) : null}
 
         {errorMessage ? <p className="text-sm text-rose-400">{errorMessage}</p> : null}
-        {successMessage ? <p className="text-sm text-emerald-400">{successMessage}</p> : null}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="glass-button">
@@ -166,5 +163,5 @@ export default function InviteMembersModal({ boardId, onClose }: InviteMembersMo
         </div>
       </div>
     </Modal>
-  )
+  );
 }

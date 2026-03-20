@@ -1,8 +1,12 @@
 import { apiFetch } from '@/lib/api/apiFetch';
 import type { BoardAnalyticsData } from '@/lib/types/boardAnalyticsTypes';
+import { buildOrganizationBoardApiPath } from '@/lib/utils/routes';
 
-export async function fetchBoardAnalytics(boardId: string): Promise<BoardAnalyticsData> {
-  const res = await apiFetch(`/api/board/${boardId}/analytics`, {
+export async function fetchBoardAnalytics(
+  organizationId: string,
+  boardId: string
+): Promise<BoardAnalyticsData> {
+  const res = await apiFetch(buildOrganizationBoardApiPath(organizationId, boardId, '/analytics'), {
     cache: 'no-store',
   });
 

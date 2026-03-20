@@ -7,6 +7,7 @@ export type ListBoardsForUser = Pick<BoardMembersBaseData, 'user_id'>;
 export type GetAllMembersForBoard = Pick<BoardMembersBaseData, 'board_id'>;
 export type AddBoardMembersByEmail = {
     board_id: number;
+    organization_id: number;
     emails: string[];
 };
 export type RemoveBoardMember = BoardMembersBaseData;

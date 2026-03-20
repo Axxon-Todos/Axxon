@@ -9,6 +9,7 @@ import Modal from '@/components/ui/Modal'
 import UpdateCategoryForm from '@/components/forms/CategoryForm'
 import { useModal } from '@/context/ModalManager'
 import { useBoardRealtime } from '@/hooks/useBoardRealtime'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 import { useSocket } from '@/hooks/useSocket'
 import { fetchBoard } from '@/lib/api/boards/getSingleBoard'
 import { fetchCategories } from '@/lib/api/categories/getCategories'
@@ -29,6 +30,7 @@ import BoardKanbanView from './views/BoardKanbanView'
 import BoardListView from './views/BoardListView'
 
 export default function BoardWorkspace({ boardId }: { boardId: string }) {
+  const { organizationId } = useOrganizationRouteParams()
   const socketRef = useSocket(boardId)
   useBoardRealtime(boardId, socketRef)
 
@@ -42,23 +44,26 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
   const { modalState, openModal, closeModal } = useModal()
   const shouldReduceMotion = useReducedMotion()
 
-  const updateTodo = useUpdateTodoMutation(boardId)
-  const reorderCategories = useReorderCategories(boardId)
-  const updateCategory = useUpdateCategory(boardId)
-  const deleteCategory = useDeleteCategory(boardId)
+  const updateTodo = useUpdateTodoMutation(organizationId, boardId)
+  const reorderCategories = useReorderCategories(organizationId, boardId)
+  const updateCategory = useUpdateCategory(organizationId, boardId)
+  const deleteCategory = useDeleteCategory(organizationId, boardId)
 
-  const { data: board } = useQuery({ queryKey: ['board', boardId], queryFn: () => fetchBoard(boardId) })
+  const { data: board } = useQuery({
+    queryKey: ['board', organizationId, boardId],
+    queryFn: () => fetchBoard(organizationId, boardId),
+  })
   const { data: categories } = useQuery<CategoryBaseData[]>({
-    queryKey: ['categories', boardId],
-    queryFn: () => fetchCategories(boardId),
+    queryKey: ['categories', organizationId, boardId],
+    queryFn: () => fetchCategories(organizationId, boardId),
   })
   const { data: labels } = useQuery({
-    queryKey: ['labels', boardId],
-    queryFn: () => fetchLabels(boardId),
+    queryKey: ['labels', organizationId, boardId],
+    queryFn: () => fetchLabels(organizationId, boardId),
   })
   const { data: todos } = useQuery<TodoWithLabels[]>({
-    queryKey: ['todos', boardId],
-    queryFn: () => fetchTodosWithLabels(boardId),
+    queryKey: ['todos', organizationId, boardId],
+    queryFn: () => fetchTodosWithLabels(organizationId, boardId),
   })
 
   useEffect(() => {

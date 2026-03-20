@@ -2,15 +2,17 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createTodo } from '@/lib/api/todos/createTodo'; // wherever you saved it
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
 import type { NewTodoInput } from '@/lib/api/todos/createTodo';
 
 export default function AddTodoForm({ boardId }: { boardId: number }) {
+  const { organizationId } = useOrganizationRouteParams();
   const queryClient = useQueryClient();
 
     const { mutate, status, error } = useMutation({
-    mutationFn: (data: NewTodoInput) => createTodo(boardId, data),
+    mutationFn: (data: NewTodoInput) => createTodo(organizationId, boardId, data),
     onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ['todos', boardId] });
+        queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(boardId)] });
     }
     });
 

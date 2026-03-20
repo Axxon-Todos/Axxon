@@ -1,31 +1,38 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { deleteLabel } from '@/lib/api/labels/deleteLabel'
-import type { LabelBaseData } from '@/lib/types/labelTypes'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { deleteLabel } from '@/lib/api/labels/deleteLabel';
+import type { LabelBaseData } from '@/lib/types/labelTypes';
 
-export function useDeleteLabel(boardId: string) {
-  const queryClient = useQueryClient()
+export function useDeleteLabel(organizationId: string, boardId: string) {
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (labelId: number) => {
-      return await deleteLabel(boardId, labelId)
-    },
+    mutationFn: async (labelId: number) =>
+      deleteLabel(organizationId, boardId, labelId),
     onMutate: async (labelId) => {
-      await queryClient.cancelQueries({ queryKey: ['labels', boardId] })
-      const prevLabels = queryClient.getQueryData<LabelBaseData[]>(['labels', boardId])
+      await queryClient.cancelQueries({ queryKey: ['labels', organizationId, boardId] });
+      const prevLabels = queryClient.getQueryData<LabelBaseData[]>([
+        'labels',
+        organizationId,
+        boardId,
+      ]);
 
-      queryClient.setQueryData<LabelBaseData[]>(['labels', boardId], (old) =>
-        old ? old.filter(l => l.id !== labelId) : []
-      )
+      queryClient.setQueryData<LabelBaseData[]>(
+        ['labels', organizationId, boardId],
+        (old) => (old ? old.filter((label) => label.id !== labelId) : [])
+      );
 
-      return { prevLabels }
+      return { prevLabels };
     },
     onError: (_err, _vars, context) => {
       if (context?.prevLabels) {
-        queryClient.setQueryData(['labels', boardId], context.prevLabels)
+        queryClient.setQueryData(
+          ['labels', organizationId, boardId],
+          context.prevLabels
+        );
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', boardId] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, boardId] });
     },
-  })
+  });
 }

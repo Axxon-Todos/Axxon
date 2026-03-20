@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 
 import { updateTodoById } from '@/lib/api/todos/updateTodoById'
 import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
@@ -21,6 +22,7 @@ interface UpdateTodoFormProps {
 }
 
 export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: UpdateTodoFormProps) {
+  const { organizationId } = useOrganizationRouteParams()
   const [title, setTitle] = useState(todo.title)
   const [description, setDescription] = useState(todo.description || '')
   const [priority, setPriority] = useState(todo.priority ? String(todo.priority) : '3')
@@ -31,29 +33,30 @@ export default function UpdateTodoForm({ todo, boardId, onClose, onDelete }: Upd
   const numericTodoId = Number(todo.id)
 
   const updateMutation = useMutation({
-    mutationFn: (updatedData: any) => updateTodoById(numericBoardId, numericTodoId, updatedData),
+    mutationFn: (updatedData: any) =>
+      updateTodoById(organizationId, numericBoardId, numericTodoId, updatedData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', numericBoardId] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(numericBoardId)] })
       onClose?.()
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteTodoById(numericBoardId, numericTodoId),
+    mutationFn: () => deleteTodoById(organizationId, numericBoardId, numericTodoId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', numericBoardId] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(numericBoardId)] })
       onClose?.()
       onDelete?.()
     },
   })
 
   const { data: allLabels } = useQuery({
-    queryKey: ['labels', String(numericBoardId)],
-    queryFn: () => fetchLabels(String(numericBoardId)),
+    queryKey: ['labels', organizationId, String(numericBoardId)],
+    queryFn: () => fetchLabels(organizationId, String(numericBoardId)),
   })
 
-  const toggleLabel = useToggleTodoLabel(String(numericBoardId))
-  const createLabel = useCreateLabel(String(numericBoardId))
+  const toggleLabel = useToggleTodoLabel(organizationId, String(numericBoardId))
+  const createLabel = useCreateLabel(organizationId, String(numericBoardId))
 
   const handleToggleLabel = (labelId: number, isAdding: boolean) => {
     toggleLabel.mutate({ todoId: numericTodoId, labelId, isAdding })

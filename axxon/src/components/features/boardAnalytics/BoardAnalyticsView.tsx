@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 
 import { fetchBoardAnalytics } from '@/lib/api/boards/getBoardAnalytics';
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
+import {
+  buildOrganizationBoardPath,
+} from '@/lib/utils/routes';
 
 import AnalyticsCategoryBarChart from './AnalyticsCategoryBarChart';
 import AnalyticsCategoryBreakdown from './AnalyticsCategoryBreakdown';
@@ -75,6 +79,7 @@ const SECTION_NAV: Array<{ id: SectionId; label: string }> = [
 ];
 
 export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
+  const { organizationId } = useOrganizationRouteParams();
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all');
   const [scope, setScope] = useState<ScopeMode>('completed');
   const [activeSection, setActiveSection] = useState<SectionId>('overview');
@@ -83,8 +88,8 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
   const deferredScope = useDeferredValue(scope);
 
   const { data, isLoading, isError } = useQuery<BoardAnalyticsData>({
-    queryKey: ['board-analytics', boardId],
-    queryFn: () => fetchBoardAnalytics(boardId),
+    queryKey: ['board-analytics', organizationId, boardId],
+    queryFn: () => fetchBoardAnalytics(organizationId, boardId),
   });
 
   useEffect(() => {
@@ -263,7 +268,10 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
           <p className="mt-3 text-sm app-text-muted">
             Refresh and try again. If this continues, return to the board and re-open analytics.
           </p>
-          <Link href={`/dashboard/${boardId}`} className="glass-button mt-6">
+          <Link
+            href={buildOrganizationBoardPath(organizationId, boardId)}
+            className="glass-button mt-6"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back to Board
           </Link>
@@ -323,7 +331,10 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
             </div>
           </div>
 
-          <Link href={`/dashboard/${boardId}`} className="glass-button">
+          <Link
+            href={buildOrganizationBoardPath(organizationId, boardId)}
+            className="glass-button"
+          >
             <ArrowLeft className="h-4 w-4" />
             Back to Board
           </Link>
