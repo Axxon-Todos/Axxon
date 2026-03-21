@@ -20,7 +20,6 @@ import type { UpdateBoard } from '@/lib/types/boardTypes';
 
 interface BoardListProps {
   organizationId: string;
-  onCreateBoard?: () => void;
   variant?: 'default' | 'sidebar';
 }
 
@@ -28,7 +27,6 @@ const ITEM_EASE = [0.16, 1, 0.3, 1] as const;
 
 export default function BoardList({
   organizationId,
-  onCreateBoard,
   variant = 'default',
 }: BoardListProps) {
   const queryClient = useQueryClient();
@@ -80,17 +78,8 @@ export default function BoardList({
 
   if (boards.length === 0) {
     return (
-      <div className={clsx(statusClassName, !isSidebar && 'space-y-4')}>
+      <div className={statusClassName}>
         <p>No boards yet. Create the first control surface for this organization.</p>
-        {!isSidebar && onCreateBoard ? (
-          <button
-            type="button"
-            onClick={onCreateBoard}
-            className="glass-button glass-button-primary"
-          >
-            Create Board
-          </button>
-        ) : null}
       </div>
     );
   }

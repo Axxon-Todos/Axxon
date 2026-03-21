@@ -13,6 +13,8 @@ type OrganizationListProps = {
   variant?: 'page' | 'sidebar';
 };
 
+const PAGE_ITEM_EASE = [0.16, 1, 0.3, 1] as const;
+
 export default function OrganizationList({
   variant = 'page',
 }: OrganizationListProps) {
@@ -116,11 +118,30 @@ export default function OrganizationList({
                   : { opacity: 0, y: 18, scale: 0.985 }
               }
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.28, delay: shouldReduceMotion ? 0 : index * 0.04 }}
-              className="glass-panel-strong relative overflow-hidden rounded-[1.8rem] p-6 transition-shadow group-focus-visible:ring-2 group-focus-visible:ring-[var(--app-accent)]"
+              whileHover={
+                shouldReduceMotion
+                  ? undefined
+                  : { y: -10, scale: 1.018 }
+              }
+              transition={{
+                duration: shouldReduceMotion ? 0 : 0.28,
+                delay: shouldReduceMotion ? 0 : index * 0.04,
+                ease: PAGE_ITEM_EASE,
+              }}
+              className={clsx(
+                'glass-panel-strong relative overflow-hidden rounded-[1.8rem] border border-transparent p-6',
+                'transition-[box-shadow,border-color,background-color] group-hover:border-white/20',
+                'group-hover:shadow-[0_28px_80px_-34px_rgba(15,23,42,0.62)]',
+                'group-focus-visible:border-white/20 group-focus-visible:ring-2 group-focus-visible:ring-[var(--app-accent)]',
+                shouldReduceMotion ? 'duration-0' : 'duration-300'
+              )}
             >
               <div
-                className="absolute inset-x-0 top-0 h-24 opacity-80"
+                className={clsx(
+                  'absolute inset-x-0 top-0 h-24 origin-top opacity-80',
+                  'transition-[opacity,transform] group-hover:opacity-100 group-hover:scale-[1.03]',
+                  shouldReduceMotion ? 'duration-0' : 'duration-300'
+                )}
                 style={{
                   background: `linear-gradient(135deg, ${organization.color || '#0f766e'}, transparent)`,
                 }}
@@ -138,7 +159,10 @@ export default function OrganizationList({
                     </p>
                   </div>
                   <span
-                    className="h-4 w-4 shrink-0 rounded-full"
+                    className={clsx(
+                      'h-4 w-4 shrink-0 rounded-full transition-transform',
+                      shouldReduceMotion ? 'duration-0' : 'duration-300 group-hover:scale-110'
+                    )}
                     style={{ backgroundColor: organization.color || '#0f766e' }}
                   />
                 </div>

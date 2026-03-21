@@ -115,10 +115,7 @@ export default function OrganizationWorkspace({
         </section>
 
         <section className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
-          <BoardList
-            organizationId={organizationId}
-            onCreateBoard={() => setIsCreateBoardModalOpen(true)}
-          />
+          <BoardList organizationId={organizationId} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">

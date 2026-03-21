@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mockedFetchBoards } = vi.hoisted(() => ({
@@ -23,20 +23,14 @@ describe('BoardList', () => {
     vi.clearAllMocks();
   });
 
-  it('renders an empty-state create button on the org page', async () => {
+  it('renders the empty state without a duplicate create button', async () => {
     mockedFetchBoards.mockResolvedValue([]);
-    const onCreateBoard = vi.fn();
 
-    renderWithProviders(
-      <BoardList organizationId="3" onCreateBoard={onCreateBoard} />
-    );
+    renderWithProviders(<BoardList organizationId="3" />);
 
     expect(
       await screen.findByText('No boards yet. Create the first control surface for this organization.')
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Create Board' }));
-
-    expect(onCreateBoard).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Create Board' })).not.toBeInTheDocument();
   });
 });

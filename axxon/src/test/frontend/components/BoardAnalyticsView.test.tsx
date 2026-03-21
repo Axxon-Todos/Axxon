@@ -14,27 +14,6 @@ vi.mock('@/hooks/useOrganizationRouteParams', () => ({
   useOrganizationRouteParams: () => ({ organizationId: '12', boardId: '7' }),
 }));
 
-vi.mock('recharts', async () => {
-  const ReactModule = await import('react');
-
-  function Box({ children }: { children?: React.ReactNode }) {
-    return ReactModule.createElement('div', null, children);
-  }
-
-  return {
-    ResponsiveContainer: Box,
-    PieChart: Box,
-    Pie: Box,
-    Cell: () => null,
-    Tooltip: () => null,
-    BarChart: Box,
-    Bar: Box,
-    CartesianGrid: () => null,
-    XAxis: () => null,
-    YAxis: () => null,
-  };
-});
-
 import BoardAnalyticsView from '@/components/features/boardAnalytics/BoardAnalyticsView';
 
 import { renderWithProviders } from '../renderWithProviders';
