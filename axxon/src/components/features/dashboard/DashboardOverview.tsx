@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FolderGit2, ShieldCheck, Users2 } from 'lucide-react';
@@ -31,7 +30,7 @@ export default function DashboardOverview() {
     return (
       <div className="mx-auto max-w-[1480px]">
         <section className="glass-panel-strong rounded-[2rem] p-8">
-          <p className="app-kicker">Dashboard</p>
+          <p className="app-kicker">Organizations</p>
           <h1 className="mt-3 text-3xl font-semibold">Sign in to access your organizations</h1>
           <p className="mt-3 max-w-2xl app-text-muted">
             Organization boundaries now sit above boards so repo context, members, and agent work stay coordinated.
@@ -54,29 +53,24 @@ export default function DashboardOverview() {
     <>
       <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
         <section className="glass-panel-strong rounded-[2rem] p-8 sm:p-10">
-          <p className="app-kicker">Control Layer</p>
+          <p className="app-kicker">Organizations</p>
           <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
             <div className="max-w-3xl">
               <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                Organize engineering work around teams, repos, and execution boundaries.
+                Choose the organization boundary before you dive into boards.
               </h1>
               <p className="mt-4 text-base leading-7 app-text-muted">
-                Axxon now treats organizations as the top-level workspace. Boards live inside those orgs so members, repo context, and AI-assisted work stay aligned in one system.
+                Axxon treats organizations as the top-level workspace. Boards live inside those orgs so members, repo context, and AI-assisted work stay aligned in one place.
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => setIsCreateModalOpen(true)}
-                className="glass-button glass-button-primary"
-              >
-                Create Organization
-              </button>
-              <Link href="/dashboard/orgs" className="glass-button">
-                View All Orgs
-              </Link>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="glass-button glass-button-primary"
+            >
+              Create Organization
+            </button>
           </div>
 
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -99,16 +93,14 @@ export default function DashboardOverview() {
         </section>
 
         <section className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <div>
-              <p className="app-kicker">Organizations</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-tight">
-                Choose the workspace boundary first
-              </h2>
-            </div>
-            <Link href="/dashboard/orgs" className="glass-button">
-              Open directory
-            </Link>
+          <div className="mb-6">
+            <p className="app-kicker">Directory</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+              Your organizations
+            </h2>
+            <p className="mt-3 max-w-2xl text-base leading-7 app-text-muted">
+              Open an organization to manage boards, members, and the execution surfaces inside it.
+            </p>
           </div>
 
           <OrganizationList />

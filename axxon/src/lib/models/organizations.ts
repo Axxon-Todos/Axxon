@@ -3,6 +3,7 @@ import type {
   OrganizationBaseData,
   OrganizationCreation,
   OrganizationSummary,
+  OrganizationUpdate,
 } from '@/lib/types/organizationTypes';
 
 type RawOrganizationSummary = OrganizationBaseData & {
@@ -80,6 +81,25 @@ export class Organizations {
 
   static async getById(id: number): Promise<OrganizationBaseData | null> {
     return (await knex('organizations').where({ id }).first()) ?? null;
+  }
+
+  static async updateOrganization(
+    id: number,
+    data: OrganizationUpdate
+  ): Promise<OrganizationBaseData | null> {
+    if (Object.keys(data).length === 0) {
+      return this.getById(id);
+    }
+
+    const [organization] = await knex('organizations')
+      .where({ id })
+      .update({
+        ...data,
+        updated_at: knex.fn.now(),
+      })
+      .returning('*');
+
+    return organization ?? null;
   }
 
   static async getSummaryById(

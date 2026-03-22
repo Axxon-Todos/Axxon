@@ -22,6 +22,7 @@ export function useCreateBoard(organizationId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['organization', organizationId] });
     },
   });
 }

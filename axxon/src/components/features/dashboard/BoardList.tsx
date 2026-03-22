@@ -49,6 +49,7 @@ export default function BoardList({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['organization', organizationId] });
     },
   });
 
@@ -78,7 +79,7 @@ export default function BoardList({
   if (boards.length === 0) {
     return (
       <div className={statusClassName}>
-        No boards yet. Create the first control surface for this organization.
+        <p>No boards yet. Create the first control surface for this organization.</p>
       </div>
     );
   }

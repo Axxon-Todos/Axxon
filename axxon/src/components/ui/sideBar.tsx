@@ -10,7 +10,6 @@ import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   Building2,
   ChevronLeft,
-  LayoutDashboard,
   LogOut,
   MoonStar,
   Plus,
@@ -57,8 +56,8 @@ export default function Sidebar({
   const shouldReduceMotion = useReducedMotion();
   const sidebarTransition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
   const contentTransition = shouldReduceMotion ? { duration: 0 } : CONTENT_TRANSITION;
-  const isDashboardActive = pathname === "/dashboard";
-  const isOrganizationsActive = pathname.startsWith("/dashboard/orgs");
+  const isOrganizationsActive =
+    pathname === "/dashboard" || pathname.startsWith("/dashboard/orgs");
   const collapsedButtonStyle = collapsed
     ? {
         width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
@@ -184,13 +183,6 @@ export default function Sidebar({
           <div className={`grid gap-2 px-3 ${collapsed ? "justify-center" : ""}`}>
             <SidebarNavItem
               href="/dashboard"
-              label="Dashboard"
-              icon={<LayoutDashboard className="h-5 w-5" />}
-              collapsed={collapsed}
-              active={isDashboardActive}
-            />
-            <SidebarNavItem
-              href="/dashboard/orgs"
               label="Organizations"
               icon={<Building2 className="h-5 w-5" />}
               collapsed={collapsed}

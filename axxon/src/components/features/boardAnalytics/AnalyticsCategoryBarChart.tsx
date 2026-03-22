@@ -1,17 +1,5 @@
 'use client'
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipContentProps,
-} from 'recharts';
-
 type ScopeMode = 'all' | 'completed' | 'active';
 
 type AnalyticsCategoryBarItem = {
@@ -29,20 +17,10 @@ type AnalyticsCategoryBarChartProps = {
   emptyLabel: string;
 };
 
-function CategoryTooltip({ active, payload }: TooltipContentProps<number, string>) {
-  if (!active || !payload?.length) return null;
-
-  const item = payload[0]?.payload as AnalyticsCategoryBarItem;
-  if (!item) return null;
-
-  return (
-    <div className="glass-panel rounded-xl px-3 py-2 text-xs shadow-lg">
-      <p className="font-semibold">{item.label}</p>
-      <p className="mt-1 app-text-muted">{item.total} total</p>
-      <p className="app-text-muted">{item.completed} completed</p>
-      <p className="app-text-muted">{item.active} active</p>
-    </div>
-  );
+function getValueForScope(item: AnalyticsCategoryBarItem, scope: ScopeMode) {
+  if (scope === 'completed') return item.completed;
+  if (scope === 'active') return item.active;
+  return item.total;
 }
 
 export default function AnalyticsCategoryBarChart({
@@ -58,51 +36,72 @@ export default function AnalyticsCategoryBarChart({
     );
   }
 
-  const chartHeight = Math.max(items.length * 54, 260);
+  const maxValue = Math.max(...items.map((item) => getValueForScope(item, scope)), 1);
 
   return (
-    <div className="h-full min-h-[260px]">
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart
-          data={items}
-          layout="vertical"
-          margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
-          barCategoryGap={16}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border)" horizontal={false} />
-          <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--app-muted)' }} />
-          <YAxis
-            type="category"
-            dataKey="label"
-            axisLine={false}
-            tickLine={false}
-            tick={{ fontSize: 12, fill: 'var(--app-foreground)' }}
-            width={120}
-          />
-          <Tooltip cursor={{ fill: 'color-mix(in srgb, var(--app-panel-strong) 78%, transparent)' }} content={CategoryTooltip} />
+    <div className="flex h-full min-h-[260px] flex-col gap-3">
+      {scope === 'all' ? (
+        <div className="flex flex-wrap gap-2 text-xs app-text-muted">
+          <span className="app-badge">
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'var(--app-accent)' }} />
+            Completed
+          </span>
+          <span className="app-badge">
+            <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+            Active
+          </span>
+        </div>
+      ) : null}
 
-          {scope === 'all' ? (
-            <>
-              <Bar dataKey="completed" stackId="total" radius={[0, 10, 10, 0]}>
-                {items.map((item) => (
-                  <Cell key={`${item.id}-completed`} fill={item.color} />
-                ))}
-              </Bar>
-              <Bar dataKey="active" stackId="total" fill="#94a3b8" radius={[0, 10, 10, 0]} />
-            </>
-          ) : null}
+      <div className="space-y-3">
+        {items.map((item) => {
+          const value = getValueForScope(item, scope);
+          const width = `${Math.max((value / maxValue) * 100, value > 0 ? 8 : 0)}%`;
+          const completedWidth = item.total > 0 ? `${(item.completed / item.total) * 100}%` : '0%';
+          const activeWidth = item.total > 0 ? `${(item.active / item.total) * 100}%` : '0%';
 
-          {scope === 'completed' ? (
-            <Bar dataKey="completed" radius={[0, 10, 10, 0]}>
-              {items.map((item) => (
-                <Cell key={`${item.id}-completed-only`} fill={item.color} />
-              ))}
-            </Bar>
-          ) : null}
+          return (
+            <article
+              key={item.id}
+              className="glass-panel rounded-[1.2rem] px-3 py-3"
+              title={`${item.label}: ${item.total} total, ${item.completed} completed, ${item.active} active`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                  <p className="truncate text-sm font-medium">{item.label}</p>
+                </div>
+                <span className="shrink-0 text-xs font-semibold app-text-muted">
+                  {value}
+                </span>
+              </div>
 
-          {scope === 'active' ? <Bar dataKey="active" fill="#94a3b8" radius={[0, 10, 10, 0]} /> : null}
-        </BarChart>
-      </ResponsiveContainer>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--app-border)_78%,transparent)]">
+                {scope === 'all' ? (
+                  <div className="flex h-full overflow-hidden rounded-full" style={{ width }}>
+                    <span style={{ width: completedWidth, backgroundColor: item.color }} />
+                    <span style={{ width: activeWidth, backgroundColor: '#94a3b8' }} />
+                  </div>
+                ) : (
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width,
+                      backgroundColor: scope === 'active' ? '#94a3b8' : item.color,
+                    }}
+                  />
+                )}
+              </div>
+
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs app-text-muted">
+                <span>{item.total} total</span>
+                <span>{item.completed} completed</span>
+                <span>{item.active} active</span>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
