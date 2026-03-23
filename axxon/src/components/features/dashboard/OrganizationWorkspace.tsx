@@ -7,6 +7,7 @@ import { FolderGit2, Users2 } from 'lucide-react';
 import BoardList from '@/components/features/dashboard/BoardList';
 import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
 import EditOrganizationModal from '@/components/features/dashboard/EditOrganizationModal';
+import OrganizationGitHubPanel from '@/components/features/dashboard/OrganizationGitHubPanel';
 import Modal from '@/components/ui/Modal';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
@@ -119,18 +120,10 @@ export default function OrganizationWorkspace({
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <article className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
-            <p className="app-kicker">Connected Repos</p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-tight">
-              Repo connection setup comes next
-            </h2>
-            <p className="mt-4 max-w-2xl leading-7 app-text-muted">
-              This phase only establishes the org boundary. Repository onboarding will plug into this section after the org-first board flow is stable.
-            </p>
-            <div className="mt-6 rounded-[1.5rem] border border-dashed border-[var(--app-border)] p-5 text-sm app-text-muted">
-              No repositories connected yet.
-            </div>
-          </article>
+          <OrganizationGitHubPanel
+            organizationId={organizationId}
+            isOwner={isOwner}
+          />
 
           <article className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
             <p className="app-kicker">Members</p>

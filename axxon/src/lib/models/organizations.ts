@@ -70,7 +70,11 @@ export class Organizations {
           .whereRaw('boards.organization_id = organizations.id')
           .andWhere('board_members.user_id', userId)
           .as('accessible_board_count'),
-        knex.raw('0::integer as repo_count')
+        knex('repositories')
+          .countDistinct('id')
+          .whereRaw('repositories.organization_id = organizations.id')
+          .andWhere('repositories.is_active', true)
+          .as('repo_count')
       )
       .orderBy('organizations.created_at', 'desc');
 
@@ -120,7 +124,11 @@ export class Organizations {
           .whereRaw('boards.organization_id = organizations.id')
           .andWhere('board_members.user_id', userId)
           .as('accessible_board_count'),
-        knex.raw('0::integer as repo_count')
+        knex('repositories')
+          .countDistinct('id')
+          .whereRaw('repositories.organization_id = organizations.id')
+          .andWhere('repositories.is_active', true)
+          .as('repo_count')
       )
       .first();
 

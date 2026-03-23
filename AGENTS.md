@@ -6,13 +6,16 @@ Axxon is an agent-work orchestration platform for software teams.
 - Organizations are the top-level workspace boundary.
 - Organizations own members, connected repositories, boards, tasks, agent configurations, shared context, execution history, and org-level settings.
 - Boards must live inside organizations. Do not reintroduce board-first data models, routes, or UI flows.
+- GitHub repository connections are installation-based. Persist the GitHub App installation at the org layer and treat imported repositories as org-owned records.
 - The authenticated SPA flow is org-first:
   - `/dashboard`
   - `/dashboard/orgs`
   - `/dashboard/orgs/[organizationId]`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]/analytics`
+- GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
 - The canonical API surface is org-scoped under `src/app/api/organizations/**`.
+- The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
 ## Project Structure & Module Organization
@@ -20,11 +23,14 @@ Axxon is an agent-work orchestration platform for software teams.
 
 - Keep organization pages under `axxon/src/app/dashboard/orgs/**`.
 - Keep org-aware API handlers under `axxon/src/app/api/organizations/**`.
+- Keep GitHub App setup bridge pages under `axxon/src/app/dashboard/integrations/**`.
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Route helpers, org/board path builders, and authorization helpers should stay in `axxon/src/lib/utils`.
 - Reusable domain types should live under `axxon/src/lib/types`.
+- GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
+- Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
 
 ## Build, Test, and Development Commands
 Run commands from `axxon/`.
@@ -60,8 +66,10 @@ Knex is used at the model and migrations layer.
 - Maintain ACID-safe behavior for org, board, member, and task mutations.
 - Keep models focused on persistence concerns and controllers focused on request orchestration.
 - Validate org membership and board membership at the correct boundary. Org membership comes first; board access is scoped within the org.
+- Restrict GitHub install/finalize/sync actions to org owners. Repository listing can remain visible to org members.
 - Do not bypass authorization helpers for org-scoped resources.
 - Maintain secure defaults for auth, cookies, secrets, and socket access.
+- Read GitHub webhook request bodies raw before JSON parsing, verify `X-Hub-Signature-256`, and persist deliveries before processing.
 
 ## Testing Guidelines
 Vitest is available for backend and frontend suites. Tests are part of the expected delivery for every feature, not optional cleanup.
@@ -99,6 +107,8 @@ Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate
 
 ## Rules
 - Follow proper separation of concerns and maintain up-to-date security practices.
+- ALWAYS Write commens at the top of files to briefly describe its purpose and functionality
+- When developing features aim for reusable functions to enforce clean code
 - Maintain consistency with the surrounding codebase.
 - Keep functions and components organized in their appropriate layers.
 - UI-layer components should remain general-purpose and reusable.
