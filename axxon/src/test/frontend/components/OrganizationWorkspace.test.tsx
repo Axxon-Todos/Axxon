@@ -30,6 +30,20 @@ vi.mock('@/components/features/dashboard/BoardList', () => ({
   ),
 }));
 
+vi.mock('@/components/features/dashboard/OrganizationGitHubPanel', () => ({
+  default: ({
+    organizationId,
+    isOwner,
+  }: {
+    organizationId: string;
+    isOwner: boolean;
+  }) => (
+    <div data-testid="github-panel">
+      GitHub panel for {organizationId} ({isOwner ? 'owner' : 'member'})
+    </div>
+  ),
+}));
+
 import OrganizationWorkspace from '@/components/features/dashboard/OrganizationWorkspace';
 
 import { renderWithProviders } from '../renderWithProviders';

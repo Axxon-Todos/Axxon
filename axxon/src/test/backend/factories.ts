@@ -7,6 +7,8 @@ let categorySequence = 1;
 let labelSequence = 1;
 let todoSequence = 1;
 let conversationSequence = 1;
+let githubInstallationSequence = 1;
+let githubRepositorySequence = 1;
 
 export async function createUser(overrides: Partial<Record<'first_name' | 'last_name' | 'email' | 'avatar_url', string | null>> = {}) {
   const sequence = userSequence++;
@@ -230,4 +232,93 @@ export async function createConversationRecord({
     .returning('*');
 
   return conversation;
+}
+
+export async function createGitHubInstallationRecord({
+  organizationId,
+  installedByUserId = null,
+  githubInstallationId,
+  githubAccountId,
+  githubAccountLogin,
+  githubAccountType = 'Organization',
+  repositorySelection = 'all',
+  status = 'active',
+}: {
+  organizationId: number;
+  installedByUserId?: number | null;
+  githubInstallationId?: string;
+  githubAccountId?: string;
+  githubAccountLogin?: string;
+  githubAccountType?: string;
+  repositorySelection?: 'all' | 'selected';
+  status?: 'pending' | 'active' | 'suspended' | 'removed';
+}) {
+  const sequence = githubInstallationSequence++;
+  const [installation] = await db('github_installations')
+    .insert({
+      organization_id: organizationId,
+      github_installation_id: githubInstallationId ?? String(1000 + sequence),
+      github_account_id: githubAccountId ?? String(2000 + sequence),
+      github_account_login: githubAccountLogin ?? `axxon-installation-${sequence}`,
+      github_account_type: githubAccountType,
+      repository_selection: repositorySelection,
+      status,
+      installed_by_user_id: installedByUserId,
+      last_synced_at: null,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return installation;
+}
+
+export async function createRepositoryRecord({
+  organizationId,
+  githubInstallationId,
+  githubRepoId,
+  name,
+  fullName,
+  ownerLogin,
+  defaultBranch = 'main',
+  isPrivate = true,
+  archived = false,
+  htmlUrl,
+  isActive = true,
+}: {
+  organizationId: number;
+  githubInstallationId: string;
+  githubRepoId?: string;
+  name?: string;
+  fullName?: string;
+  ownerLogin?: string;
+  defaultBranch?: string | null;
+  isPrivate?: boolean;
+  archived?: boolean;
+  htmlUrl?: string;
+  isActive?: boolean;
+}) {
+  const sequence = githubRepositorySequence++;
+  const resolvedOwnerLogin = ownerLogin ?? 'axxon-test';
+  const resolvedName = name ?? `repo-${sequence}`;
+  const [repository] = await db('repositories')
+    .insert({
+      organization_id: organizationId,
+      github_installation_id: githubInstallationId,
+      github_repo_id: githubRepoId ?? String(3000 + sequence),
+      name: resolvedName,
+      full_name: fullName ?? `${resolvedOwnerLogin}/${resolvedName}`,
+      owner_login: resolvedOwnerLogin,
+      default_branch: defaultBranch,
+      private: isPrivate,
+      archived,
+      html_url: htmlUrl ?? `https://github.com/${resolvedOwnerLogin}/${resolvedName}`,
+      is_active: isActive,
+      raw_json: null,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return repository;
 }

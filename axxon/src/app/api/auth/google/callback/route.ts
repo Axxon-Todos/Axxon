@@ -16,7 +16,10 @@ export async function GET(req: NextRequest) {
 
     // Set cookie and redirect
     const response = NextResponse.redirect(
-      new URL('/dashboard', process.env.NEXT_PUBLIC_HOSTNAME || req.nextUrl.origin)
+      new URL(
+        '/dashboard',
+        process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_HOSTNAME || req.nextUrl.origin
+      )
     );
     await issueSessionCookie(response, {
       id: user.id,
