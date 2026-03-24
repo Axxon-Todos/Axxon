@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  addBoardMembersByEmail,
+  addBoardMembers,
   getBoardMembers,
 } from '@/lib/controllers/boardMembers/boardMemberControllers';
 import { handleApiError } from '@/lib/utils/apiErrors';
@@ -17,7 +17,7 @@ type BoardMemberRouteParams = {
 };
 
 type AddBoardMembersPayload = {
-  emails: string[];
+  userIds: number[];
 };
 
 export async function GET(req: NextRequest, context: RouteContext<BoardMemberRouteParams>) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, context: RouteContext<BoardMemberRo
     const session = await requireSession(req);
     const { boardId } = await requireOrganizationBoardMember(context, session.userId);
     const data = await parseJsonBody<AddBoardMembersPayload>(req);
-    const result = await addBoardMembersByEmail({
+    const result = await addBoardMembers({
       boardId,
       sessionUserId: session.userId,
       data,
@@ -48,6 +48,6 @@ export async function POST(req: NextRequest, context: RouteContext<BoardMemberRo
 
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
-    return handleApiError(error, '[ADD_BOARD_MEMBER_BY_EMAIL_ERROR]', 'Failed to add member by email');
+    return handleApiError(error, '[ADD_BOARD_MEMBER_ERROR]', 'Failed to add board members');
   }
 }

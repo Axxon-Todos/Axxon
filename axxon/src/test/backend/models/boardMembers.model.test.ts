@@ -37,10 +37,9 @@ describe('BoardMembers model', () => {
       { conversation_id: conversation.id, user_id: existingMember.id },
     ]);
 
-    await BoardMembers.addMembersByEmail({
+    await BoardMembers.addMembersByUserIds({
       board_id: board.id,
-      organization_id: board.organization_id,
-      emails: [existingMember.email, invitee.email, 'missing@example.com'],
+      user_ids: [existingMember.id, invitee.id],
     });
 
     const boardMembers = await db('board_members')
@@ -78,5 +77,33 @@ describe('BoardMembers model', () => {
     expect(boards).toHaveLength(1);
     expect(boards[0]?.id).toBe(board.id);
     expect(isMember).toBe(true);
+  });
+
+  it('lists matching org members who are not already on the board', async () => {
+    const creator = await createUser({ email: 'creator@example.com' });
+    const matchingInvitee = await createUser({
+      email: 'alex@example.com',
+      first_name: 'Alex',
+      last_name: 'Builder',
+    });
+    const existingBoardMember = await createUser({
+      email: 'alex-board@example.com',
+      first_name: 'Alex',
+      last_name: 'Member',
+    });
+    const board = await createBoardRecord({ createdBy: creator.id });
+
+    await addOrganizationMember(board.organization_id, matchingInvitee.id);
+    await addOrganizationMember(board.organization_id, existingBoardMember.id);
+    await addBoardMember(board.id, creator.id);
+    await addBoardMember(board.id, existingBoardMember.id);
+
+    const candidates = await BoardMembers.listInviteCandidates({
+      organizationId: board.organization_id,
+      boardId: board.id,
+      query: 'alex',
+    });
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual([matchingInvitee.id]);
   });
 });

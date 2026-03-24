@@ -46,6 +46,23 @@ export class Repositories {
       });
   }
 
+  static async listByIdsForOrganization(
+    organizationId: number,
+    repositoryIds: number[]
+  ): Promise<RepositoryRecord[]> {
+    if (repositoryIds.length === 0) {
+      return [];
+    }
+
+    return db('repositories')
+      .where({
+        organization_id: organizationId,
+        is_active: true,
+      })
+      .whereIn('id', repositoryIds)
+      .orderBy('full_name', 'asc');
+  }
+
   static async deactivateMissingForInstallation({
     organizationId,
     githubInstallationId,

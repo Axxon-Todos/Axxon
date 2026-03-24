@@ -7,6 +7,7 @@ import { FolderGit2, Users2 } from 'lucide-react';
 import BoardList from '@/components/features/dashboard/BoardList';
 import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
 import EditOrganizationModal from '@/components/features/dashboard/EditOrganizationModal';
+import InviteOrganizationMembersModal from '@/components/features/dashboard/InviteOrganizationMembersModal';
 import OrganizationGitHubPanel from '@/components/features/dashboard/OrganizationGitHubPanel';
 import Modal from '@/components/ui/Modal';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
@@ -22,6 +23,7 @@ export default function OrganizationWorkspace({
 }) {
   const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [isEditOrganizationModalOpen, setIsEditOrganizationModalOpen] = useState(false);
+  const [isInviteMembersModalOpen, setIsInviteMembersModalOpen] = useState(false);
 
   const { data: organization, isLoading: isOrganizationLoading } = useQuery({
     queryKey: ['organization', organizationId],
@@ -130,6 +132,17 @@ export default function OrganizationWorkspace({
             <h2 className="mt-3 text-2xl font-semibold tracking-tight">
               Organization access
             </h2>
+            {isOwner ? (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsInviteMembersModalOpen(true)}
+                  className="glass-button"
+                >
+                  Invite Members
+                </button>
+              </div>
+            ) : null}
 
             <div className="mt-6 space-y-3">
               {isMembersLoading ? (
@@ -176,6 +189,13 @@ export default function OrganizationWorkspace({
         <EditOrganizationModal
           organization={organization}
           onClose={() => setIsEditOrganizationModalOpen(false)}
+        />
+      ) : null}
+
+      {isInviteMembersModalOpen ? (
+        <InviteOrganizationMembersModal
+          organizationId={organizationId}
+          onClose={() => setIsInviteMembersModalOpen(false)}
         />
       ) : null}
     </>

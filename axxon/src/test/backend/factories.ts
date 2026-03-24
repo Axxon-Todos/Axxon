@@ -322,3 +322,21 @@ export async function createRepositoryRecord({
 
   return repository;
 }
+
+export async function createBoardRepositoryAccessRecord({
+  boardId,
+  repositoryId,
+}: {
+  boardId: number;
+  repositoryId: number;
+}) {
+  const [record] = await db('board_repository_access')
+    .insert({
+      board_id: boardId,
+      repository_id: repositoryId,
+      created_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return record;
+}

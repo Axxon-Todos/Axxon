@@ -5,13 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import Modal from '@/components/ui/Modal';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { addBoardMembers } from '@/lib/api/boardMembers/addBoardMembers';
-import { searchBoardInviteCandidates } from '@/lib/api/boardMembers/searchBoardInviteCandidates';
+import { inviteOrganizationMembers } from '@/lib/api/organizations/inviteOrganizationMembers';
+import { searchOrganizationInviteCandidates } from '@/lib/api/organizations/searchOrganizationInviteCandidates';
 import type { User } from '@/lib/types/users';
 
-type InviteMembersModalProps = {
-  organizationId: number;
-  boardId: number;
+type InviteOrganizationMembersModalProps = {
+  organizationId: string;
   onClose: () => void;
 };
 
@@ -19,25 +18,22 @@ function formatMemberName(member: Pick<User, 'first_name' | 'last_name' | 'email
   return [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email;
 }
 
-export default function InviteMembersModal({
+export default function InviteOrganizationMembersModal({
   organizationId,
-  boardId,
   onClose,
-}: InviteMembersModalProps) {
+}: InviteOrganizationMembersModalProps) {
   const queryClient = useQueryClient();
   const [searchValue, setSearchValue] = useState('');
   const debouncedSearchValue = useDebouncedValue(searchValue, 300);
   const [selectedCandidates, setSelectedCandidates] = useState<User[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
+  const shouldSearch = debouncedSearchValue.trim().length >= 2;
 
   const { data: candidates = [], isLoading, isFetching } = useQuery<User[]>({
-    queryKey: ['board-member-candidates', String(organizationId), String(boardId), debouncedSearchValue],
+    queryKey: ['organization-member-candidates', organizationId, debouncedSearchValue],
     queryFn: () =>
-      searchBoardInviteCandidates(
-        String(organizationId),
-        String(boardId),
-        debouncedSearchValue.trim()
-      ),
+      searchOrganizationInviteCandidates(organizationId, debouncedSearchValue.trim()),
+    enabled: shouldSearch,
     placeholderData: (previousData) => previousData,
   });
 
@@ -51,25 +47,27 @@ export default function InviteMembersModal({
   );
   const isDebouncing = searchValue !== debouncedSearchValue;
 
-  const addMembersMutation = useMutation({
+  const inviteMutation = useMutation({
     mutationFn: () =>
-      addBoardMembers({
+      inviteOrganizationMembers({
         organizationId,
-        boardId,
         userIds: selectedUserIds,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ['board-members', String(organizationId), String(boardId)],
+        queryKey: ['organization-members', organizationId],
       });
       await queryClient.invalidateQueries({
-        queryKey: ['board-member-candidates', String(organizationId), String(boardId)],
+        queryKey: ['organization-member-candidates', organizationId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['organization', organizationId],
       });
       onClose();
     },
     onError: (error) => {
       setErrorMessage(
-        error instanceof Error ? error.message : 'Failed to add board members.'
+        error instanceof Error ? error.message : 'Failed to invite organization members.'
       );
     },
   });
@@ -84,70 +82,71 @@ export default function InviteMembersModal({
   }
 
   async function handleSubmit() {
-    if (selectedCandidates.length === 0 || addMembersMutation.isPending) {
+    if (selectedCandidates.length === 0 || inviteMutation.isPending) {
       return;
     }
 
     setErrorMessage('');
-    await addMembersMutation.mutateAsync();
+    await inviteMutation.mutateAsync();
   }
-  const searchTerm = debouncedSearchValue.trim();
 
   return (
-    <Modal isOpen onClose={onClose} title="Invite Org Members to Board">
+    <Modal isOpen onClose={onClose} title="Invite Members to Organization">
       <div className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="invite-board-members-search" className="text-sm font-medium">
-            Search organization members
+          <label htmlFor="invite-organization-members-input" className="text-sm font-medium">
+            Find existing users
           </label>
           <input
-            id="invite-board-members-search"
+            id="invite-organization-members-input"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
             placeholder="Search by name or email"
             className="app-input"
           />
           <p className="text-xs app-text-muted">
-            Showing organization members who can still be added to this board.
+            Type at least 2 characters to find existing Axxon users who are not already in this organization.
           </p>
         </div>
 
         {selectedCandidates.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {selectedCandidates.map((member) => (
+            {selectedCandidates.map((candidate) => (
               <button
-                key={member.id}
+                key={candidate.id}
                 type="button"
-                onClick={() => toggleUser(member)}
+                onClick={() => toggleUser(candidate)}
                 className="app-badge"
-                aria-label={`Remove ${member.email}`}
+                aria-label={`Remove ${candidate.email}`}
               >
-                {formatMemberName(member)} ×
+                {formatMemberName(candidate)} ×
               </button>
             ))}
           </div>
         ) : null}
 
         <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-[var(--app-border)] p-2">
-          {isLoading && candidates.length === 0 ? (
+          {!shouldSearch ? (
             <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
-              Loading addable organization members...
+              Start typing to search existing Axxon users.
+            </div>
+          ) : isLoading && candidates.length === 0 ? (
+            <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
+              Searching users...
             </div>
           ) : candidates.length === 0 ? (
             <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
-              {searchTerm
-                ? 'No addable organization members match this search.'
-                : 'Everyone in this organization already has board access.'}
+              No existing Axxon users match this search.
             </div>
           ) : (
-            candidates.map((member) => {
-              const isSelected = selectedUserIdSet.has(member.id);
+            candidates.map((candidate) => {
+              const isSelected = selectedUserIdSet.has(candidate.id);
 
               return (
                 <button
-                  key={member.id}
+                  key={candidate.id}
                   type="button"
-                  onClick={() => toggleUser(member)}
+                  onClick={() => toggleUser(candidate)}
                   className="glass-panel flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left"
                   style={
                     isSelected
@@ -161,10 +160,10 @@ export default function InviteMembersModal({
                   }
                 >
                   <div>
-                    <p className="font-medium">{formatMemberName(member)}</p>
-                    <p className="text-sm app-text-muted">{member.email}</p>
+                    <p className="font-medium">{formatMemberName(candidate)}</p>
+                    <p className="text-sm app-text-muted">{candidate.email}</p>
                   </div>
-                  <span className="app-badge">{isSelected ? 'Selected' : 'Addable'}</span>
+                  <span className="app-badge">{isSelected ? 'Selected' : 'Invite'}</span>
                 </button>
               );
             })
@@ -184,10 +183,10 @@ export default function InviteMembersModal({
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={selectedCandidates.length === 0 || addMembersMutation.isPending}
+            disabled={inviteMutation.isPending || selectedCandidates.length === 0}
             className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {addMembersMutation.isPending ? 'Adding...' : 'Add Members'}
+            {inviteMutation.isPending ? 'Inviting...' : 'Send Invites'}
           </button>
         </div>
       </div>

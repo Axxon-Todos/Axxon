@@ -2,7 +2,7 @@
 
 import clsx from 'clsx';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { MoreHorizontal } from 'lucide-react';
@@ -10,7 +10,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { fetchBoards } from '@/lib/api/boards/getBoards';
 import { deleteBoardById } from '@/lib/api/boards/deleteBoardById';
-import { buildOrganizationBoardPath } from '@/lib/utils/routes';
+import {
+  buildOrganizationBoardPath,
+  buildOrganizationBoardSettingsPath,
+} from '@/lib/utils/routes';
 
 import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal';
 import EditBoardModal from '@/components/features/dashboard/EditBoardModal';
@@ -31,6 +34,7 @@ export default function BoardList({
 }: BoardListProps) {
   const queryClient = useQueryClient();
   const pathname = usePathname();
+  const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const [editingBoard, setEditingBoard] = useState<(UpdateBoard & { organization_id: number }) | null>(null);
   const [selectedBoard, setSelectedBoard] = useState<(UpdateBoard & { organization_id: number }) | null>(null);
@@ -219,6 +223,11 @@ export default function BoardList({
           onClose={() => setSelectedBoard(null)}
           onEdit={() => setEditingBoard(selectedBoard)}
           onDelete={() => deleteMutation.mutate(String(selectedBoard.id))}
+          onSettings={() => {
+            router.push(
+              buildOrganizationBoardSettingsPath(organizationId, selectedBoard.id)
+            );
+          }}
           onInvite={() =>
             setInviteBoard({
               id: Number(selectedBoard.id),

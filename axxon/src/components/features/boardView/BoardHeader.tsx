@@ -3,7 +3,10 @@
 import Link from 'next/link'
 import { BarChart3, CalendarClock, Layers3, ListTodo, Settings2, Tags } from 'lucide-react'
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
-import { buildOrganizationBoardAnalyticsPath } from '@/lib/utils/routes'
+import {
+  buildOrganizationBoardAnalyticsPath,
+  buildOrganizationBoardSettingsPath,
+} from '@/lib/utils/routes'
 
 import BoardViewSwitcher from './BoardViewSwitcher'
 
@@ -94,9 +97,16 @@ export default function BoardHeader({
               <BarChart3 className="h-4 w-4" />
               Analytics
             </Link>
+            <Link
+              href={buildOrganizationBoardSettingsPath(organizationId, boardId)}
+              className="glass-button"
+            >
+              <Settings2 className="h-4 w-4" />
+              Settings
+            </Link>
             {activeView !== 'calendar' ? (
               <button onClick={onToggleManageCategories} className="glass-button">
-                <Settings2 className="h-4 w-4" />
+                <Layers3 className="h-4 w-4" />
                 {isManagingCategories ? 'Exit Manage Mode' : 'Manage Categories'}
               </button>
             ) : null}
