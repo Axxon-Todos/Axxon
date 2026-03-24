@@ -1,5 +1,6 @@
 import { BoardMembers } from '@/lib/models/boardMembers';
-import type { AddBoardMembersByEmail } from '@/lib/types/boardMemberTypes';
+import { OrganizationMembers } from '@/lib/models/organizationMembers';
+import type { AddBoardMembers } from '@/lib/types/boardMemberTypes';
 import {
   BadRequestError,
   NotFoundError,
@@ -22,12 +23,19 @@ type GetBoardMemberByIdInput = {
   sessionUserId: number;
 };
 
-type AddBoardMembersByEmailInput = {
+type AddBoardMembersInput = {
   boardId: number;
   sessionUserId: number;
   data: {
-    emails: string[];
+    userIds: number[];
   };
+};
+
+type SearchBoardInviteCandidatesInput = {
+  organizationId: number;
+  boardId: number;
+  sessionUserId: number;
+  query: string;
 };
 
 type RemoveBoardMemberInput = {
@@ -86,30 +94,71 @@ export async function removeBoardMember({
 }
 
 
-export async function addBoardMembersByEmail({
+export async function addBoardMembers({
   boardId,
   sessionUserId,
   data,
-}: AddBoardMembersByEmailInput) {
+}: AddBoardMembersInput) {
   if (!Number.isFinite(boardId)) {
     throw new BadRequestError('Invalid board id');
   }
 
   const board = await requireBoardCreator(boardId, sessionUserId);
 
-  if (!Array.isArray(data.emails)) {
-    throw new BadRequestError('emails must be an array');
+  if (!Array.isArray(data.userIds)) {
+    throw new BadRequestError('userIds must be an array');
   }
 
-  const input: AddBoardMembersByEmail = {
+  const normalizedUserIds = Array.from(
+    new Set(
+      data.userIds.filter((userId) => Number.isFinite(userId) && userId > 0)
+    )
+  );
+
+  if (normalizedUserIds.length === 0) {
+    throw new BadRequestError('At least one user id is required');
+  }
+
+  const memberships = await OrganizationMembers.listMembershipsForUserIds(
+    board.organization_id,
+    normalizedUserIds
+  );
+
+  if (memberships.length !== normalizedUserIds.length) {
+    throw new BadRequestError('All invited users must already belong to this organization');
+  }
+
+  const input: AddBoardMembers = {
     board_id: boardId,
-    organization_id: board.organization_id,
-    emails: data.emails,
+    user_ids: normalizedUserIds,
   };
 
-  await BoardMembers.addMembersByEmail(input);
+  const addedCount = await BoardMembers.addMembersByUserIds(input);
 
-  return { message: 'Members added successfully' };
+  return { addedCount };
+}
+
+export async function searchBoardInviteCandidates({
+  organizationId,
+  boardId,
+  sessionUserId,
+  query,
+}: SearchBoardInviteCandidatesInput) {
+  if (!Number.isFinite(organizationId) || !Number.isFinite(boardId)) {
+    throw new BadRequestError('Invalid organization or board id');
+  }
+
+  const board = await requireBoardCreator(boardId, sessionUserId);
+
+  if (board.organization_id !== organizationId) {
+    throw new NotFoundError('Board not found');
+  }
+
+  return BoardMembers.listInviteCandidates({
+    organizationId,
+    boardId,
+    query,
+  });
 }
 
 // Gets a single board member.

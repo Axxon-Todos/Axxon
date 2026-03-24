@@ -84,6 +84,7 @@ describe('OrganizationWorkspace', () => {
     expect(await screen.findByText('Platform')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Board' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Organization' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite Members' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Board' }));
 
@@ -115,5 +116,6 @@ describe('OrganizationWorkspace', () => {
     expect(await screen.findByText('Platform')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Board' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Organization' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Invite Members' })).not.toBeInTheDocument();
   });
 });

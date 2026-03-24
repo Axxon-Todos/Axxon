@@ -89,6 +89,14 @@ export class Board {
       .orderBy('created_at', 'desc');
   }
 
+  static async listAllInOrganization(
+    organizationId: number
+  ): Promise<BoardBaseData[]> {
+    return knex('boards')
+      .where({ organization_id: organizationId })
+      .orderBy('created_at', 'desc');
+  }
+
   static async getBoardById(id: number): Promise<BoardBaseData | null> {
     return (await knex('boards').where({ id }).first()) || null;
   }

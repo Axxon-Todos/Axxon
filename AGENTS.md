@@ -13,6 +13,7 @@ Axxon is an agent-work orchestration platform for software teams.
   - `/dashboard/orgs/[organizationId]`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]/analytics`
+  - `/dashboard/orgs/[organizationId]/boards/[boardId]/settings`
 - GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
 - The canonical API surface is org-scoped under `src/app/api/organizations/**`.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
@@ -27,10 +28,12 @@ Axxon is an agent-work orchestration platform for software teams.
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
+- Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
 - Route helpers, org/board path builders, and authorization helpers should stay in `axxon/src/lib/utils`.
 - Reusable domain types should live under `axxon/src/lib/types`.
 - GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
+- Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
 
 ## Build, Test, and Development Commands
 Run commands from `axxon/`.
@@ -66,6 +69,9 @@ Knex is used at the model and migrations layer.
 - Maintain ACID-safe behavior for org, board, member, and task mutations.
 - Keep models focused on persistence concerns and controllers focused on request orchestration.
 - Validate org membership and board membership at the correct boundary. Org membership comes first; board access is scoped within the org.
+- Organization member invites are org-owner actions and currently support only emails that already belong to existing Axxon users.
+- Board member adds should use org-member `userIds`, not raw email entry, and only allow users who already belong to the org.
+- Board-to-repository access is an explicit allowlist stored in `board_repository_access`; only org owners should mutate it.
 - Restrict GitHub install/finalize/sync actions to org owners. Repository listing can remain visible to org members.
 - Do not bypass authorization helpers for org-scoped resources.
 - Maintain secure defaults for auth, cookies, secrets, and socket access.

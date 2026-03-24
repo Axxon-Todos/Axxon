@@ -17,6 +17,13 @@ export function buildOrganizationBoardPath(
   return `${buildOrganizationPath(organizationId)}/boards/${boardId}`;
 }
 
+export function buildOrganizationBoardSettingsPath(
+  organizationId: string | number,
+  boardId: string | number
+) {
+  return `${buildOrganizationBoardPath(organizationId, boardId)}/settings`;
+}
+
 export function buildOrganizationGitHubSetupPath(
   organizationId: string | number
 ) {
@@ -66,4 +73,36 @@ export function buildOrganizationBoardApiPath(
   suffix = ''
 ) {
   return `${buildOrganizationBoardsApiPath(organizationId)}/${boardId}${suffix}`;
+}
+
+export function buildOrganizationMembersApiPath(
+  organizationId: string | number
+) {
+  return `${buildOrganizationApiPath(organizationId)}/members`;
+}
+
+export function buildOrganizationMemberCandidatesApiPath(
+  organizationId: string | number
+) {
+  return `${buildOrganizationApiPath(organizationId)}/member-candidates`;
+}
+
+export function buildOrganizationBoardRepositoriesApiPath(
+  organizationId: string | number,
+  boardId: string | number
+) {
+  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/repositories`;
+}
+
+export function buildOrganizationBoardMemberCandidatesApiPath(
+  organizationId: string | number,
+  boardId: string | number
+) {
+  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/member-candidates`;
+}
+
+export function buildOrganizationBoardRepositoryAccessApiPath(
+  organizationId: string | number
+) {
+  return `${buildOrganizationApiPath(organizationId)}/board-repository-access`;
 }

@@ -12,6 +12,9 @@ vi.mock('@/lib/api/boards/getBoards', () => ({
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard/orgs/3',
+  useRouter: () => ({
+    push: vi.fn(),
+  }),
 }));
 
 import BoardList from '@/components/features/dashboard/BoardList';

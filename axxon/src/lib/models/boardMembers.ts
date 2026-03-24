@@ -1,6 +1,6 @@
 import knex from '@/lib/db/db';
 import type {
-  AddBoardMembersByEmail,
+  AddBoardMembers,
   BoardMembersBaseData,
   GetAllMembersForBoard,
   GetMemberById,
@@ -9,7 +9,30 @@ import type {
 } from '../types/boardMemberTypes';
 import type { BoardBaseData } from '../types/boardTypes';
 import type { User } from '../types/users';
-import { Conversations } from './conversations';
+
+function applyUserSearch(
+  queryBuilder: ReturnType<typeof knex>,
+  query: string
+) {
+  const trimmedQuery = query.trim();
+
+  if (!trimmedQuery) {
+    return queryBuilder;
+  }
+
+  const searchPattern = `%${trimmedQuery}%`;
+
+  return queryBuilder.andWhere((builder) => {
+    builder
+      .where('users.email', 'ilike', searchPattern)
+      .orWhere('users.first_name', 'ilike', searchPattern)
+      .orWhere('users.last_name', 'ilike', searchPattern)
+      .orWhereRaw(
+        `concat_ws(' ', users.first_name, users.last_name) ilike ?`,
+        [searchPattern]
+      );
+  });
+}
 
 export class BoardMembers {
   static async listBoardsForUser(data: ListBoardsForUser): Promise<BoardBaseData[]> {
@@ -45,63 +68,89 @@ export class BoardMembers {
       .del();
   }
 
-  static async addMembersByEmail(data: AddBoardMembersByEmail): Promise<void> {
-    const users = await knex('users')
+  static async listInviteCandidates({
+    organizationId,
+    boardId,
+    query,
+  }: {
+    organizationId: number;
+    boardId: number;
+    query: string;
+  }): Promise<User[]> {
+    const queryBuilder = knex('users')
       .join('organization_members', 'users.id', 'organization_members.user_id')
-      .where('organization_members.organization_id', data.organization_id)
-      .whereIn('users.email', data.emails)
-      .select('users.id');
+      .where('organization_members.organization_id', organizationId)
+      .whereNotExists(function excludeCurrentBoardMembers() {
+        this.select(knex.raw('1'))
+          .from('board_members')
+          .whereRaw('board_members.user_id = users.id')
+          .andWhere('board_members.board_id', boardId);
+      })
+      .select('users.*')
+      .orderBy('users.first_name', 'asc')
+      .orderBy('users.last_name', 'asc')
+      .orderBy('users.email', 'asc');
 
-    if (users.length === 0) return;
+    return applyUserSearch(queryBuilder, query);
+  }
 
-    const existingMembers = await knex('board_members')
-      .where({ board_id: data.board_id })
-      .whereIn(
-        'user_id',
-        users.map((user) => user.id)
-      )
-      .select('user_id');
-
-    const existingMemberIds = new Set(
-      existingMembers.map((member) => member.user_id)
-    );
-    const newUsers = users.filter((user) => !existingMemberIds.has(user.id));
-
-    if (newUsers.length === 0) return;
-
-    const memberInserts = newUsers.map((user) => ({
-      user_id: user.id,
-      board_id: data.board_id,
-    }));
-
-    await knex('board_members').insert(memberInserts);
-
-    const mainConvo = await Conversations.getConversationByBoardId(data.board_id);
-
-    if (!mainConvo) return;
-
-    const existingConversationMembers = await knex('conversation_members')
-      .where({ conversation_id: mainConvo.id })
-      .whereIn(
-        'user_id',
-        newUsers.map((user) => user.id)
-      )
-      .select('user_id');
-
-    const existingConversationMemberIds = new Set(
-      existingConversationMembers.map((member) => member.user_id)
-    );
-
-    const conversationMemberInserts = newUsers
-      .filter((user) => !existingConversationMemberIds.has(user.id))
-      .map((user) => ({
-        conversation_id: mainConvo.id,
-        user_id: user.id,
-      }));
-
-    if (conversationMemberInserts.length > 0) {
-      await knex('conversation_members').insert(conversationMemberInserts);
+  static async addMembersByUserIds(data: AddBoardMembers): Promise<number> {
+    if (data.user_ids.length === 0) {
+      return 0;
     }
+
+    return knex.transaction(async (trx) => {
+      const existingMembers = await trx('board_members')
+        .where({ board_id: data.board_id })
+        .whereIn('user_id', data.user_ids)
+        .select('user_id');
+
+      const existingMemberIds = new Set(
+        existingMembers.map((member) => member.user_id)
+      );
+      const newUserIds = data.user_ids.filter((userId) => !existingMemberIds.has(userId));
+
+      if (newUserIds.length === 0) {
+        return 0;
+      }
+
+      await trx('board_members').insert(
+        newUserIds.map((userId) => ({
+          user_id: userId,
+          board_id: data.board_id,
+        }))
+      );
+
+      const mainConvo = await trx('conversations')
+        .where({ board_id: data.board_id })
+        .first();
+
+      if (!mainConvo) {
+        return newUserIds.length;
+      }
+
+      const existingConversationMembers = await trx('conversation_members')
+        .where({ conversation_id: mainConvo.id })
+        .whereIn('user_id', newUserIds)
+        .select('user_id');
+
+      const existingConversationMemberIds = new Set(
+        existingConversationMembers.map((member) => member.user_id)
+      );
+
+      const conversationMemberInserts = newUserIds
+        .filter((userId) => !existingConversationMemberIds.has(userId))
+        .map((userId) => ({
+          conversation_id: mainConvo.id,
+          user_id: userId,
+        }));
+
+      if (conversationMemberInserts.length > 0) {
+        await trx('conversation_members').insert(conversationMemberInserts);
+      }
+
+      return newUserIds.length;
+    });
   }
 
   static async getMemberById(

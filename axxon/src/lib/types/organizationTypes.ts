@@ -17,6 +17,11 @@ export type OrganizationUpdate = Partial<
   Pick<OrganizationBaseData, 'name' | 'description' | 'color'>
 >;
 
+export type InviteOrganizationMembersResponse = {
+  addedCount: number;
+  alreadyMemberEmails: string[];
+};
+
 export type OrganizationSummary = OrganizationBaseData & {
   member_count: number;
   accessible_board_count: number;

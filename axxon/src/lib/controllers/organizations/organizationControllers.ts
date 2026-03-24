@@ -2,7 +2,9 @@ import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
 import { Organizations } from '@/lib/models/organizations';
+import { Users } from '@/lib/models/users';
 import type {
+  InviteOrganizationMembersResponse,
   OrganizationCreation,
   OrganizationUpdate,
 } from '@/lib/types/organizationTypes';
@@ -35,6 +37,20 @@ type UpdateOrganizationInput = {
   organizationId: number;
   sessionUserId: number;
   data: OrganizationUpdate;
+};
+
+type InviteOrganizationMembersInput = {
+  organizationId: number;
+  sessionUserId: number;
+  data: {
+    userIds: number[];
+  };
+};
+
+type SearchOrganizationInviteCandidatesInput = {
+  organizationId: number;
+  sessionUserId: number;
+  query: string;
 };
 
 function normalizeRequiredName(value: string | undefined, label: string) {
@@ -131,6 +147,76 @@ export async function getOrganizationMembers({
 
   await requireOrganizationMember(organizationId, sessionUserId);
   return OrganizationMembers.listMembersForOrganization(organizationId);
+}
+
+export async function inviteOrganizationMembers({
+  organizationId,
+  sessionUserId,
+  data,
+}: InviteOrganizationMembersInput): Promise<InviteOrganizationMembersResponse> {
+  if (!Number.isFinite(organizationId)) {
+    throw new BadRequestError('Invalid organization id');
+  }
+
+  await requireOrganizationOwner(organizationId, sessionUserId);
+
+  if (!Array.isArray(data.userIds)) {
+    throw new BadRequestError('userIds must be an array');
+  }
+
+  const normalizedUserIds = Array.from(
+    new Set(
+      data.userIds.filter((userId) => Number.isFinite(userId) && userId > 0)
+    )
+  );
+
+  if (normalizedUserIds.length === 0) {
+    throw new BadRequestError('At least one user id is required');
+  }
+
+  const users = await Users.listUsersByIds(normalizedUserIds);
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  const missingUserIds = normalizedUserIds.filter((userId) => !usersById.has(userId));
+
+  if (missingUserIds.length > 0) {
+    throw new BadRequestError(
+      `These users do not exist: ${missingUserIds.join(', ')}`
+    );
+  }
+
+  const memberships = await OrganizationMembers.listMembershipsForUserIds(
+    organizationId,
+    users.map((user) => user.id)
+  );
+  const existingUserIds = new Set(memberships.map((membership) => membership.user_id));
+  const alreadyMemberEmails = users
+    .filter((user) => existingUserIds.has(user.id))
+    .map((user) => user.email)
+    .sort((left, right) => left.localeCompare(right));
+
+  const addedCount = await OrganizationMembers.addMembers(
+    organizationId,
+    users.map((user) => user.id)
+  );
+
+  return {
+    addedCount,
+    alreadyMemberEmails,
+  };
+}
+
+export async function searchOrganizationInviteCandidates({
+  organizationId,
+  sessionUserId,
+  query,
+}: SearchOrganizationInviteCandidatesInput) {
+  if (!Number.isFinite(organizationId)) {
+    throw new BadRequestError('Invalid organization id');
+  }
+
+  await requireOrganizationOwner(organizationId, sessionUserId);
+
+  return OrganizationMembers.listInviteCandidates(organizationId, query);
 }
 
 export async function listBoardsForOrganization({
