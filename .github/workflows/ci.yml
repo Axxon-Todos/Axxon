@@ -13,6 +13,18 @@ jobs:
     defaults:
       run:
         working-directory: axxon
+    env:
+      NODE_ENV: test
+      JWT_SECRET: test-jwt-secret
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASS: postgres
+      PG_DB: axxon_test
+      PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/axxon_test
+      REDIS_URL: redis://127.0.0.1:6379
+      CLIENT_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_WS_URL: http://127.0.0.1:4000
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +41,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint:ci
       - run: pnpm typecheck
+      - run: pnpm build
 
   backend_tests:
     runs-on: ubuntu-latest

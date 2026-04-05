@@ -18,6 +18,16 @@ export class Users  {
         return user;
     };
 
+    static findByEmails = async (emails: string[]): Promise<User[]> => {
+        if (emails.length === 0) {
+            return [];
+        }
+
+        return db('users')
+            .whereIn('email', emails)
+            .select('*');
+    };
+
     static listUsersByIds = async (ids: number[]): Promise<User[]> => {
         if (ids.length === 0) {
             return [];

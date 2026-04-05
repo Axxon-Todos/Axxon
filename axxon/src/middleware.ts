@@ -3,7 +3,14 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getSessionTokenFromRequest, verifySessionToken } from '@/lib/utils/auth';
 
-const PUBLIC_API_PATHS = new Set(['/api/auth', '/api/auth/google/callback']);
+const PUBLIC_API_PATHS = new Set([
+  '/api/auth',
+  '/api/auth/google',
+  '/api/auth/google/callback',
+  '/api/integrations/github/callback',
+  '/api/webhooks/github',
+  '/api/auth/google/start',
+]);
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;

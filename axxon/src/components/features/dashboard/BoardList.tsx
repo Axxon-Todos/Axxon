@@ -1,119 +1,117 @@
-'use client'
+'use client';
 
-import clsx from 'clsx'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { useEffect, useState, type ReactNode } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { BarChart3, CalendarRange, ChevronDown, FolderKanban, MoreHorizontal } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import clsx from 'clsx';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { BarChart3, CalendarRange, ChevronDown, FolderKanban, MoreHorizontal } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { getUserId } from '@/lib/api/users/getUserId'
-import { fetchBoards } from '@/lib/api/boards/getBoards'
-import { deleteBoardById } from '@/lib/api/boards/deleteBoardById'
+import { deleteBoardById } from '@/lib/api/boards/deleteBoardById';
+import { fetchBoards } from '@/lib/api/boards/getBoards';
+import type { BoardBaseData } from '@/lib/types/boardTypes';
+import {
+  buildOrganizationBoardAnalyticsPath,
+  buildOrganizationBoardPath,
+  buildOrganizationBoardSettingsPath,
+  buildOrganizationBoardSprintsPath,
+} from '@/lib/utils/routes';
 
-import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal'
-import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal'
-import EditBoardModal from '@/components/features/dashboard/EditBoardModal'
-
-import type { UpdateBoard } from '@/lib/types/boardTypes'
+import BoardOptionsModal from '@/components/features/dashboard/BoardOptionsModal';
+import EditBoardModal from '@/components/features/dashboard/EditBoardModal';
+import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal';
 
 interface BoardListProps {
-  variant?: 'default' | 'sidebar'
+  organizationId: string;
+  variant?: 'default' | 'sidebar';
 }
 
-const ITEM_EASE = [0.16, 1, 0.3, 1] as const
+const ITEM_EASE = [0.16, 1, 0.3, 1] as const;
 
-export default function BoardList({ variant = 'default' }: BoardListProps) {
-  const queryClient = useQueryClient()
-  const pathname = usePathname()
-  const shouldReduceMotion = useReducedMotion()
-  const [editingBoard, setEditingBoard] = useState<UpdateBoard | null>(null)
-  const [selectedBoard, setSelectedBoard] = useState<UpdateBoard | null>(null)
-  const [inviteBoard, setInviteBoard] = useState<UpdateBoard | null>(null)
-  const [expandedBoards, setExpandedBoards] = useState<Record<string, boolean>>({})
-  const isSidebar = variant === 'sidebar'
+export default function BoardList({
+  organizationId,
+  variant = 'default',
+}: BoardListProps) {
+  const queryClient = useQueryClient();
+  const pathname = usePathname();
+  const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
+  const [editingBoard, setEditingBoard] = useState<BoardBaseData | null>(null);
+  const [selectedBoard, setSelectedBoard] = useState<BoardBaseData | null>(null);
+  const [inviteBoard, setInviteBoard] = useState<BoardBaseData | null>(null);
+  const [expandedBoards, setExpandedBoards] = useState<Record<string, boolean>>({});
+  const isSidebar = variant === 'sidebar';
 
-  const { data: id, error: userError, isLoading: isUserLoading } = useQuery({
-    queryKey: ['id'],
-    queryFn: getUserId,
+  const { data: boards = [], error, isLoading } = useQuery<BoardBaseData[]>({
+    queryKey: ['boards', organizationId],
+    queryFn: () => fetchBoards(organizationId),
+    enabled: Boolean(organizationId),
     staleTime: 5 * 60 * 1000,
-  })
-
-  const { data: boards = [], error: boardsError, isLoading: isBoardsLoading } = useQuery({
-    queryKey: ['boards', id],
-    queryFn: () => fetchBoards(id!),
-    enabled: !!id,
-    staleTime: 5 * 60 * 1000,
-  })
+  });
 
   const deleteMutation = useMutation({
-    mutationFn: (boardId: string) => deleteBoardById(boardId),
+    mutationFn: (boardId: string) => deleteBoardById(organizationId, boardId),
     onSuccess: () => {
-      if (id) queryClient.invalidateQueries({ queryKey: ['boards', id] })
+      queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
+      queryClient.invalidateQueries({ queryKey: ['organizations'] });
+      queryClient.invalidateQueries({ queryKey: ['organization', organizationId] });
     },
-  })
+  });
+
+  useEffect(() => {
+    const activeBoard = boards.find((board) => {
+      const boardHref = buildOrganizationBoardPath(organizationId, board.id);
+      return pathname === boardHref || pathname.startsWith(`${boardHref}/`);
+    });
+
+    if (!activeBoard) {
+      return;
+    }
+
+    setExpandedBoards((prev) => {
+      const boardId = String(activeBoard.id);
+
+      if (Object.prototype.hasOwnProperty.call(prev, boardId)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [boardId]: true,
+      };
+    });
+  }, [boards, organizationId, pathname]);
 
   const itemTransition = shouldReduceMotion
     ? { duration: 0 }
-    : { duration: 0.24, ease: ITEM_EASE }
+    : { duration: 0.24, ease: ITEM_EASE };
 
   const statusClassName = clsx(
     'text-sm',
     isSidebar
       ? 'glass-panel rounded-2xl px-4 py-3 app-text-muted'
       : 'glass-panel rounded-2xl px-4 py-3 text-center app-text-muted'
-  )
+  );
 
-  function openBoardOptions(board: UpdateBoard) {
-    setSelectedBoard(board)
+  if (!organizationId) {
+    return <div className={statusClassName}>Select an organization to view boards.</div>;
   }
 
-  function toggleBoardExpansion(boardId: string) {
-    setExpandedBoards((prev) => ({
-      ...prev,
-      [boardId]: !(prev[boardId] ?? false),
-    }))
+  if (isLoading) {
+    return <div className={statusClassName}>Loading boards...</div>;
   }
 
-  useEffect(() => {
-    const activeBoard = boards.find((board) => {
-      const boardHref = `/dashboard/${board.id}`
-      return pathname === boardHref || pathname.startsWith(`${boardHref}/`)
-    })
-
-    if (!activeBoard) {
-      return
-    }
-
-    setExpandedBoards((prev) => {
-      const boardId = String(activeBoard.id)
-
-      if (Object.prototype.hasOwnProperty.call(prev, boardId)) {
-        return prev
-      }
-
-      return {
-        ...prev,
-        [boardId]: true,
-      }
-    })
-  }, [boards, pathname])
-
-  if (isUserLoading || isBoardsLoading) {
-    return <div className={statusClassName}>Loading dashboard...</div>
+  if (error) {
+    return <div className={statusClassName}>Error loading boards.</div>;
   }
 
-  if (userError) {
-    return <div className={statusClassName}>Error loading user info</div>
-  }
-
-  if (boardsError) {
-    return <div className={statusClassName}>Error loading boards</div>
-  }
-
-  if (!id) {
-    return <div className={statusClassName}>Please log in to view your dashboard.</div>
+  if (boards.length === 0) {
+    return (
+      <div className={statusClassName}>
+        <p>No boards yet. Create the first control surface for this organization.</p>
+      </div>
+    );
   }
 
   return (
@@ -124,44 +122,39 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
           isSidebar ? 'w-full' : 'w-full overflow-y-auto p-3'
         )}
       >
-        {!isSidebar && <h1 className="mb-6 text-center text-4xl font-bold">Boards</h1>}
+        {!isSidebar ? (
+          <h2 className="mb-6 text-center text-4xl font-bold">Boards</h2>
+        ) : null}
 
-        {boards.length === 0 ? (
-          <p className={statusClassName}>No boards yet.</p>
-        ) : isSidebar ? (
+        {isSidebar ? (
           <div className="space-y-2">
             {boards.map((board, index) => {
-              const boardName = board.name || 'Untitled Board'
-              const boardId = String(board.id)
-              const overviewHref = `/dashboard/${board.id}`
-              const sprintsHref = `/dashboard/${board.id}/sprints`
-              const analyticsHref = `/dashboard/${board.id}/analytics`
-              const isBoardActive = pathname === overviewHref || pathname.startsWith(`${overviewHref}/`)
-              const isExpanded = expandedBoards[boardId] ?? isBoardActive
-              const isOverviewActive = pathname === overviewHref
-              const isSprintsActive = pathname === sprintsHref
-              const isAnalyticsActive = pathname === analyticsHref
+              const boardName = board.name || 'Untitled Board';
+              const boardId = String(board.id);
+              const overviewHref = buildOrganizationBoardPath(organizationId, board.id);
+              const sprintsHref = buildOrganizationBoardSprintsPath(organizationId, board.id);
+              const analyticsHref = buildOrganizationBoardAnalyticsPath(organizationId, board.id);
+              const isBoardActive =
+                pathname === overviewHref || pathname.startsWith(`${overviewHref}/`);
+              const isExpanded = expandedBoards[boardId] ?? isBoardActive;
+              const isOverviewActive = pathname === overviewHref;
+              const isSprintsActive = pathname === sprintsHref;
+              const isAnalyticsActive = pathname === analyticsHref;
 
               return (
                 <motion.div
                   key={board.id}
-                  initial={{
-                    opacity: 0,
-                    y: shouldReduceMotion ? 0 : 10,
-                    scale: shouldReduceMotion ? 1 : 0.985,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                  }}
+                  initial={
+                    shouldReduceMotion
+                      ? false
+                      : { opacity: 0, y: 10, scale: 0.985 }
+                  }
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{
                     ...itemTransition,
-                    delay: shouldReduceMotion ? 0 : index * 0.045,
+                    delay: shouldReduceMotion ? 0 : index * 0.04,
                   }}
-                  className={clsx(
-                    'group glass-panel overflow-hidden rounded-[1.6rem] transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5'
-                  )}
+                  className="group glass-panel overflow-hidden rounded-[1.6rem] transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5"
                   style={
                     isBoardActive
                       ? {
@@ -201,7 +194,12 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
 
                     <button
                       type="button"
-                      onClick={() => toggleBoardExpansion(boardId)}
+                      onClick={() =>
+                        setExpandedBoards((prev) => ({
+                          ...prev,
+                          [boardId]: !(prev[boardId] ?? false),
+                        }))
+                      }
                       className="glass-button !h-10 !w-10 !p-0"
                       aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${boardName}`}
                     >
@@ -216,7 +214,7 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
 
                     <button
                       type="button"
-                      onClick={() => openBoardOptions(board)}
+                      onClick={() => setSelectedBoard(board)}
                       className="glass-button !h-10 !w-10 !p-0"
                     >
                       <MoreHorizontal className="h-4 w-4" />
@@ -260,113 +258,95 @@ export default function BoardList({ variant = 'default' }: BoardListProps) {
                     ) : null}
                   </AnimatePresence>
                 </motion.div>
-              )
+              );
             })}
           </div>
         ) : (
-          <div className="h-[30%] overflow-y-auto pr-2 scrollbar-hidden space-y-3">
-            {boards.map((board, index) => {
-              const boardName = board.name || 'Untitled Board'
-
-              return (
-                <motion.div
-                  key={board.id}
-                  initial={{
-                    opacity: 0,
-                    y: shouldReduceMotion ? 0 : 12,
-                    scale: shouldReduceMotion ? 1 : 0.985,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                    scale: 1,
-                  }}
-                  transition={{
-                    ...itemTransition,
-                    delay: shouldReduceMotion ? 0 : index * 0.05,
-                  }}
-                  className="group glass-panel relative rounded-[1.5rem] transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5"
-                >
-                  <Link
-                    href={`/dashboard/${board.id}`}
-                    aria-label={`Open ${boardName}`}
-                    className="absolute inset-0 rounded-[1.5rem] focus-visible:outline-none"
-                  />
-
-                  <div className="pointer-events-none relative flex items-start justify-between gap-3 p-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{
-                            backgroundColor: board.color || '#2563eb',
-                            boxShadow: `0 0 0 6px color-mix(in srgb, ${board.color || '#2563eb'} 18%, transparent)`,
-                          }}
-                        />
-                        <span className="block truncate text-lg font-semibold">
-                          {boardName}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm app-text-muted">Board workspace</p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => openBoardOptions(board)}
-                      className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">Open options for {boardName}</span>
-                    </button>
-                  </div>
-
-                  <div className="pointer-events-none px-4 pb-4">
-                    <div className="h-2 rounded-full bg-white/20">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: '42%',
-                          backgroundColor: board.color || '#2563eb',
-                        }}
+          <div className="grid gap-4 xl:grid-cols-2">
+            {boards.map((board, index) => (
+              <motion.article
+                key={board.id}
+                initial={
+                  shouldReduceMotion
+                    ? false
+                    : { opacity: 0, y: 14, scale: 0.985 }
+                }
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  ...itemTransition,
+                  delay: shouldReduceMotion ? 0 : index * 0.04,
+                }}
+                className="group glass-panel relative rounded-[1.8rem] p-5"
+              >
+                <Link
+                  href={buildOrganizationBoardPath(organizationId, board.id)}
+                  className="absolute inset-0 rounded-[1.8rem]"
+                />
+                <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: board.color || '#2563eb' }}
                       />
+                      <span className="truncate text-lg font-semibold">
+                        {board.name || 'Untitled Board'}
+                      </span>
                     </div>
+                    <p className="mt-2 text-sm app-text-muted">
+                      Execution layer for scoped work inside this organization.
+                    </p>
                   </div>
-                </motion.div>
-              )
-            })}
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBoard(board)}
+                    className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </div>
+              </motion.article>
+            ))}
           </div>
         )}
       </div>
 
-      {editingBoard && (
+      {editingBoard ? (
         <EditBoardModal
           board={editingBoard}
           onClose={() => setEditingBoard(null)}
           onSuccess={() => {
-            if (id) queryClient.invalidateQueries({ queryKey: ['boards', id] })
-            setEditingBoard(null)
+            queryClient.invalidateQueries({ queryKey: ['boards', organizationId] });
+            setEditingBoard(null);
           }}
         />
-      )}
+      ) : null}
 
-      {selectedBoard && (
+      {selectedBoard ? (
         <BoardOptionsModal
           board={selectedBoard}
           onClose={() => setSelectedBoard(null)}
           onEdit={() => setEditingBoard(selectedBoard)}
           onDelete={() => deleteMutation.mutate(String(selectedBoard.id))}
+          onSettings={() => {
+            router.push(
+              buildOrganizationBoardSettingsPath(organizationId, selectedBoard.id)
+            );
+          }}
           onInvite={() => setInviteBoard(selectedBoard)}
         />
-      )}
+      ) : null}
 
-      {inviteBoard && (
+      {inviteBoard ? (
         <InviteMembersModal
           boardId={Number(inviteBoard.id)}
+          organizationId={inviteBoard.organization_id}
           onClose={() => setInviteBoard(null)}
         />
-      )}
+      ) : null}
     </>
-  )
+  );
 }
 
 function SidebarBoardLink({
@@ -375,10 +355,10 @@ function SidebarBoardLink({
   icon,
   active,
 }: {
-  href: string
-  label: string
-  icon: ReactNode
-  active: boolean
+  href: string;
+  label: string;
+  icon: ReactNode;
+  active: boolean;
 }) {
   return (
     <Link
@@ -394,5 +374,5 @@ function SidebarBoardLink({
       <span className="shrink-0">{icon}</span>
       <span className="truncate">{label}</span>
     </Link>
-  )
+  );
 }

@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/apiFetch';
 import type { UpdateTodoData } from '@/lib/types/todoTypes';
+import { buildOrganizationBoardApiPath } from '@/lib/utils/routes';
 
 type UpdateTodoInput = Partial<
   Pick<
@@ -9,15 +10,19 @@ type UpdateTodoInput = Partial<
 >;
 
 export async function updateTodoById(
+  organizationId: string | number,
   boardId: string | number,
   todoId: string | number,
   data: UpdateTodoInput
 ) {
-  const res = await apiFetch(`/api/board/${boardId}/todos/${todoId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
+  const res = await apiFetch(
+    buildOrganizationBoardApiPath(organizationId, boardId, `/todos/${todoId}`),
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }
+  );
 
   if (!res.ok) {
     const err = await res.json();

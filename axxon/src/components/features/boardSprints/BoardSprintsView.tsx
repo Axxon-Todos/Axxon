@@ -8,6 +8,7 @@ import { Archive, CalendarDays, ChevronDown, PencilLine, Plus, Rows3 } from 'luc
 import clsx from 'clsx';
 
 import BoardWorkspace from '@/components/features/boardView/BoardWorkspace';
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
 import { fetchSprints } from '@/lib/api/sprints/getSprints';
 import { fetchTodosWithLabels } from '@/lib/api/todos/getTodosWithLabels';
 import type { SprintBaseData } from '@/lib/types/sprintTypes';
@@ -54,6 +55,7 @@ function formatSprintDateRange(sprint: SprintBaseData) {
 }
 
 export default function BoardSprintsView({ boardId }: { boardId: string }) {
+  const { organizationId } = useOrganizationRouteParams();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -66,16 +68,18 @@ export default function BoardSprintsView({ boardId }: { boardId: string }) {
     error: sprintsError,
     isLoading: isSprintsLoading,
   } = useQuery<SprintBaseData[]>({
-    queryKey: ['sprints', boardId],
-    queryFn: () => fetchSprints(boardId),
+    queryKey: ['sprints', organizationId, boardId],
+    queryFn: () => fetchSprints(organizationId, boardId),
+    enabled: Boolean(organizationId),
   });
   const {
     data: todos = [],
     error: todosError,
     isLoading: isTodosLoading,
   } = useQuery<TodoWithLabels[]>({
-    queryKey: ['todos', boardId],
-    queryFn: () => fetchTodosWithLabels(boardId),
+    queryKey: ['todos', organizationId, boardId],
+    queryFn: () => fetchTodosWithLabels(organizationId, boardId),
+    enabled: Boolean(organizationId),
   });
 
   const sprintGroups = useMemo(() => {

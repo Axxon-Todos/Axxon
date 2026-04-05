@@ -1,6 +1,9 @@
 import db from '@/lib/db/db';
 
 export const TEST_TABLES = [
+  'github_webhook_events',
+  'repositories',
+  'github_installations',
   'messages',
   'conversation_members',
   'conversations',
@@ -11,6 +14,8 @@ export const TEST_TABLES = [
   'categories',
   'board_members',
   'boards',
+  'organization_members',
+  'organizations',
   'users',
 ];
 

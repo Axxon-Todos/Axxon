@@ -5,11 +5,13 @@ const {
   mockedCreateTodo,
   mockedListTodos,
   mockedRequireSession,
+  mockedRequireOrganizationBoardMember,
   mockedHandleApiError,
 } = vi.hoisted(() => ({
   mockedCreateTodo: vi.fn(),
   mockedListTodos: vi.fn(),
   mockedRequireSession: vi.fn(),
+  mockedRequireOrganizationBoardMember: vi.fn(),
   mockedHandleApiError: vi.fn(),
 }));
 
@@ -20,6 +22,10 @@ vi.mock('@/lib/controllers/todos/todoControllers', () => ({
 
 vi.mock('@/lib/utils/auth', () => ({
   requireSession: mockedRequireSession,
+}));
+
+vi.mock('@/lib/utils/organizationBoardRoute', () => ({
+  requireOrganizationBoardMember: mockedRequireOrganizationBoardMember,
 }));
 
 vi.mock('@/lib/utils/apiErrors', async () => {
@@ -33,12 +39,13 @@ vi.mock('@/lib/utils/apiErrors', async () => {
   };
 });
 
-import { GET, POST } from '@/app/api/board/[boardId]/todos/route';
+import { GET, POST } from '@/app/api/organizations/[organizationId]/boards/[boardId]/todos/route';
 
 describe('todos route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockedRequireSession.mockResolvedValue({ userId: 17 });
+    mockedRequireOrganizationBoardMember.mockResolvedValue({ organizationId: 4, boardId: 9 });
     mockedHandleApiError.mockImplementation((error: unknown) =>
       NextResponse.json({ error: String(error) }, { status: 500 })
     );
@@ -52,7 +59,7 @@ describe('todos route', () => {
         json: async () => ({ title: 'Created' }),
       } as never,
       {
-        params: Promise.resolve({ boardId: '9' }),
+        params: Promise.resolve({ organizationId: '4', boardId: '9' }),
       }
     );
 
@@ -70,7 +77,7 @@ describe('todos route', () => {
     mockedListTodos.mockRejectedValue(new Error('boom'));
 
     const response = await GET({} as never, {
-      params: Promise.resolve({ boardId: '9' }),
+      params: Promise.resolve({ organizationId: '4', boardId: '9' }),
     });
 
     expect(mockedHandleApiError).toHaveBeenCalled();

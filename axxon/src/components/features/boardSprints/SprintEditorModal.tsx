@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CalendarDays, PaintBucket, Shapes, Text, Archive, RotateCcw } from 'lucide-react';
 
 import Modal from '@/components/ui/Modal';
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
 import { createSprint } from '@/lib/api/sprints/createSprint';
 import { updateSprint } from '@/lib/api/sprints/updateSprint';
 import type { SprintBaseData } from '@/lib/types/sprintTypes';
@@ -24,6 +25,7 @@ export default function SprintEditorModal({
   onClose,
   onSuccess,
 }: SprintEditorModalProps) {
+  const { organizationId } = useOrganizationRouteParams();
   const queryClient = useQueryClient();
   const isEditMode = Boolean(sprint);
   const [name, setName] = useState(sprint?.name ?? '');
@@ -48,8 +50,8 @@ export default function SprintEditorModal({
 
   const invalidateBoardQueries = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['sprints', String(boardId)] }),
-      queryClient.invalidateQueries({ queryKey: ['todos', String(boardId)] }),
+      queryClient.invalidateQueries({ queryKey: ['sprints', organizationId, String(boardId)] }),
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, String(boardId)] }),
     ]);
   };
 
@@ -65,10 +67,10 @@ export default function SprintEditorModal({
       };
 
       if (sprint?.id) {
-        return updateSprint(boardId, sprint.id, payload);
+        return updateSprint(organizationId, boardId, sprint.id, payload);
       }
 
-      return createSprint(boardId, payload);
+      return createSprint(organizationId, boardId, payload);
     },
     onSuccess: async (savedSprint) => {
       await invalidateBoardQueries();
@@ -85,7 +87,7 @@ export default function SprintEditorModal({
         throw new Error('Sprint not found');
       }
 
-      return updateSprint(boardId, sprint.id, {
+      return updateSprint(organizationId, boardId, sprint.id, {
         archived_at: sprint.archived_at ? null : new Date().toISOString(),
       });
     },

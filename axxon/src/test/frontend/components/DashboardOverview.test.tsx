@@ -4,48 +4,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   mockedGetUserId,
-  mockedFetchBoards,
-  mockedFetchTodos,
-  mockedFetchCategories,
+  mockedFetchOrganizations,
 } = vi.hoisted(() => ({
   mockedGetUserId: vi.fn(),
-  mockedFetchBoards: vi.fn(),
-  mockedFetchTodos: vi.fn(),
-  mockedFetchCategories: vi.fn(),
+  mockedFetchOrganizations: vi.fn(),
 }));
 
 vi.mock('@/lib/api/users/getUserId', () => ({
   getUserId: mockedGetUserId,
 }));
 
-vi.mock('@/lib/api/boards/getBoards', () => ({
-  fetchBoards: mockedFetchBoards,
+vi.mock('@/lib/api/organizations/getOrganizations', () => ({
+  fetchOrganizations: mockedFetchOrganizations,
 }));
 
-vi.mock('@/lib/api/todos/getTodos', () => ({
-  fetchTodos: mockedFetchTodos,
-}));
-
-vi.mock('@/lib/api/categories/getCategories', () => ({
-  fetchCategories: mockedFetchCategories,
-}));
-
-vi.mock('@/components/common/calendar', () => ({
-  default: ({ selectedDate }: { selectedDate: string }) => (
-    <div>Calendar selected: {selectedDate}</div>
-  ),
-}));
-
-vi.mock('@/components/features/dashboard/TaskDetailsDrawer', () => ({
-  default: () => <div data-testid="task-details-drawer" />,
-}));
-
-vi.mock('@/components/ui/PaginationControls', () => ({
-  default: ({ page, pageCount }: { page: number; pageCount: number }) => (
-    <div>
-      Page {page} of {pageCount}
-    </div>
-  ),
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/dashboard',
 }));
 
 import DashboardOverview from '@/components/features/dashboard/DashboardOverview';
@@ -62,32 +36,37 @@ describe('DashboardOverview', () => {
 
     renderWithProviders(<DashboardOverview />);
 
-    expect(await screen.findByText('Sign in to view your workspace')).toBeInTheDocument();
+    expect(await screen.findByText('Sign in to access your organizations')).toBeInTheDocument();
   });
 
-  it('renders board and todo data from the query modules', async () => {
+  it('renders organization-level overview data', async () => {
     mockedGetUserId.mockResolvedValue(7);
-    mockedFetchBoards.mockResolvedValue([
-      { id: 11, name: 'Engineering', color: '#2563eb' },
-    ]);
-    mockedFetchCategories.mockResolvedValue([
-      { id: 4, board_id: 11, name: 'Backlog', color: '#94a3b8', position: 0, is_done: false },
-    ]);
-    mockedFetchTodos.mockResolvedValue([
+    mockedFetchOrganizations.mockResolvedValue([
       {
-        id: 21,
-        board_id: 11,
-        title: 'Review test plan',
-        category_id: 4,
-        due_date: '2030-01-02',
-        is_complete: false,
+        id: 11,
+        name: 'Engineering',
+        description: 'Platform and delivery coordination',
+        color: '#2563eb',
+        accessible_board_count: 3,
+        member_count: 8,
       },
     ]);
 
     renderWithProviders(<DashboardOverview />);
 
-    expect(await screen.findByText('Deadlines, boards, and work in one view.')).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'Choose the organization boundary before you dive into boards.'
+      )
+    ).toBeInTheDocument();
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
-    expect(screen.getByText(/Calendar selected:/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Organization' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View All Orgs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open directory' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Engineering/i })).toHaveAttribute(
+      'href',
+      '/dashboard/orgs/11'
+    );
+    expect(screen.getByText('Accessible Boards')).toBeInTheDocument();
   });
 });

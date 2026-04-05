@@ -1,4 +1,5 @@
 import path from 'node:path';
+import 'tsx/cjs';
 import knex from 'knex';
 import type { Knex } from 'knex';
 
@@ -19,6 +20,7 @@ function createTestKnex(): Knex {
 
 export default async function globalSetup() {
   applyBackendTestEnv();
+
   const dbConfig = getBackendTestDbConfig();
 
   // Knex loads migrations through CommonJS in the backend test bootstrap.

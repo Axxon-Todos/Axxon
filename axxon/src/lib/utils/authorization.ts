@@ -1,5 +1,7 @@
 import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
+import { OrganizationMembers } from '@/lib/models/organizationMembers';
+import { Organizations } from '@/lib/models/organizations';
 import {
   ForbiddenError,
   NotFoundError,
@@ -13,12 +15,47 @@ export function requireSameUser(authenticatedUserId: number, requestedUserId: nu
   }
 }
 
+export async function requireOrganizationMember(
+  organizationId: number,
+  userId: number
+) {
+  const organization = await Organizations.getById(organizationId);
+
+  if (!organization) {
+    throw new NotFoundError('Organization not found');
+  }
+
+  const isMember = await OrganizationMembers.isMember(organizationId, userId);
+
+  if (!isMember) {
+    throw new ForbiddenError('You do not have access to this organization');
+  }
+
+  return organization;
+}
+
+export async function requireOrganizationOwner(
+  organizationId: number,
+  userId: number
+) {
+  const organization = await requireOrganizationMember(organizationId, userId);
+  const role = await OrganizationMembers.getRole(organizationId, userId);
+
+  if (role !== 'owner') {
+    throw new ForbiddenError('Only organization owners can perform this action');
+  }
+
+  return organization;
+}
+
 export async function requireBoardMember(boardId: number, userId: number) {
   const board = await Board.getBoardById(boardId);
 
   if (!board) {
     throw new NotFoundError('Board not found');
   }
+
+  await requireOrganizationMember(board.organization_id, userId);
 
   const isMember = await BoardMembers.isMember({ board_id: boardId, user_id: userId });
 
@@ -36,8 +73,38 @@ export async function requireBoardCreator(boardId: number, userId: number) {
     throw new NotFoundError('Board not found');
   }
 
+  await requireOrganizationMember(board.organization_id, userId);
+
   if (board.created_by !== userId) {
     throw new ForbiddenError('Only the board creator can perform this action');
+  }
+
+  return board;
+}
+
+export async function requireBoardInOrganization(
+  organizationId: number,
+  boardId: number,
+  userId: number
+) {
+  const board = await requireBoardMember(boardId, userId);
+
+  if (board.organization_id !== organizationId) {
+    throw new NotFoundError('Board not found');
+  }
+
+  return board;
+}
+
+export async function requireBoardCreatorInOrganization(
+  organizationId: number,
+  boardId: number,
+  userId: number
+) {
+  const board = await requireBoardCreator(boardId, userId);
+
+  if (board.organization_id !== organizationId) {
+    throw new NotFoundError('Board not found');
   }
 
   return board;

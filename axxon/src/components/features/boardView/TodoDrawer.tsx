@@ -6,6 +6,7 @@ import { CalendarDays, CheckCircle2, FolderKanban, Sparkles, Tags, Trash2, UserR
 
 import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
 import LabelSelector from '@/components/features/boardView/LabelSelector'
+import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 import { fetchBoardMembers } from '@/lib/api/boardMembers/getBoardMembers'
 import { fetchCategories } from '@/lib/api/categories/getCategories'
 import { fetchLabels } from '@/lib/api/labels/getLabels'
@@ -42,25 +43,30 @@ function formatMemberName(member: User) {
 }
 
 export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null, onClose }: TodoDrawerProps) {
+  const { organizationId } = useOrganizationRouteParams()
   const queryClient = useQueryClient()
   const boardIdKey = String(boardId)
   const isEditMode = mode === 'edit' && !!todo
 
   const { data: categories = [] } = useQuery<CategoryBaseData[]>({
-    queryKey: ['categories', boardIdKey],
-    queryFn: () => fetchCategories(boardIdKey),
+    queryKey: ['categories', organizationId, boardIdKey],
+    queryFn: () => fetchCategories(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
   const { data: boardMembers = [] } = useQuery<User[]>({
-    queryKey: ['board-members', boardIdKey],
-    queryFn: () => fetchBoardMembers(boardIdKey),
+    queryKey: ['board-members', organizationId, boardIdKey],
+    queryFn: () => fetchBoardMembers(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
   const { data: allLabels = [] } = useQuery<LabelBaseData[]>({
-    queryKey: ['labels', boardIdKey],
-    queryFn: () => fetchLabels(boardIdKey),
+    queryKey: ['labels', organizationId, boardIdKey],
+    queryFn: () => fetchLabels(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
   const { data: sprints = [] } = useQuery<SprintBaseData[]>({
-    queryKey: ['sprints', boardIdKey],
-    queryFn: () => fetchSprints(boardIdKey),
+    queryKey: ['sprints', organizationId, boardIdKey],
+    queryFn: () => fetchSprints(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
 
   const [title, setTitle] = useState(todo?.title || '')
@@ -91,7 +97,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createTodo(boardId, {
+      createTodo(organizationId, boardId, {
         title,
         description: description || undefined,
         due_date: dueDate || undefined,
@@ -102,7 +108,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
         is_complete: isComplete,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', boardIdKey] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, boardIdKey] })
       onClose()
     },
     onError: (error: Error) => {
@@ -112,7 +118,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
 
   const updateMutation = useMutation({
     mutationFn: () =>
-      updateTodoById(boardId, todo?.id || 0, {
+      updateTodoById(organizationId, boardId, todo?.id || 0, {
         title,
         description: description || undefined,
         due_date: dueDate || undefined,
@@ -123,7 +129,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
         is_complete: isComplete,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', boardIdKey] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, boardIdKey] })
       onClose()
     },
     onError: (error: Error) => {
@@ -132,9 +138,9 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
   })
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteTodoById(boardId, todo?.id || 0),
+    mutationFn: () => deleteTodoById(organizationId, boardId, todo?.id || 0),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['todos', boardIdKey] })
+      queryClient.invalidateQueries({ queryKey: ['todos', organizationId, boardIdKey] })
       onClose()
     },
     onError: (error: Error) => {
@@ -142,8 +148,8 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
     },
   })
 
-  const toggleLabel = useToggleTodoLabel(boardIdKey)
-  const createLabel = useCreateLabel(boardIdKey)
+  const toggleLabel = useToggleTodoLabel(organizationId, boardIdKey)
+  const createLabel = useCreateLabel(organizationId, boardIdKey)
 
   const selectedCategory = useMemo(
     () => categories.find((category) => String(category.id) === categoryId),
@@ -247,7 +253,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
       { name },
       {
         onSuccess: (createdLabel) => {
-          queryClient.invalidateQueries({ queryKey: ['labels', boardIdKey] })
+          queryClient.invalidateQueries({ queryKey: ['labels', organizationId, boardIdKey] })
           if (!todo?.id) return
           setCurrentLabels((prev) => [...prev, createdLabel])
           toggleLabel.mutate({ todoId: todo.id, labelId: createdLabel.id, isAdding: true })

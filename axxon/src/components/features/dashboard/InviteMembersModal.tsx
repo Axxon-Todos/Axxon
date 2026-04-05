@@ -1,155 +1,181 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import Modal from '@/components/ui/Modal'
-import { inviteMembersByEmail } from '@/lib/api/members/inviteMembers'
+import Modal from '@/components/ui/Modal';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { addBoardMembers } from '@/lib/api/boardMembers/addBoardMembers';
+import { searchBoardInviteCandidates } from '@/lib/api/boardMembers/searchBoardInviteCandidates';
+import type { User } from '@/lib/types/users';
 
 type InviteMembersModalProps = {
-  boardId: number
-  onClose: () => void
+  organizationId: number;
+  boardId: number;
+  onClose: () => void;
+};
+
+function formatMemberName(member: Pick<User, 'first_name' | 'last_name' | 'email'>) {
+  return [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email;
 }
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+export default function InviteMembersModal({
+  organizationId,
+  boardId,
+  onClose,
+}: InviteMembersModalProps) {
+  const queryClient = useQueryClient();
+  const [searchValue, setSearchValue] = useState('');
+  const debouncedSearchValue = useDebouncedValue(searchValue, 300);
+  const [selectedCandidates, setSelectedCandidates] = useState<User[]>([]);
+  const [errorMessage, setErrorMessage] = useState('');
 
-export default function InviteMembersModal({ boardId, onClose }: InviteMembersModalProps) {
-  const [emails, setEmails] = useState<string[]>([])
-  const [input, setInput] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
-  const [successMessage, setSuccessMessage] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { data: candidates = [], isLoading, isFetching } = useQuery<User[]>({
+    queryKey: ['board-member-candidates', String(organizationId), String(boardId), debouncedSearchValue],
+    queryFn: () =>
+      searchBoardInviteCandidates(
+        String(organizationId),
+        String(boardId),
+        debouncedSearchValue.trim()
+      ),
+    placeholderData: (previousData) => previousData,
+  });
 
-  function normalizeEmails(rawValue: string) {
-    return rawValue
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean)
-  }
+  const selectedUserIds = useMemo(
+    () => selectedCandidates.map((candidate) => candidate.id),
+    [selectedCandidates]
+  );
+  const selectedUserIdSet = useMemo(
+    () => new Set(selectedUserIds),
+    [selectedUserIds]
+  );
+  const isDebouncing = searchValue !== debouncedSearchValue;
 
-  function appendEmails(rawValue: string) {
-    const parsedEmails = normalizeEmails(rawValue)
-    if (parsedEmails.length === 0) {
-      return
-    }
+  const addMembersMutation = useMutation({
+    mutationFn: () =>
+      addBoardMembers({
+        organizationId,
+        boardId,
+        userIds: selectedUserIds,
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ['board-members', String(organizationId), String(boardId)],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['board-member-candidates', String(organizationId), String(boardId)],
+      });
+      onClose();
+    },
+    onError: (error) => {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Failed to add board members.'
+      );
+    },
+  });
 
-    const nextEmails = [...emails]
-    const seenEmails = new Set(emails.map((email) => email.toLowerCase()))
-    const invalidEmails: string[] = []
-
-    for (const email of parsedEmails) {
-      if (!EMAIL_PATTERN.test(email)) {
-        invalidEmails.push(email)
-        continue
-      }
-
-      const normalized = email.toLowerCase()
-      if (seenEmails.has(normalized)) {
-        continue
-      }
-
-      seenEmails.add(normalized)
-      nextEmails.push(email)
-    }
-
-    setEmails(nextEmails)
-    setInput('')
-    setSuccessMessage('')
-
-    if (invalidEmails.length > 0) {
-      setErrorMessage(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`)
-      return
-    }
-
-    setErrorMessage('')
-  }
-
-  function removeEmail(emailToRemove: string) {
-    setEmails((current) => current.filter((email) => email !== emailToRemove))
-    setErrorMessage('')
-    setSuccessMessage('')
+  function toggleUser(candidate: User) {
+    setSelectedCandidates((current) =>
+      current.some((member) => member.id === candidate.id)
+        ? current.filter((member) => member.id !== candidate.id)
+        : [...current, candidate]
+    );
+    setErrorMessage('');
   }
 
   async function handleSubmit() {
-    if (isSubmitting) {
-      return
+    if (selectedCandidates.length === 0 || addMembersMutation.isPending) {
+      return;
     }
 
-    const pendingEmails = normalizeEmails(input)
-    const combinedEmails = pendingEmails.length > 0 ? [...emails, ...pendingEmails] : emails
-    const dedupedEmails = Array.from(new Map(combinedEmails.map((email) => [email.toLowerCase(), email])).values())
-    const invalidEmails = dedupedEmails.filter((email) => !EMAIL_PATTERN.test(email))
-
-    if (invalidEmails.length > 0) {
-      setErrorMessage(`Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`)
-      return
-    }
-
-    if (dedupedEmails.length === 0) {
-      setErrorMessage('Add at least one valid email before sending invites.')
-      return
-    }
-
-    setIsSubmitting(true)
-    setErrorMessage('')
-    setSuccessMessage('')
-
-    try {
-      const result = await inviteMembersByEmail({ boardId, emails: dedupedEmails })
-      setSuccessMessage(result.message || 'Invites sent successfully.')
-      setEmails([])
-      setInput('')
-      onClose()
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : 'Failed to send invites.')
-    } finally {
-      setIsSubmitting(false)
-    }
+    setErrorMessage('');
+    await addMembersMutation.mutateAsync();
   }
+  const searchTerm = debouncedSearchValue.trim();
 
   return (
-    <Modal isOpen onClose={onClose} title="Invite Members">
+    <Modal isOpen onClose={onClose} title="Invite Org Members to Board">
       <div className="space-y-4">
         <div className="space-y-2">
-          <label htmlFor="invite-members-input" className="text-sm font-medium">
-            Email addresses
+          <label htmlFor="invite-board-members-search" className="text-sm font-medium">
+            Search organization members
           </label>
           <input
-            id="invite-members-input"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onBlur={() => appendEmails(input)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ',') {
-                event.preventDefault()
-                appendEmails(input)
-              }
-            }}
-            placeholder="Enter emails and press Enter"
+            id="invite-board-members-search"
+            value={searchValue}
+            onChange={(event) => setSearchValue(event.target.value)}
+            placeholder="Search by name or email"
             className="app-input"
           />
           <p className="text-xs app-text-muted">
-            Add one or more teammate emails. Separate multiple addresses with commas.
+            Showing organization members who can still be added to this board.
           </p>
         </div>
 
-        {emails.length > 0 ? (
+        {selectedCandidates.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {emails.map((email) => (
+            {selectedCandidates.map((member) => (
               <button
-                key={email}
+                key={member.id}
                 type="button"
-                onClick={() => removeEmail(email)}
+                onClick={() => toggleUser(member)}
                 className="app-badge"
-                aria-label={`Remove ${email}`}
+                aria-label={`Remove ${member.email}`}
               >
-                {email} ×
+                {formatMemberName(member)} ×
               </button>
             ))}
           </div>
         ) : null}
 
+        <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-[var(--app-border)] p-2">
+          {isLoading && candidates.length === 0 ? (
+            <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
+              Loading addable organization members...
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
+              {searchTerm
+                ? 'No addable organization members match this search.'
+                : 'Everyone in this organization already has board access.'}
+            </div>
+          ) : (
+            candidates.map((member) => {
+              const isSelected = selectedUserIdSet.has(member.id);
+
+              return (
+                <button
+                  key={member.id}
+                  type="button"
+                  onClick={() => toggleUser(member)}
+                  className="glass-panel flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left"
+                  style={
+                    isSelected
+                      ? {
+                          borderColor:
+                            'color-mix(in srgb, var(--app-accent) 28%, var(--app-border))',
+                          background:
+                            'color-mix(in srgb, var(--app-accent) 10%, var(--app-panel-strong))',
+                        }
+                      : undefined
+                  }
+                >
+                  <div>
+                    <p className="font-medium">{formatMemberName(member)}</p>
+                    <p className="text-sm app-text-muted">{member.email}</p>
+                  </div>
+                  <span className="app-badge">{isSelected ? 'Selected' : 'Addable'}</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {isDebouncing || (isFetching && candidates.length > 0) ? (
+          <p className="text-xs app-text-muted">Updating results...</p>
+        ) : null}
+
         {errorMessage ? <p className="text-sm text-rose-400">{errorMessage}</p> : null}
-        {successMessage ? <p className="text-sm text-emerald-400">{successMessage}</p> : null}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="glass-button">
@@ -158,13 +184,13 @@ export default function InviteMembersModal({ boardId, onClose }: InviteMembersMo
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={isSubmitting || (emails.length === 0 && input.trim().length === 0)}
+            disabled={selectedCandidates.length === 0 || addMembersMutation.isPending}
             className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSubmitting ? 'Sending...' : 'Send Invites'}
+            {addMembersMutation.isPending ? 'Adding...' : 'Add Members'}
           </button>
         </div>
       </div>
     </Modal>
-  )
+  );
 }

@@ -8,8 +8,8 @@ import * as ScrollArea from "@radix-ui/react-scroll-area";
 import * as Separator from "@radix-ui/react-separator";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import {
+  Building2,
   ChevronLeft,
-  LayoutDashboard,
   LogOut,
   MoonStar,
   Plus,
@@ -18,8 +18,11 @@ import {
 } from "lucide-react";
 import BoardList from "@/components/features/dashboard/BoardList";
 import CreateBoardForm from "@/components/features/dashboard/CreateBoardForm";
+import CreateOrganizationForm from "@/components/features/dashboard/CreateOrganizationForm";
+import OrganizationList from "@/components/features/dashboard/OrganizationList";
 import Modal from "@/components/ui/Modal";
 import { useTheme } from "@/context/ThemeProvider";
+import { useOrganizationRouteParams } from "@/hooks/useOrganizationRouteParams";
 
 export const SIDEBAR_EXPANDED_WIDTH = 280;
 export const SIDEBAR_COLLAPSED_WIDTH = 84;
@@ -48,21 +51,20 @@ export default function Sidebar({
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+  const { organizationId } = useOrganizationRouteParams();
   const { theme, toggleTheme } = useTheme();
   const shouldReduceMotion = useReducedMotion();
-  const sidebarTransition = shouldReduceMotion
-    ? { duration: 0 }
-    : SIDEBAR_TRANSITION;
-  const contentTransition = shouldReduceMotion
-    ? { duration: 0 }
-    : CONTENT_TRANSITION;
-  const isDashboardActive = pathname === "/dashboard";
+  const sidebarTransition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
+  const contentTransition = shouldReduceMotion ? { duration: 0 } : CONTENT_TRANSITION;
+  const isOrganizationsActive =
+    pathname === "/dashboard" || pathname.startsWith("/dashboard/orgs");
   const collapsedButtonStyle = collapsed
     ? {
         width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
         height: SIDEBAR_COLLAPSED_BUTTON_SIZE,
       }
     : undefined;
+  const createLabel = organizationId ? "Create board" : "Create organization";
 
   async function handleLogout() {
     if (isLoggingOut) return;
@@ -112,7 +114,7 @@ export default function Sidebar({
               style={{ pointerEvents: collapsed ? "none" : "auto" }}
             >
               <p className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] app-text-muted">
-                Workspace
+                Engineering OS
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--app-accent)] text-[var(--app-accent-foreground)] shadow-lg">
@@ -131,10 +133,10 @@ export default function Sidebar({
                   : "w-full items-center justify-end"
               }`}
             >
-              <SidebarTooltip label="Create board">
+              <SidebarTooltip label={createLabel}>
                 <motion.button
                   type="button"
-                  aria-label="Create board"
+                  aria-label={createLabel}
                   aria-haspopup="dialog"
                   onClick={() => setIsCreateModalOpen(true)}
                   whileHover={
@@ -178,12 +180,13 @@ export default function Sidebar({
             </div>
           </motion.div>
 
-          <div className={`px-3 ${collapsed ? "flex justify-center" : ""}`}>
+          <div className={`grid gap-2 px-3 ${collapsed ? "justify-center" : ""}`}>
             <SidebarNavItem
               href="/dashboard"
-              label="Dashboard"
+              label="Organizations"
+              icon={<Building2 className="h-5 w-5" />}
               collapsed={collapsed}
-              active={isDashboardActive}
+              active={isOrganizationsActive}
             />
           </div>
 
@@ -215,10 +218,12 @@ export default function Sidebar({
                 className="px-4 pb-3 pt-4"
               >
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] app-text-muted">
-                  Boards
+                  {organizationId ? "Boards" : "Organizations"}
                 </p>
                 <p className="mt-1 text-sm app-text-muted">
-                  Move between boards without breaking flow.
+                  {organizationId
+                    ? "Scoped execution surfaces inside the selected organization."
+                    : "Top-level workspaces for members, repos, and boards."}
                 </p>
               </motion.div>
 
@@ -231,7 +236,11 @@ export default function Sidebar({
               <ScrollArea.Root className="min-h-0 flex-1">
                 <ScrollArea.Viewport className="h-full w-full">
                   <div className="px-3 py-3">
-                    <BoardList variant="sidebar" />
+                    {organizationId ? (
+                      <BoardList organizationId={organizationId} variant="sidebar" />
+                    ) : (
+                      <OrganizationList variant="sidebar" />
+                    )}
                   </div>
                 </ScrollArea.Viewport>
                 <ScrollArea.Scrollbar
@@ -280,9 +289,16 @@ export default function Sidebar({
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Create New Board"
+        title={organizationId ? "Create New Board" : "Create Organization"}
       >
-        <CreateBoardForm onClose={() => setIsCreateModalOpen(false)} />
+        {organizationId ? (
+          <CreateBoardForm
+            organizationId={organizationId}
+            onClose={() => setIsCreateModalOpen(false)}
+          />
+        ) : (
+          <CreateOrganizationForm onClose={() => setIsCreateModalOpen(false)} />
+        )}
       </Modal>
     </>
   );
@@ -291,11 +307,13 @@ export default function Sidebar({
 function SidebarNavItem({
   href,
   label,
+  icon,
   collapsed,
   active,
 }: {
   href: string;
   label: string;
+  icon: React.ReactNode;
   collapsed: boolean;
   active: boolean;
 }) {
@@ -303,18 +321,6 @@ function SidebarNavItem({
   const contentTransition = shouldReduceMotion
     ? { duration: 0 }
     : CONTENT_TRANSITION;
-  const iconContent = (
-    <div
-      className="flex items-center justify-center rounded-full"
-      style={{
-        width: SIDEBAR_COLLAPSED_ICON_SIZE,
-        height: SIDEBAR_COLLAPSED_ICON_SIZE,
-        color: active ? "var(--app-accent)" : "var(--app-foreground)",
-      }}
-    >
-      <LayoutDashboard className="h-[1.15rem] w-[1.15rem]" />
-    </div>
-  );
 
   if (collapsed) {
     return (
@@ -332,23 +338,30 @@ function SidebarNavItem({
                       "color-mix(in srgb, var(--app-accent) 28%, var(--app-border))",
                     background:
                       "color-mix(in srgb, var(--app-accent) 12%, var(--app-panel-strong))",
-                    boxShadow:
-                      "0 18px 32px -24px color-mix(in srgb, var(--app-accent) 55%, transparent)",
                   }
                 : null),
             }}
           >
-            {iconContent}
+            <span
+              className="flex items-center justify-center rounded-full"
+              style={{
+                width: SIDEBAR_COLLAPSED_ICON_SIZE,
+                height: SIDEBAR_COLLAPSED_ICON_SIZE,
+                color: active ? "var(--app-accent)" : "var(--app-foreground)",
+              }}
+            >
+              {icon}
+            </span>
           </motion.div>
         </Link>
       </SidebarTooltip>
     );
   }
 
-  const content = (
+  return (
     <Link href={href} aria-current={active ? "page" : undefined} className="block">
       <motion.div
-        whileHover={shouldReduceMotion ? undefined : { x: collapsed ? 0 : 4 }}
+        whileHover={shouldReduceMotion ? undefined : { x: 4 }}
         whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
         className="glass-button flex min-h-14 items-center justify-between rounded-[20px] px-3.5 transition-colors"
         style={{
@@ -357,8 +370,6 @@ function SidebarNavItem({
                 borderColor: "color-mix(in srgb, var(--app-accent) 28%, var(--app-border))",
                 background:
                   "color-mix(in srgb, var(--app-accent) 12%, var(--app-panel-strong))",
-                boxShadow:
-                  "0 18px 32px -24px color-mix(in srgb, var(--app-accent) 55%, transparent)",
               }
             : null),
         }}
@@ -380,7 +391,7 @@ function SidebarNavItem({
                   }
             }
           >
-            <LayoutDashboard className="h-5 w-5" />
+            {icon}
           </div>
 
           <SidebarLabel collapsed={collapsed} transition={contentTransition}>
@@ -388,27 +399,23 @@ function SidebarNavItem({
           </SidebarLabel>
         </div>
 
-        {!collapsed ? (
-          <motion.span
-            animate={{
-              opacity: active ? 1 : 0,
-              scale: active ? 1 : 0.7,
-            }}
-            transition={contentTransition}
-            aria-hidden={!active}
-            className="h-2 w-2 rounded-full"
-            style={{
-              backgroundColor: "var(--app-accent)",
-              boxShadow: "0 0 16px var(--app-accent)",
-              pointerEvents: "none",
-            }}
-          />
-        ) : null}
+        <motion.span
+          animate={{
+            opacity: active ? 1 : 0,
+            scale: active ? 1 : 0.7,
+          }}
+          transition={contentTransition}
+          aria-hidden={!active}
+          className="h-2 w-2 rounded-full"
+          style={{
+            backgroundColor: "var(--app-accent)",
+            boxShadow: "0 0 16px var(--app-accent)",
+            pointerEvents: "none",
+          }}
+        />
       </motion.div>
     </Link>
   );
-
-  return content;
 }
 
 function SidebarUtilityButton({
@@ -456,7 +463,7 @@ function SidebarUtilityButton({
     );
   }
 
-  const content = (
+  return (
     <button
       type="button"
       onClick={onClick}
@@ -477,8 +484,6 @@ function SidebarUtilityButton({
       </SidebarLabel>
     </button>
   );
-
-  return content;
 }
 
 function SidebarLabel({

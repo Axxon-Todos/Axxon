@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { PencilLine, Trash2, UserPlus, X } from "lucide-react";
+import { PencilLine, Settings2, Trash2, UserPlus, X } from "lucide-react";
 import type { UpdateBoard } from "@/lib/types/boardTypes";
 
 type BoardOptionsModalProps = {
@@ -11,6 +11,7 @@ type BoardOptionsModalProps = {
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSettings: () => void;
   onInvite: () => void;
 };
 
@@ -24,6 +25,7 @@ export default function BoardOptionsModal({
   onClose,
   onEdit,
   onDelete,
+  onSettings,
   onInvite,
 }: BoardOptionsModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -118,6 +120,17 @@ export default function BoardOptionsModal({
           </div>
 
           <div className="mt-6 grid max-h-[60vh] gap-3 overflow-y-auto pr-1">
+            <ActionButton
+              title="Board settings"
+              description="Review access, board members, and repository links."
+              icon={<Settings2 className="h-5 w-5" />}
+              iconClassName="bg-sky-500/[0.14] text-sky-700"
+              onClick={() => {
+                onSettings();
+                onClose();
+              }}
+            />
+
             <ActionButton
               title="Edit board"
               description="Rename the board, change its color, or update its details."

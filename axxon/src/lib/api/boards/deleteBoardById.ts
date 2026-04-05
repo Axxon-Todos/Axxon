@@ -1,7 +1,11 @@
 import { apiFetch } from '@/lib/api/apiFetch';
+import { buildOrganizationBoardApiPath } from '@/lib/utils/routes';
 
-export async function deleteBoardById(id: string) {
-  const res = await apiFetch(`/api/board/${id}`, {
+export async function deleteBoardById(
+  organizationId: string | number,
+  id: string
+) {
+  const res = await apiFetch(buildOrganizationBoardApiPath(organizationId, id), {
     method: 'DELETE',
   });
 

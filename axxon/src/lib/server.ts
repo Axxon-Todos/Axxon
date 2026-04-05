@@ -1,11 +1,8 @@
-// server.ts
-import dotenv from "dotenv";
 import http from "http";
+import { loadRuntimeEnv } from "./env/loadRuntimeEnv";
 import { createWsServer } from "./wsServer";
 
-// Keep the standalone WS process aligned with Next's local env loading.
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+loadRuntimeEnv();
 
 const PORT = process.env.WS_PORT || 4000;
 
