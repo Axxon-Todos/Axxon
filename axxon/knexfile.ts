@@ -1,9 +1,9 @@
+// Loads runtime environment variables before exposing Knex configs for local and Docker workflows.
 import path from 'node:path';
-import dotenv from 'dotenv';
 import type { Knex } from 'knex';
+import { loadRuntimeEnv } from './src/lib/env/loadRuntimeEnv';
 
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+loadRuntimeEnv();
 
 const directoryConfig = {
   migrations: {

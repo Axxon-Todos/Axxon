@@ -1,12 +1,10 @@
 'use server';
 
-import dotenv from 'dotenv';
 import knex from 'knex';
 import type { Knex } from 'knex';
+import { loadRuntimeEnv } from '../env/loadRuntimeEnv';
 
-// Load the same local env values for standalone processes like the WS server.
-dotenv.config({ path: '.env.local' });
-dotenv.config();
+loadRuntimeEnv();
 
 const config: Knex.Config = {
   client: 'pg',
