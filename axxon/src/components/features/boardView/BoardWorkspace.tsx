@@ -20,6 +20,7 @@ import { useReorderCategories } from '@/lib/mutations/useReorderCategories'
 import { useUpdateCategory } from '@/lib/mutations/UseUpdateCategory'
 import { useUpdateTodoMutation } from '@/lib/mutations/useUpdateTodo'
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
+import type { SprintBaseData } from '@/lib/types/sprintTypes'
 import { BOARD_VIEW_ORDER, type BoardDisplayView } from '@/lib/types/boardViewTypes'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 import { isTodoEffectivelyComplete } from '@/lib/utils/todoCompletion'
@@ -29,10 +30,16 @@ import BoardCalendarView from './views/BoardCalendarView'
 import BoardKanbanView from './views/BoardKanbanView'
 import BoardListView from './views/BoardListView'
 
-export default function BoardWorkspace({ boardId }: { boardId: string }) {
+export default function BoardWorkspace({
+  boardId,
+  selectedSprint = null,
+}: {
+  boardId: string
+  selectedSprint?: SprintBaseData | null
+}) {
   const { organizationId } = useOrganizationRouteParams()
   const socketRef = useSocket(boardId)
-  useBoardRealtime(boardId, socketRef)
+  useBoardRealtime(organizationId, boardId, socketRef)
 
   const [activeView, setActiveView] = useState<BoardDisplayView>('list')
   const [transitionDirection, setTransitionDirection] = useState(1)
@@ -52,19 +59,34 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
   const { data: board } = useQuery({
     queryKey: ['board', organizationId, boardId],
     queryFn: () => fetchBoard(organizationId, boardId),
+    enabled: Boolean(organizationId),
   })
   const { data: categories } = useQuery<CategoryBaseData[]>({
     queryKey: ['categories', organizationId, boardId],
     queryFn: () => fetchCategories(organizationId, boardId),
+    enabled: Boolean(organizationId),
   })
   const { data: labels } = useQuery({
     queryKey: ['labels', organizationId, boardId],
     queryFn: () => fetchLabels(organizationId, boardId),
+    enabled: Boolean(organizationId),
   })
   const { data: todos } = useQuery<TodoWithLabels[]>({
     queryKey: ['todos', organizationId, boardId],
     queryFn: () => fetchTodosWithLabels(organizationId, boardId),
+    enabled: Boolean(organizationId),
   })
+  const sprintScopedTodos = useMemo(() => {
+    if (!todos) {
+      return []
+    }
+
+    if (!selectedSprint) {
+      return todos
+    }
+
+    return todos.filter((todo) => todo.sprint_id === selectedSprint.id)
+  }, [selectedSprint, todos])
 
   useEffect(() => {
     if (categories && categories.length && categoryOrder.length === 0) {
@@ -86,25 +108,25 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
   }, [categories, unsavedCategories])
 
   const categorizedTodos = useMemo(() => {
-    if (!todos || !categories) return {}
+    if (!categories) return {}
 
     return categories.reduce(
       (acc, category) => {
-        acc[category.id] = todos.filter((todo) => todo.category_id === category.id)
+        acc[category.id] = sprintScopedTodos.filter((todo) => todo.category_id === category.id)
         return acc
       },
       {} as Record<number, TodoWithLabels[]>
     )
-  }, [categories, todos])
+  }, [categories, sprintScopedTodos])
 
-  const dueSoonCount = (todos || []).filter((todo) => {
+  const dueSoonCount = sprintScopedTodos.filter((todo) => {
     const category = todo.category_id ? categoryMap[todo.category_id] : undefined
     if (!todo.due_date || isTodoEffectivelyComplete(todo.is_complete, category?.is_done)) return false
     const dueDate = dayjs(todo.due_date)
     return dueDate.isAfter(dayjs().subtract(1, 'day'), 'day') && dueDate.diff(dayjs(), 'day') <= 7
   }).length
 
-  const completedCount = (todos || []).filter((todo) => {
+  const completedCount = sprintScopedTodos.filter((todo) => {
     const category = todo.category_id ? categoryMap[todo.category_id] : undefined
     return isTodoEffectivelyComplete(todo.is_complete, category?.is_done)
   }).length
@@ -198,15 +220,22 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
         boardId={boardId}
         board={board}
         categoryCount={categories.length}
-        todoCount={todos.length}
+        todoCount={sprintScopedTodos.length}
         labelCount={labels.length}
         dueSoonCount={dueSoonCount}
         completedCount={completedCount}
         activeView={activeView}
         onChangeView={handleChangeView}
-        onAddTodo={() => openModal('ADD_TODO', { boardId: Number(boardId) })}
+        onAddTodo={() =>
+          openModal('ADD_TODO', {
+            boardId: Number(boardId),
+            sprintId: selectedSprint?.archived_at ? null : selectedSprint?.id ?? null,
+          })
+        }
         isManagingCategories={isManagingCategories}
         onToggleManageCategories={handleToggleManageCategories}
+        selectedSprint={selectedSprint}
+        canAddTodo={!selectedSprint?.archived_at}
       />
 
       {modalState.type === 'CATEGORY' ? (
@@ -292,7 +321,7 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
               <BoardCalendarView
                 board={board}
                 categoriesById={categoryMap}
-                todos={todos}
+                todos={sprintScopedTodos}
                 onTodoClick={handleOpenTodo}
               />
             </div>

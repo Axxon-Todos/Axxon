@@ -10,7 +10,7 @@ type CreateTodoPayload = Omit<CreateTodoData, 'board_id'>;
 type UpdateTodoPayload = Partial<
   Pick<
     UpdateTodoData,
-    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'
+    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'sprint_id' | 'is_complete'
   >
 >;
 
@@ -49,7 +49,9 @@ function throwTodoRuleError(error: unknown) {
     error instanceof Error &&
     (
       error.message.includes('Completed todos must belong to a done category') ||
-      error.message.includes('Assignee must be a member of the board')
+      error.message.includes('Assignee must be a member of the board') ||
+      error.message.includes('Sprint must belong to the board') ||
+      error.message.includes('Archived sprints cannot accept new todos')
     )
   ) {
     throw new BadRequestError(error.message);
@@ -120,6 +122,7 @@ export async function updateTodo({
     'assignee_id',
     'priority',
     'category_id',
+    'sprint_id',
     'is_complete',
   ];
   const filteredBody = Object.fromEntries(

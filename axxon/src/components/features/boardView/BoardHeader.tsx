@@ -8,16 +8,18 @@ import Badge from '@/components/ui/Badge'
 import Button, { buttonClassName } from '@/components/ui/Button'
 import PageHero from '@/components/ui/PageHero'
 import Surface from '@/components/ui/Surface'
+import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
+import type { BoardBaseData } from '@/lib/types/boardTypes'
+import type { SprintBaseData } from '@/lib/types/sprintTypes'
+import type { BoardDisplayView } from '@/lib/types/boardViewTypes'
 import {
   buildOrganizationBoardAnalyticsPath,
   buildOrganizationBoardSettingsPath,
 } from '@/lib/utils/routes'
+import { getSprintStatus, getSprintStatusLabel } from '@/lib/utils/sprintStatus'
 
 import BoardViewSwitcher from './BoardViewSwitcher'
-
-import type { BoardBaseData } from '@/lib/types/boardTypes'
-import type { BoardDisplayView } from '@/lib/types/boardViewTypes'
 
 export default function BoardHeader({
   boardId,
@@ -32,6 +34,8 @@ export default function BoardHeader({
   onAddTodo,
   isManagingCategories,
   onToggleManageCategories,
+  selectedSprint,
+  canAddTodo,
 }: {
   boardId: string
   board: BoardBaseData
@@ -45,21 +49,32 @@ export default function BoardHeader({
   onAddTodo: () => void
   isManagingCategories: boolean
   onToggleManageCategories: () => void
+  selectedSprint?: SprintBaseData | null
+  canAddTodo: boolean
 }) {
   const { organizationId } = useOrganizationRouteParams()
   const accentColor = board.color || '#2fd087'
+  const sprintStatus = selectedSprint ? getSprintStatus(selectedSprint) : null
 
   return (
     <PageHero
-      kicker="Board Workspace"
+      kicker={selectedSprint ? 'Sprint Workspace' : 'Board Workspace'}
       title={board.name}
-      description="Switch between list, kanban, and calendar layouts without leaving the board or losing the same task workflow controls."
+      description={
+        selectedSprint
+          ? `Focus this board on ${selectedSprint.name}. Only sprint-assigned work appears here while the same board views and workflow controls stay available.`
+          : 'Switch between list, kanban, and calendar layouts without leaving the board or losing the same task workflow controls.'
+      }
       accentColor={accentColor}
       actions={
         <>
-          <Button variant="primary" onClick={onAddTodo}>
+          <Button
+            variant={canAddTodo ? 'primary' : 'secondary'}
+            onClick={onAddTodo}
+            disabled={!canAddTodo}
+          >
             <ListTodo className="h-4 w-4" />
-            Add Todo
+            {canAddTodo ? 'Add Todo' : 'Sprint Archived'}
           </Button>
           <Link
             href={buildOrganizationBoardAnalyticsPath(organizationId, boardId)}
@@ -97,6 +112,13 @@ export default function BoardHeader({
             <Tags className="h-3.5 w-3.5" />
             {labelCount} labels
           </Badge>
+          {selectedSprint ? (
+            <Badge style={selectedSprint.color ? { color: selectedSprint.color } : undefined}>
+              <SprintIconGlyph icon={selectedSprint.icon} />
+              {selectedSprint.name}
+            </Badge>
+          ) : null}
+          {sprintStatus ? <Badge>{getSprintStatusLabel(sprintStatus)}</Badge> : null}
         </>
       }
     >

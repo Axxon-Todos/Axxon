@@ -7,6 +7,7 @@ import type {
   TodoLabelsBaseData,
 } from '../types/todoLabelTypes'
 import type { LabelBaseData } from '../types/labelTypes';
+import type { SprintSummary } from '../types/sprintTypes';
 import type { TodoAssigneeSummary, TodoBaseData, TodoWithLabels } from '../types/todoTypes';
 import { Users } from './users';
 import { Labels } from './labels';
@@ -44,10 +45,13 @@ export class TodoLabels {
       )
     );
 
-    const [todoLabels, allLabels, assignees] = await Promise.all([
+    const [todoLabels, allLabels, assignees, sprints] = await Promise.all([
       knex('todo_labels').whereIn('todo_id', todoIds),
       Labels.listAllLabelsInBoard({ board_id: boardId }),
       Users.listUsersByIds(assigneeIds),
+      knex('sprints')
+        .where({ board_id: boardId })
+        .select('id', 'name', 'color', 'icon', 'archived_at'),
     ]);
 
     const labelMap = allLabels.reduce((acc, label) => {
@@ -60,6 +64,11 @@ export class TodoLabels {
       return acc;
     }, {} as Record<number, TodoAssigneeSummary>);
 
+    const sprintMap = sprints.reduce((acc, sprint) => {
+      acc[sprint.id] = sprint as SprintSummary;
+      return acc;
+    }, {} as Record<number, SprintSummary>);
+
     return todos.map((todo) => ({
       ...todo,
       labels: todoLabels
@@ -67,6 +76,7 @@ export class TodoLabels {
         .map((relation) => labelMap[relation.label_id])
         .filter((label): label is LabelBaseData => Boolean(label)),
       assignee: typeof todo.assignee_id === 'number' ? assigneeMap[todo.assignee_id] ?? null : null,
+      sprint: typeof todo.sprint_id === 'number' ? sprintMap[todo.sprint_id] ?? null : null,
     }));
   };
 

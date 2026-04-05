@@ -19,7 +19,7 @@ type TodoRouteParams = {
 type UpdateTodoPayload = Partial<
   Pick<
     UpdateTodoData,
-    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'
+    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'sprint_id' | 'is_complete'
   >
 >;
 

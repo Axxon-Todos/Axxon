@@ -197,6 +197,31 @@ describe('wsServer', () => {
     await expect(eventPromise).resolves.toEqual({ id: 88 });
   });
 
+  it('forwards sprint updates to the correct socket room', async () => {
+    const creator = await createUser({ email: 'creator@example.com' });
+    const user = await createUser({ email: 'member@example.com' });
+    const board = await createBoardRecord({ createdBy: creator.id });
+
+    await addBoardMember(board.id, user.id);
+
+    const cookie = await createAuthCookie(user.id);
+    const client = await connectClient(cookie);
+    client.emit('joinBoard', String(board.id));
+
+    await waitForCondition(() => Boolean(createWsRoomSnapshot(board.id)?.has(client.id ?? '')));
+
+    const eventPromise = new Promise<{ id: number; name: string }>((resolve) => {
+      client.once('board:sprint:updated', resolve);
+    });
+
+    await publishBoardUpdate(String(board.id), {
+      type: 'sprint:updated',
+      payload: { id: 12, name: 'Execution Sprint' },
+    });
+
+    await expect(eventPromise).resolves.toEqual({ id: 12, name: 'Execution Sprint' });
+  });
+
   it('falls back to board:update when Redis payloads omit a type', async () => {
     const creator = await createUser({ email: 'creator@example.com' });
     const user = await createUser({ email: 'member@example.com' });

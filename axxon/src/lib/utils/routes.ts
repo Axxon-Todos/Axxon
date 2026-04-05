@@ -24,6 +24,13 @@ export function buildOrganizationBoardSettingsPath(
   return `${buildOrganizationBoardPath(organizationId, boardId)}/settings`;
 }
 
+export function buildOrganizationBoardSprintsPath(
+  organizationId: string | number,
+  boardId: string | number
+) {
+  return `${buildOrganizationBoardPath(organizationId, boardId)}/sprints`;
+}
+
 export function buildOrganizationGitHubSetupPath(
   organizationId: string | number
 ) {

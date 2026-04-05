@@ -8,6 +8,7 @@ export type NewTodoInput = {
   assignee_id?: number | null;
   priority?: number;
   category_id?: number;
+  sprint_id?: number | null;
   is_complete?: boolean;
 };
 

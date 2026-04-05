@@ -1,11 +1,19 @@
 import { apiFetch } from '@/lib/api/apiFetch';
+import type { UpdateTodoData } from '@/lib/types/todoTypes';
 import { buildOrganizationBoardApiPath } from '@/lib/utils/routes';
+
+type UpdateTodoInput = Partial<
+  Pick<
+    UpdateTodoData,
+    'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'sprint_id' | 'is_complete'
+  >
+>;
 
 export async function updateTodoById(
   organizationId: string | number,
   boardId: string | number,
   todoId: string | number,
-  data: any
+  data: UpdateTodoInput
 ) {
   const res = await apiFetch(
     buildOrganizationBoardApiPath(organizationId, boardId, `/todos/${todoId}`),

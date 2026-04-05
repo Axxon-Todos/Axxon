@@ -12,6 +12,7 @@ Axxon is an agent-work orchestration platform for software teams.
   - `/dashboard/orgs`
   - `/dashboard/orgs/[organizationId]`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]`
+  - `/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]/analytics`
   - `/dashboard/orgs/[organizationId]/boards/[boardId]/settings`
 - GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
@@ -38,11 +39,13 @@ Axxon now uses a dark-first deep-green platform theme with light-mode support.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
+- Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, and sprint pages must live under `axxon/src/app/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`.
 - Route helpers, org/board path builders, and authorization helpers should stay in `axxon/src/lib/utils`.
 - Reusable domain types should live under `axxon/src/lib/types`.
 - GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
 - Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
+- Sprint persistence belongs in the existing `src/lib` layers and should extend shared todo payloads through shared types instead of adding separate view-only task models.
 
 ## Build, Test, and Development Commands
 Run commands from `axxon/`.
@@ -103,6 +106,7 @@ Vitest is available for backend and frontend suites. Tests are part of the expec
   - org-scoped board creation and access
   - auth and authorization helpers
   - analytics and board workspace behavior
+  - sprint CRUD, sprint assignment rules, and sprint-filtered board views
   - migrations and schema constraints
   - websocket and realtime flows when affected
 - Manual verification is still expected for the affected user flow, especially auth, org creation, board CRUD, analytics, migrations, and websocket behavior.

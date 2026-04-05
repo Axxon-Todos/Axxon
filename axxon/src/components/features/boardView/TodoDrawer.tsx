@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarDays, CheckCircle2, FolderKanban, Sparkles, Tags, Trash2, UserRound } from 'lucide-react'
 
+import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
 import LabelSelector from '@/components/features/boardView/LabelSelector'
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
 import { fetchBoardMembers } from '@/lib/api/boardMembers/getBoardMembers'
 import { fetchCategories } from '@/lib/api/categories/getCategories'
 import { fetchLabels } from '@/lib/api/labels/getLabels'
+import { fetchSprints } from '@/lib/api/sprints/getSprints'
 import { createTodo } from '@/lib/api/todos/createTodo'
 import { deleteTodoById } from '@/lib/api/todos/deleteTodoById'
 import { updateTodoById } from '@/lib/api/todos/updateTodoById'
@@ -17,6 +19,7 @@ import { useToggleTodoLabel } from '@/lib/mutations/useToggleTodoLabel'
 
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 import type { LabelBaseData } from '@/lib/types/labelTypes'
+import type { SprintBaseData } from '@/lib/types/sprintTypes'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 import type { User } from '@/lib/types/users'
 
@@ -24,6 +27,7 @@ interface TodoDrawerProps {
   mode: 'create' | 'edit'
   boardId: number
   todo?: TodoWithLabels
+  initialSprintId?: number | null
   onClose: () => void
 }
 
@@ -38,7 +42,7 @@ function formatMemberName(member: User) {
   return [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email
 }
 
-export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerProps) {
+export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null, onClose }: TodoDrawerProps) {
   const { organizationId } = useOrganizationRouteParams()
   const queryClient = useQueryClient()
   const boardIdKey = String(boardId)
@@ -47,14 +51,22 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
   const { data: categories = [] } = useQuery<CategoryBaseData[]>({
     queryKey: ['categories', organizationId, boardIdKey],
     queryFn: () => fetchCategories(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
   const { data: boardMembers = [] } = useQuery<User[]>({
     queryKey: ['board-members', organizationId, boardIdKey],
     queryFn: () => fetchBoardMembers(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
   const { data: allLabels = [] } = useQuery<LabelBaseData[]>({
     queryKey: ['labels', organizationId, boardIdKey],
     queryFn: () => fetchLabels(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
+  })
+  const { data: sprints = [] } = useQuery<SprintBaseData[]>({
+    queryKey: ['sprints', organizationId, boardIdKey],
+    queryFn: () => fetchSprints(organizationId, boardIdKey),
+    enabled: Boolean(organizationId),
   })
 
   const [title, setTitle] = useState(todo?.title || '')
@@ -62,6 +74,9 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
   const [priority, setPriority] = useState(todo?.priority ? String(todo.priority) : '3')
   const [dueDate, setDueDate] = useState(todo?.due_date ? todo.due_date.slice(0, 10) : '')
   const [categoryId, setCategoryId] = useState(todo?.category_id ? String(todo.category_id) : '')
+  const [sprintId, setSprintId] = useState(
+    todo?.sprint_id ? String(todo.sprint_id) : initialSprintId ? String(initialSprintId) : ''
+  )
   const [assigneeId, setAssigneeId] = useState(todo?.assignee_id ? String(todo.assignee_id) : '')
   const [isComplete, setIsComplete] = useState(Boolean(todo?.is_complete))
   const [currentLabels, setCurrentLabels] = useState<LabelBaseData[]>(todo?.labels || [])
@@ -73,11 +88,12 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
     setPriority(todo?.priority ? String(todo.priority) : '3')
     setDueDate(todo?.due_date ? todo.due_date.slice(0, 10) : '')
     setCategoryId(todo?.category_id ? String(todo.category_id) : '')
+    setSprintId(todo?.sprint_id ? String(todo.sprint_id) : initialSprintId ? String(initialSprintId) : '')
     setAssigneeId(todo?.assignee_id ? String(todo.assignee_id) : '')
     setIsComplete(Boolean(todo?.is_complete))
     setCurrentLabels(todo?.labels || [])
     setErrorMessage(null)
-  }, [todo, mode])
+  }, [initialSprintId, mode, todo])
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -88,6 +104,7 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
         assignee_id: assigneeId ? Number(assigneeId) : null,
         priority: Number(priority),
         category_id: categoryId ? Number(categoryId) : undefined,
+        sprint_id: sprintId ? Number(sprintId) : null,
         is_complete: isComplete,
       }),
     onSuccess: () => {
@@ -107,7 +124,8 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
         due_date: dueDate || undefined,
         assignee_id: assigneeId ? Number(assigneeId) : null,
         priority: Number(priority),
-        category_id: categoryId ? Number(categoryId) : null,
+        category_id: categoryId ? Number(categoryId) : undefined,
+        sprint_id: sprintId ? Number(sprintId) : null,
         is_complete: isComplete,
       }),
     onSuccess: () => {
@@ -137,6 +155,10 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
     () => categories.find((category) => String(category.id) === categoryId),
     [categories, categoryId]
   )
+  const selectedSprint = useMemo(
+    () => sprints.find((sprint) => String(sprint.id) === sprintId) ?? todo?.sprint ?? null,
+    [sprintId, sprints, todo?.sprint]
+  )
   const selectedAssigneeName = useMemo(() => {
     if (!assigneeId) {
       return null
@@ -154,6 +176,10 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
       [...boardMembers].sort((left, right) => formatMemberName(left).localeCompare(formatMemberName(right))),
     [boardMembers]
   )
+  const sortedSprints = useMemo(
+    () => [...sprints].sort((left, right) => new Date(left.start_date).getTime() - new Date(right.start_date).getTime()),
+    [sprints]
+  )
   const missingAssigneeOption = useMemo(() => {
     if (!assigneeId) {
       return null
@@ -170,6 +196,21 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
       label: `${fallbackName} (not on this board)`,
     }
   }, [assigneeId, boardMembers, todo?.assignee?.name])
+  const missingSprintOption = useMemo(() => {
+    if (!sprintId || !todo?.sprint) {
+      return null
+    }
+
+    const sprint = sprints.find((item) => String(item.id) === sprintId)
+    if (sprint) {
+      return null
+    }
+
+    return {
+      value: sprintId,
+      label: `${todo.sprint.name} (archived or unavailable)`,
+    }
+  }, [sprintId, sprints, todo?.sprint])
 
   const isPending =
     createMutation.isPending ||
@@ -320,6 +361,35 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
                 <p className="text-sm app-text-muted">Assignments are limited to current board members.</p>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Sprint</label>
+                <select
+                  value={sprintId}
+                  onChange={(e) => setSprintId(e.target.value)}
+                  className="app-input"
+                  aria-label="Sprint"
+                >
+                  <option value="">No sprint</option>
+                  {missingSprintOption ? (
+                    <option value={missingSprintOption.value}>{missingSprintOption.label}</option>
+                  ) : null}
+                  {sortedSprints.map((sprint) => {
+                    const isCurrentSelection = String(sprint.id) === sprintId
+                    const isArchived = Boolean(sprint.archived_at)
+
+                    return (
+                      <option key={sprint.id} value={sprint.id} disabled={isArchived && !isCurrentSelection}>
+                        {sprint.name}
+                        {isArchived ? ' (archived)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+                <p className="text-sm app-text-muted">
+                  Keep work in board-wide scope or attach it to one focused sprint.
+                </p>
+              </div>
+
               <label className="glass-panel flex items-center justify-between rounded-[1.3rem] p-4">
                 <div>
                   <p className="text-sm font-medium">Completion</p>
@@ -411,6 +481,12 @@ export default function TodoDrawer({ mode, boardId, todo, onClose }: TodoDrawerP
                 <span className="app-badge">
                   <UserRound className="h-3.5 w-3.5" />
                   {selectedAssigneeName}
+                </span>
+              ) : null}
+              {selectedSprint ? (
+                <span className="app-badge" style={selectedSprint.color ? { color: selectedSprint.color } : undefined}>
+                  <SprintIconGlyph icon={selectedSprint.icon} />
+                  {selectedSprint.name}
                 </span>
               ) : null}
               {selectedCategory ? (

@@ -4,84 +4,126 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import type { RefObject } from "react";
 import type { LabelBaseData } from "@/lib/types/labelTypes";
+import type { SprintBaseData } from "@/lib/types/sprintTypes";
 
-export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | null>) {
+export function useBoardRealtime(
+  organizationId: string,
+  boardId: string,
+  socketRef: RefObject<Socket | null>
+) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     const socket = socketRef.current;
-    if (!socket) return;
+    if (!socket || !organizationId || !boardId) return;
 
     const currentBoard = boardId;
+    const todoKey = ["todos", organizationId, currentBoard];
+    const labelKey = ["labels", organizationId, currentBoard];
+    const sprintKey = ["sprints", organizationId, currentBoard];
 
-    // --- Event handlers ---
     const handleTodoCreated = (todo: any) => {
       console.log("Realtime todo created received:", todo);
-      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
-        old ? [...old, todo] : [todo]
-      );
+      queryClient.setQueryData(todoKey, (old: any[]) => (old ? [...old, todo] : [todo]));
     };
 
     const handleTodoUpdated = (todo: any) => {
       console.log("Realtime todo updated received:", todo);
-      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
-        old ? old.map(t => (t.id === todo.id ? todo : t)) : [todo]
+      queryClient.setQueryData(todoKey, (old: any[]) =>
+        old ? old.map((item) => (item.id === todo.id ? todo : item)) : [todo]
       );
     };
 
     const handleTodoDeleted = ({ id }: any) => {
       console.log("Realtime todo deleted received:", id);
-      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
-        old ? old.filter(t => t.id !== id) : []
+      queryClient.setQueryData(todoKey, (old: any[]) =>
+        old ? old.filter((item) => item.id !== id) : []
       );
     };
 
     const handleLabelCreated = (label: LabelBaseData) => {
       console.log("Realtime label created received:", label);
-      queryClient.setQueryData(["labels", currentBoard], (old: LabelBaseData[]) =>
+      queryClient.setQueryData(labelKey, (old: LabelBaseData[]) =>
         old ? [...old, label] : [label]
       );
     };
 
     const handleLabelUpdated = (label: LabelBaseData) => {
       console.log("Realtime label updated received:", label);
-      queryClient.setQueryData(["labels", currentBoard], (old: LabelBaseData[]) =>
-        old ? old.map(l => (l.id === label.id ? label : l)) : [label]
+      queryClient.setQueryData(labelKey, (old: LabelBaseData[]) =>
+        old ? old.map((item) => (item.id === label.id ? label : item)) : [label]
       );
 
-      // Update todos that have this label
-      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
-        old ? old.map(todo => ({
-          ...todo,
-          labels: todo.labels?.map((l: any) => l.id === label.id ? label : l)
-        })) : []
+      queryClient.setQueryData(todoKey, (old: any[]) =>
+        old
+          ? old.map((todo) => ({
+              ...todo,
+              labels: todo.labels?.map((item: any) =>
+                item.id === label.id ? label : item
+              ),
+            }))
+          : []
       );
     };
 
     const handleLabelDeleted = ({ id }: { id: number }) => {
       console.log("Realtime label deleted received:", id);
-      queryClient.setQueryData(["labels", currentBoard], (old: LabelBaseData[]) =>
-        old ? old.filter(l => l.id !== id) : []
+      queryClient.setQueryData(labelKey, (old: LabelBaseData[]) =>
+        old ? old.filter((item) => item.id !== id) : []
       );
 
-      // Remove from all todos
-      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
-        old ? old.map(todo => ({
-          ...todo,
-          labels: todo.labels?.filter((l: any) => l.id !== id)
-        })) : []
+      queryClient.setQueryData(todoKey, (old: any[]) =>
+        old
+          ? old.map((todo) => ({
+              ...todo,
+              labels: todo.labels?.filter((item: any) => item.id !== id),
+            }))
+          : []
       );
     };
 
-    // --- Listen for all board events ---
+    const handleSprintCreated = (sprint: SprintBaseData) => {
+      console.log("Realtime sprint created received:", sprint);
+      queryClient.setQueryData(sprintKey, (old: SprintBaseData[]) =>
+        old ? [...old, sprint] : [sprint]
+      );
+    };
+
+    const handleSprintUpdated = (sprint: SprintBaseData) => {
+      console.log("Realtime sprint updated received:", sprint);
+      queryClient.setQueryData(sprintKey, (old: SprintBaseData[]) =>
+        old ? old.map((item) => (item.id === sprint.id ? sprint : item)) : [sprint]
+      );
+
+      queryClient.setQueryData(todoKey, (old: any[]) =>
+        old
+          ? old.map((todo) =>
+              todo.sprint_id === sprint.id
+                ? {
+                    ...todo,
+                    sprint: {
+                      id: sprint.id,
+                      name: sprint.name,
+                      color: sprint.color,
+                      icon: sprint.icon,
+                      archived_at: sprint.archived_at,
+                    },
+                  }
+                : todo
+            )
+          : []
+      );
+    };
+
     socket.on("board:todo:created", handleTodoCreated);
     socket.on("board:todo:updated", handleTodoUpdated);
     socket.on("board:todo:deleted", handleTodoDeleted);
     socket.on("board:label:created", handleLabelCreated);
     socket.on("board:label:updated", handleLabelUpdated);
     socket.on("board:label:deleted", handleLabelDeleted);
+    socket.on("board:sprint:created", handleSprintCreated);
+    socket.on("board:sprint:updated", handleSprintUpdated);
 
-    // --- Cleanup ---
     return () => {
       socket.off("board:todo:created", handleTodoCreated);
       socket.off("board:todo:updated", handleTodoUpdated);
@@ -89,6 +131,8 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
       socket.off("board:label:created", handleLabelCreated);
       socket.off("board:label:updated", handleLabelUpdated);
       socket.off("board:label:deleted", handleLabelDeleted);
+      socket.off("board:sprint:created", handleSprintCreated);
+      socket.off("board:sprint:updated", handleSprintUpdated);
     };
-  }, [boardId, queryClient, socketRef]);
+  }, [boardId, organizationId, queryClient, socketRef]);
 }
