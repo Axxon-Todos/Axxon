@@ -1,3 +1,4 @@
+// Boots the development database by waiting for Postgres, applying migrations, and seeding fresh instances.
 import { spawnSync } from "child_process";
 import { setTimeout as delay } from "timers/promises";
 import dotenv from "dotenv";
@@ -9,20 +10,64 @@ dotenv.config();
 
 const WAIT_INTERVAL_MS = 2000;
 const MAX_WAIT_ATTEMPTS = 30;
+const DEFAULT_PG_PORT = 5432;
+const PRIMARY_DB_HOST = process.env.PG_HOST;
+const FALLBACK_DB_HOST = process.env.PG_HOST_FALLBACK;
+let activeDbHost = PRIMARY_DB_HOST;
 
-const config: Knex.Config = {
-  client: "pg",
-  connection: process.env.PG_CONNECTION_STRING || {
-    host: process.env.PG_HOST,
-    port: process.env.PG_PORT ? Number(process.env.PG_PORT) : 5432,
-    user: process.env.PG_USER,
-    password: process.env.PG_PASS,
-    database: process.env.PG_DB,
-  },
-};
+function createConnectionConfig(): Knex.Config {
+  if (process.env.PG_CONNECTION_STRING) {
+    return {
+      client: "pg",
+      connection: process.env.PG_CONNECTION_STRING,
+    };
+  }
+
+  return {
+    client: "pg",
+    connection: {
+      host: activeDbHost,
+      port: process.env.PG_PORT ? Number(process.env.PG_PORT) : DEFAULT_PG_PORT,
+      user: process.env.PG_USER,
+      password: process.env.PG_PASS,
+      database: process.env.PG_DB,
+    },
+  };
+}
 
 function createDbConnection() {
-  return knex(config);
+  return knex(createConnectionConfig());
+}
+
+function isHostnameLookupError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOTFOUND"
+  );
+}
+
+function canUseFallbackHost() {
+  return Boolean(
+    !process.env.PG_CONNECTION_STRING &&
+      FALLBACK_DB_HOST &&
+      PRIMARY_DB_HOST &&
+      activeDbHost === PRIMARY_DB_HOST,
+  );
+}
+
+function switchToFallbackHost() {
+  if (!FALLBACK_DB_HOST) {
+    return false;
+  }
+
+  activeDbHost = FALLBACK_DB_HOST;
+  process.env.PG_HOST = activeDbHost;
+  console.warn(
+    `[db:bootstrap] Falling back to Postgres host "${activeDbHost}" after DNS lookup failed for "${PRIMARY_DB_HOST}".`,
+  );
+  return true;
 }
 
 async function waitForDatabase() {
@@ -34,6 +79,11 @@ async function waitForDatabase() {
       await db.raw("select 1");
       ready = true;
     } catch (error) {
+      if (isHostnameLookupError(error) && canUseFallbackHost() && switchToFallbackHost()) {
+        console.log("[db:bootstrap] Retrying Postgres connection with fallback host.");
+        continue;
+      }
+
       if (attempt === MAX_WAIT_ATTEMPTS) {
         throw error;
       }
