@@ -3,6 +3,7 @@
 import dayjs from 'dayjs'
 import { AlertCircle, CheckCircle2, Clock3, UserRound } from 'lucide-react'
 
+import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
 const priorityMap: Record<number, { label: string; color: string }> = {
@@ -54,6 +55,12 @@ export default function TodoCard({ todo, labelControl, elevated = false }: TodoC
             <span className="app-badge" style={isOverdue ? { color: '#f87171' } : undefined}>
               <Clock3 className="h-3.5 w-3.5" />
               {dueDate.format('MMM D')}
+            </span>
+          ) : null}
+          {todo.sprint?.name ? (
+            <span className="app-badge" style={todo.sprint.color ? { color: todo.sprint.color } : undefined}>
+              <SprintIconGlyph icon={todo.sprint.icon} />
+              <span className="truncate">{todo.sprint.name}</span>
             </span>
           ) : null}
           {todo.is_complete ? (

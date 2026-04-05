@@ -3,6 +3,7 @@
 ## Project Structure & Module Organization
 `axxon/` contains the application code. Use `axxon/src/app` for Next.js App Router pages, layouts, and `api/**/route.ts` handlers. Shared UI lives in `axxon/src/components`, client state in `axxon/src/context`, and reusable hooks in `axxon/src/hooks`. Core business logic is grouped under `axxon/src/lib` (`api`, `controllers`, `models`, `mutations`, `types`, `utils`), with database migrations and seeds in `axxon/src/lib/db/`. Put static assets in `axxon/public/`. The repository root is mostly documentation and metadata.
 Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused by multiple features.
+Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, while sprint routing should live under `axxon/src/app/dashboard/[boardId]/sprints`. Board-scoped sprint persistence belongs in the existing `src/lib` layers and should extend todo payloads through shared types instead of adding parallel view-only data shapes.
 
 ## Build, Test, and Development Commands
 Run commands from `axxon/`.
@@ -22,6 +23,7 @@ Knex is used at the model and migrations layer. Ensure proper use of transaction
 
 ## Testing Guidelines
 Vitest is available for backend and frontend suites (`pnpm test`, `pnpm test:backend`, `pnpm test:frontend`). Every change should include `pnpm lint` plus targeted test execution and manual verification of the affected flow, especially auth, board CRUD, analytics, migrations, and websocket behavior. Place tests near the feature in `src/` and use `*.test.ts` or `*.test.tsx`.
+For sprint work, cover migration behavior, board-scoped sprint CRUD, todo sprint assignment rules, and realtime updates that keep sprint-filtered board views in sync.
 
 ## Commit & Pull Request Guidelines
 Recent history favors short, single-purpose commit subjects; use imperative wording and prefer Conventional Commit prefixes when they fit, for example `feat: add board accent color`. Keep each commit focused. PRs should summarize user-visible changes, list schema or environment updates, link the relevant issue when available, and include screenshots or recordings for UI work. Always note the manual test steps you ran.

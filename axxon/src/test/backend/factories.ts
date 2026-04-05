@@ -5,6 +5,7 @@ let boardSequence = 1;
 let categorySequence = 1;
 let labelSequence = 1;
 let todoSequence = 1;
+let sprintSequence = 1;
 let conversationSequence = 1;
 
 export async function createUser(overrides: Partial<Record<'first_name' | 'last_name' | 'email' | 'avatar_url', string | null>> = {}) {
@@ -108,6 +109,7 @@ export async function createLabelRecord({
 export async function createTodoRecord({
   boardId,
   categoryId,
+  sprintId = null,
   title,
   description = null,
   dueDate = null,
@@ -117,6 +119,7 @@ export async function createTodoRecord({
 }: {
   boardId: number;
   categoryId: number;
+  sprintId?: number | null;
   title?: string;
   description?: string | null;
   dueDate?: string | null;
@@ -135,12 +138,51 @@ export async function createTodoRecord({
       assignee_id: assigneeId,
       priority,
       is_complete: isComplete,
+      sprint_id: sprintId,
       created_at: db.fn.now(),
       updated_at: db.fn.now(),
     })
     .returning('*');
 
   return todo;
+}
+
+export async function createSprintRecord({
+  boardId,
+  name,
+  description = null,
+  startDate = '2030-01-01',
+  endDate = '2030-01-14',
+  color = '#2563eb',
+  icon = 'flag',
+  archivedAt = null,
+}: {
+  boardId: number;
+  name?: string;
+  description?: string | null;
+  startDate?: string;
+  endDate?: string;
+  color?: string | null;
+  icon?: string | null;
+  archivedAt?: string | null;
+}) {
+  const sequence = sprintSequence++;
+  const [sprint] = await db('sprints')
+    .insert({
+      board_id: boardId,
+      name: name ?? `Sprint ${sequence}`,
+      description,
+      start_date: startDate,
+      end_date: endDate,
+      color,
+      icon,
+      archived_at: archivedAt,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return sprint;
 }
 
 export async function addTodoLabel(todoId: number, labelId: number) {

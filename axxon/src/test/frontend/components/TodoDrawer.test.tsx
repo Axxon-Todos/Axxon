@@ -6,6 +6,7 @@ const {
   mockedFetchCategories,
   mockedFetchBoardMembers,
   mockedFetchLabels,
+  mockedFetchSprints,
   mockedCreateTodo,
   mockedUpdateTodoById,
   mockedDeleteTodoById,
@@ -15,6 +16,7 @@ const {
   mockedFetchCategories: vi.fn(),
   mockedFetchBoardMembers: vi.fn(),
   mockedFetchLabels: vi.fn(),
+  mockedFetchSprints: vi.fn(),
   mockedCreateTodo: vi.fn(),
   mockedUpdateTodoById: vi.fn(),
   mockedDeleteTodoById: vi.fn(),
@@ -32,6 +34,10 @@ vi.mock('@/lib/api/boardMembers/getBoardMembers', () => ({
 
 vi.mock('@/lib/api/labels/getLabels', () => ({
   fetchLabels: mockedFetchLabels,
+}));
+
+vi.mock('@/lib/api/sprints/getSprints', () => ({
+  fetchSprints: mockedFetchSprints,
 }));
 
 vi.mock('@/lib/api/todos/createTodo', () => ({
@@ -85,6 +91,34 @@ describe('TodoDrawer', () => {
       },
     ]);
     mockedFetchLabels.mockResolvedValue([]);
+    mockedFetchSprints.mockResolvedValue([
+      {
+        id: 7,
+        board_id: 1,
+        name: 'Sprint 7',
+        description: null,
+        start_date: '2030-01-01',
+        end_date: '2030-01-14',
+        color: '#2563eb',
+        icon: 'flag',
+        archived_at: null,
+        created_at: '2030-01-01T00:00:00.000Z',
+        updated_at: '2030-01-01T00:00:00.000Z',
+      },
+      {
+        id: 8,
+        board_id: 1,
+        name: 'Sprint 8',
+        description: null,
+        start_date: '2030-02-01',
+        end_date: '2030-02-14',
+        color: '#10b981',
+        icon: 'rocket',
+        archived_at: '2030-02-15T00:00:00.000Z',
+        created_at: '2030-02-01T00:00:00.000Z',
+        updated_at: '2030-02-15T00:00:00.000Z',
+      },
+    ]);
     mockedUseToggleTodoLabel.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -164,6 +198,26 @@ describe('TodoDrawer', () => {
         1,
         expect.objectContaining({
           assignee_id: 3,
+        })
+      );
+    });
+  });
+
+  it('preselects and submits the current sprint for new todos', async () => {
+    renderWithProviders(<TodoDrawer mode="create" boardId={1} initialSprintId={7} onClose={vi.fn()} />);
+
+    expect(await screen.findByRole('option', { name: 'Sprint 7' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText('Ship dashboard polish'), {
+      target: { value: 'Sprint scoped todo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Todo' }));
+
+    await waitFor(() => {
+      expect(mockedCreateTodo).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          sprint_id: 7,
         })
       );
     });

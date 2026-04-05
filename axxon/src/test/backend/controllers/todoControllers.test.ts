@@ -91,12 +91,25 @@ describe('todoControllers', () => {
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
+  it('maps archived sprint assignment errors to a bad request during creation', async () => {
+    mockedCreateTodo.mockRejectedValue(new Error('Archived sprints cannot accept new todos'));
+
+    await expect(
+      createTodo({
+        boardId: 1,
+        sessionUserId: 7,
+        data: { title: 'Ship fix', sprint_id: 12 },
+      })
+    ).rejects.toBeInstanceOf(BadRequestError);
+  });
+
   it('filters unknown update keys and publishes the hydrated todo', async () => {
-    mockedUpdateTodo.mockResolvedValue({ id: 14, board_id: 5, title: 'Updated' });
+    mockedUpdateTodo.mockResolvedValue({ id: 14, board_id: 5, title: 'Updated', sprint_id: 8 });
     mockedGetTodoByIdWithLabels.mockResolvedValue({
       id: 14,
       board_id: 5,
       title: 'Updated',
+      sprint_id: 8,
       labels: [],
     });
 
@@ -107,6 +120,7 @@ describe('todoControllers', () => {
       data: {
         title: 'Updated',
         priority: 4,
+        sprint_id: 8,
         ignored: 'value',
       } as unknown as Parameters<typeof updateTodo>[0]['data'],
     });
@@ -116,6 +130,7 @@ describe('todoControllers', () => {
       board_id: 5,
       title: 'Updated',
       priority: 4,
+      sprint_id: 8,
     });
     expect(mockedPublishBoardUpdate).toHaveBeenCalledWith('5', {
       type: 'todo:updated',

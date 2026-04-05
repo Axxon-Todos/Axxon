@@ -19,7 +19,12 @@ export default function GlobalOverlayHost() {
         title="Create Todo"
         description="Capture the next step with priority, category, due date, and labels without leaving the board."
       >
-        <TodoDrawer mode="create" boardId={modalState.payload.boardId} onClose={closeModal} />
+        <TodoDrawer
+          mode="create"
+          boardId={modalState.payload.boardId}
+          initialSprintId={modalState.payload.sprintId ?? null}
+          onClose={closeModal}
+        />
       </SideDrawer>
     )
   }

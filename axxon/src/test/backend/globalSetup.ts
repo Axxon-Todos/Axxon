@@ -21,6 +21,10 @@ export default async function globalSetup() {
   applyBackendTestEnv();
   const dbConfig = getBackendTestDbConfig();
 
+  // Knex loads migrations through CommonJS in the backend test bootstrap.
+  // Register ts-node so TypeScript migration files can be required there.
+  await import('ts-node/register/transpile-only');
+
   const adminDb = knex({
     client: 'pg',
     connection: dbConfig.adminConnectionString,

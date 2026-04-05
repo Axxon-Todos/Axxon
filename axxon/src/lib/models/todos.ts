@@ -7,11 +7,11 @@ import type {
   GetTodoByNameData,
   ListAllTodosData,
   TodoBaseData,
-  UpdateTodoData,
-  GetTodoByCompletionData,
-  GetTodoByAssigneeData,
-  GetTodoByStatusData,
-  SearchTodoByTitle,
+    UpdateTodoData,
+    GetTodoByCompletionData,
+    GetTodoByAssigneeData,
+    GetTodoByStatusData,
+    SearchTodoByTitle,
 } from '../types/todoTypes'
 
 export class Todos {
@@ -55,6 +55,28 @@ export class Todos {
             throw new Error('Assignee must be a member of the board');
         }
     };
+
+    static validateSprintAssignment = async (
+        trx: Knex.Transaction,
+        boardId: number,
+        sprintId: number | null | undefined
+    ) => {
+        if (sprintId == null) {
+            return;
+        }
+
+        const sprint = await trx('sprints')
+            .where({ id: sprintId, board_id: boardId })
+            .first();
+
+        if (!sprint) {
+            throw new Error('Sprint must belong to the board');
+        }
+
+        if (sprint.archived_at) {
+            throw new Error('Archived sprints cannot accept new todos');
+        }
+    };
     
     static createTodo = async (data: CreateTodoData): Promise<TodoBaseData> => {
         const {
@@ -65,6 +87,7 @@ export class Todos {
             assignee_id,
             priority,
             category_id,
+            sprint_id,
             is_complete
         } = data;
 
@@ -86,6 +109,7 @@ export class Todos {
 
             await this.validateCompletionCategory(trx, board_id, finalCategoryId, is_complete);
             await this.validateAssigneeMembership(trx, board_id, assignee_id);
+            await this.validateSprintAssignment(trx, board_id, sprint_id);
 
             const [todo] = await trx('todos')
                 .insert({
@@ -96,6 +120,7 @@ export class Todos {
                     assignee_id: assignee_id ?? null,
                     priority: priority ?? null,
                     category_id: finalCategoryId,
+                    sprint_id: sprint_id ?? null,
                     is_complete: is_complete ?? false
                 })
                 .returning('*');
@@ -128,9 +153,13 @@ export class Todos {
             const nextAssigneeId = Object.prototype.hasOwnProperty.call(updateData, 'assignee_id')
                 ? updateData.assignee_id
                 : currentTodo.assignee_id;
+            const nextSprintId = Object.prototype.hasOwnProperty.call(updateData, 'sprint_id')
+                ? updateData.sprint_id
+                : currentTodo.sprint_id;
 
             await this.validateCompletionCategory(trx, board_id, nextCategoryId, nextIsComplete);
             await this.validateAssigneeMembership(trx, board_id, nextAssigneeId);
+            await this.validateSprintAssignment(trx, board_id, nextSprintId);
 
             const [todo] = await trx('todos')
                 .where({id, board_id})

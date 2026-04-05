@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { Socket } from "socket.io-client";
 import type { RefObject } from "react";
 import type { LabelBaseData } from "@/lib/types/labelTypes";
+import type { SprintBaseData } from "@/lib/types/sprintTypes";
 
 export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | null>) {
   const queryClient = useQueryClient();
@@ -73,6 +74,37 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
       );
     };
 
+    const handleSprintCreated = (sprint: SprintBaseData) => {
+      console.log("Realtime sprint created received:", sprint);
+      queryClient.setQueryData(["sprints", currentBoard], (old: SprintBaseData[]) =>
+        old ? [...old, sprint] : [sprint]
+      );
+    };
+
+    const handleSprintUpdated = (sprint: SprintBaseData) => {
+      console.log("Realtime sprint updated received:", sprint);
+      queryClient.setQueryData(["sprints", currentBoard], (old: SprintBaseData[]) =>
+        old ? old.map(item => (item.id === sprint.id ? sprint : item)) : [sprint]
+      );
+
+      queryClient.setQueryData(["todos", currentBoard], (old: any[]) =>
+        old ? old.map(todo => (
+          todo.sprint_id === sprint.id
+            ? {
+                ...todo,
+                sprint: {
+                  id: sprint.id,
+                  name: sprint.name,
+                  color: sprint.color,
+                  icon: sprint.icon,
+                  archived_at: sprint.archived_at,
+                },
+              }
+            : todo
+        )) : []
+      );
+    };
+
     // --- Listen for all board events ---
     socket.on("board:todo:created", handleTodoCreated);
     socket.on("board:todo:updated", handleTodoUpdated);
@@ -80,6 +112,8 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
     socket.on("board:label:created", handleLabelCreated);
     socket.on("board:label:updated", handleLabelUpdated);
     socket.on("board:label:deleted", handleLabelDeleted);
+    socket.on("board:sprint:created", handleSprintCreated);
+    socket.on("board:sprint:updated", handleSprintUpdated);
 
     // --- Cleanup ---
     return () => {
@@ -89,6 +123,8 @@ export function useBoardRealtime(boardId: string, socketRef: RefObject<Socket | 
       socket.off("board:label:created", handleLabelCreated);
       socket.off("board:label:updated", handleLabelUpdated);
       socket.off("board:label:deleted", handleLabelDeleted);
+      socket.off("board:sprint:created", handleSprintCreated);
+      socket.off("board:sprint:updated", handleSprintUpdated);
     };
   }, [boardId, queryClient, socketRef]);
 }

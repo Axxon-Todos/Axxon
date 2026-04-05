@@ -10,7 +10,7 @@ export type ModalType = 'ADD_TODO' | 'UPDATE_TODO' | 'CATEGORY'
 export type ModalVariant = 'modal' | 'drawer'
 
 type ModalPayloadMap = {
-  ADD_TODO: { boardId: number }
+  ADD_TODO: { boardId: number; sprintId?: number | null }
   UPDATE_TODO: { boardId: number; todo: TodoWithLabels }
   CATEGORY: CategoryBaseData
 }

@@ -3,10 +3,14 @@
 import Link from 'next/link'
 import { BarChart3, CalendarClock, Layers3, ListTodo, Settings2, Tags } from 'lucide-react'
 
+import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
+
 import BoardViewSwitcher from './BoardViewSwitcher'
 
 import type { BoardBaseData } from '@/lib/types/boardTypes'
+import type { SprintBaseData } from '@/lib/types/sprintTypes'
 import type { BoardDisplayView } from '@/lib/types/boardViewTypes'
+import { getSprintStatus, getSprintStatusLabel } from '@/lib/utils/sprintStatus'
 
 export default function BoardHeader({
   boardId,
@@ -21,6 +25,8 @@ export default function BoardHeader({
   onAddTodo,
   isManagingCategories,
   onToggleManageCategories,
+  selectedSprint,
+  canAddTodo,
 }: {
   boardId: string
   board: BoardBaseData
@@ -34,8 +40,11 @@ export default function BoardHeader({
   onAddTodo: () => void
   isManagingCategories: boolean
   onToggleManageCategories: () => void
+  selectedSprint?: SprintBaseData | null
+  canAddTodo: boolean
 }) {
   const accentColor = board.color || '#2563eb'
+  const sprintStatus = selectedSprint ? getSprintStatus(selectedSprint) : null
 
   return (
     <section
@@ -47,7 +56,7 @@ export default function BoardHeader({
       <div className="flex flex-col gap-9">
         <div className="flex flex-col gap-9 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
-            <p className="app-kicker">Board Workspace</p>
+            <p className="app-kicker">{selectedSprint ? 'Sprint Workspace' : 'Board Workspace'}</p>
             <div className="mt-3 flex items-center gap-3">
               <span
                 className="h-4 w-4 rounded-full"
@@ -59,8 +68,9 @@ export default function BoardHeader({
               <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{board.name}</h1>
             </div>
             <p className="mt-4 max-w-2xl text-base leading-7 app-text-muted">
-              Switch between list, kanban, and calendar layouts without leaving the board or losing the same
-              task workflow controls.
+              {selectedSprint
+                ? `Focus this board on ${selectedSprint.name}. Only sprint-assigned work appears here while the same board views and workflow controls stay available.`
+                : 'Switch between list, kanban, and calendar layouts without leaving the board or losing the same task workflow controls.'}
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
@@ -76,13 +86,24 @@ export default function BoardHeader({
                 <Tags className="h-3.5 w-3.5" />
                 {labelCount} labels
               </span>
+              {selectedSprint ? (
+                <span className="app-badge" style={selectedSprint.color ? { color: selectedSprint.color } : undefined}>
+                  <SprintIconGlyph icon={selectedSprint.icon} />
+                  {selectedSprint.name}
+                </span>
+              ) : null}
+              {sprintStatus ? <span className="app-badge">{getSprintStatusLabel(sprintStatus)}</span> : null}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <button onClick={onAddTodo} className="glass-button glass-button-primary">
+            <button
+              onClick={onAddTodo}
+              className={`glass-button ${canAddTodo ? 'glass-button-primary' : ''}`}
+              disabled={!canAddTodo}
+            >
               <ListTodo className="h-4 w-4" />
-              Add Todo
+              {canAddTodo ? 'Add Todo' : 'Sprint Archived'}
             </button>
             <Link href={`/dashboard/${boardId}/analytics`} className="glass-button">
               <BarChart3 className="h-4 w-4" />

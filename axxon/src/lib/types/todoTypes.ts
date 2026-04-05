@@ -1,4 +1,5 @@
 import type { LabelBaseData } from "./labelTypes";
+import type { SprintSummary } from "./sprintTypes";
 
 export type TodoAssigneeSummary = {
   id: number;
@@ -15,6 +16,7 @@ export type TodoBaseData = {
     assignee_id?: number | null
     priority?: number
     category_id?: number
+    sprint_id?: number | null
     is_complete?: boolean
     created_at?: string
     updated_at?: string
@@ -28,11 +30,12 @@ export type CreateTodoData = {
   assignee_id?: number | null;
   priority?: number;
   category_id?: number;
+  sprint_id?: number | null;
   is_complete?: boolean;
 };
 
 export type DeleteTodoData = Pick<TodoBaseData, 'id' | 'board_id'>;
-export type UpdateTodoData = Partial<Pick<TodoBaseData, 'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'is_complete'>> & {
+export type UpdateTodoData = Partial<Pick<TodoBaseData, 'title' | 'description' | 'due_date' | 'assignee_id' | 'priority' | 'category_id' | 'sprint_id' | 'is_complete'>> & {
   id: number;
   board_id: number;
 };
@@ -46,4 +49,5 @@ export type SearchTodoByTitle = Pick<TodoBaseData,'board_id'> & {keyword: string
 export type TodoWithLabels = TodoBaseData & {
   labels: LabelBaseData[];
   assignee?: TodoAssigneeSummary | null;
+  sprint?: SprintSummary | null;
 };

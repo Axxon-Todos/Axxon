@@ -6,6 +6,7 @@ export const TEST_TABLES = [
   'conversations',
   'todo_labels',
   'todos',
+  'sprints',
   'labels',
   'categories',
   'board_members',
