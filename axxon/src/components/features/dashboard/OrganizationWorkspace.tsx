@@ -1,3 +1,4 @@
+// Renders the org workspace using the shared hero layout and refreshed product surfaces.
 'use client';
 
 import { useState } from 'react';
@@ -9,7 +10,11 @@ import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
 import EditOrganizationModal from '@/components/features/dashboard/EditOrganizationModal';
 import InviteOrganizationMembersModal from '@/components/features/dashboard/InviteOrganizationMembersModal';
 import OrganizationGitHubPanel from '@/components/features/dashboard/OrganizationGitHubPanel';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import PageHero from '@/components/ui/PageHero';
+import Surface from '@/components/ui/Surface';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
 import { getUserId } from '@/lib/api/users/getUserId';
@@ -45,11 +50,11 @@ export default function OrganizationWorkspace({
 
   if (isOrganizationLoading || !organization) {
     return (
-      <div className="mx-auto max-w-[1480px]">
-        <section className="glass-panel-strong rounded-[2rem] p-8">
+      <div className="app-page">
+        <Surface variant="strong" className="rounded-[2rem] p-8">
           <p className="app-kicker">Organization</p>
           <h1 className="mt-3 text-3xl font-semibold">Loading organization...</h1>
-        </section>
+        </Surface>
       </div>
     );
   }
@@ -60,104 +65,76 @@ export default function OrganizationWorkspace({
 
   return (
     <>
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
-        <section
-          className="glass-panel-strong rounded-[2rem] p-8 sm:p-10"
-          style={{
-            background: `linear-gradient(135deg, color-mix(in srgb, ${organization.color || '#0f766e'} 16%, var(--app-panel-strong)), var(--app-panel-strong))`,
-          }}
-        >
-          <p className="app-kicker">Organization Workspace</p>
-          <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-4 w-4 rounded-full"
-                  style={{ backgroundColor: organization.color || '#0f766e' }}
-                />
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                  {organization.name}
-                </h1>
-              </div>
-              <p className="mt-4 max-w-3xl text-base leading-7 app-text-muted">
-                {organization.description ||
-                  'Top-level workspace for coordinating members, board execution surfaces, connected repositories, and future agent history.'}
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-2">
-                <span className="app-badge">
-                  <FolderGit2 className="h-3.5 w-3.5" />
-                  {organization.accessible_board_count} boards in scope
-                </span>
-                <span className="app-badge">
-                  <Users2 className="h-3.5 w-3.5" />
-                  {organization.member_count} members
-                </span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => setIsCreateBoardModalOpen(true)}
-                className="glass-button glass-button-primary"
-              >
+      <div className="app-page">
+        <PageHero
+          kicker="Organization Workspace"
+          title={organization.name}
+          description={
+            organization.description ||
+            'Top-level workspace for coordinating members, board execution surfaces, connected repositories, and future agent history.'
+          }
+          accentColor={organization.color || '#2fd087'}
+          actions={
+            <>
+              <Button variant="primary" onClick={() => setIsCreateBoardModalOpen(true)}>
                 Create Board
-              </button>
+              </Button>
               {isOwner ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditOrganizationModalOpen(true)}
-                  className="glass-button"
-                >
+                <Button onClick={() => setIsEditOrganizationModalOpen(true)}>
                   Edit Organization
-                </button>
+                </Button>
               ) : null}
-            </div>
-          </div>
-        </section>
+            </>
+          }
+          badges={
+            <>
+              <Badge>
+                <FolderGit2 className="h-3.5 w-3.5" />
+                {organization.accessible_board_count} boards in scope
+              </Badge>
+              <Badge>
+                <Users2 className="h-3.5 w-3.5" />
+                {organization.member_count} members
+              </Badge>
+            </>
+          }
+        />
 
-        <section className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
+        <Surface variant="strong" className="rounded-[2rem] p-6 sm:p-8">
           <BoardList organizationId={organizationId} />
-        </section>
+        </Surface>
 
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <OrganizationGitHubPanel
-            organizationId={organizationId}
-            isOwner={isOwner}
-          />
+          <OrganizationGitHubPanel organizationId={organizationId} isOwner={isOwner} />
 
-          <article className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
+          <Surface variant="strong" className="rounded-[2rem] p-6 sm:p-8">
             <p className="app-kicker">Members</p>
             <h2 className="mt-3 text-2xl font-semibold tracking-tight">
               Organization access
             </h2>
             {isOwner ? (
               <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsInviteMembersModalOpen(true)}
-                  className="glass-button"
-                >
+                <Button onClick={() => setIsInviteMembersModalOpen(true)}>
                   Invite Members
-                </button>
+                </Button>
               </div>
             ) : null}
 
             <div className="mt-6 space-y-3">
               {isMembersLoading ? (
-                <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
+                <Surface variant="default" className="rounded-2xl px-4 py-3 text-sm app-text-muted">
                   Loading members...
-                </div>
+                </Surface>
               ) : members.length === 0 ? (
-                <div className="glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted">
+                <Surface variant="default" className="rounded-2xl px-4 py-3 text-sm app-text-muted">
                   No members yet.
-                </div>
+                </Surface>
               ) : (
                 members.map((member) => (
-                  <div
+                  <Surface
                     key={member.id}
-                    className="glass-panel flex items-center justify-between rounded-2xl px-4 py-3"
+                    variant="default"
+                    className="flex items-center justify-between rounded-2xl px-4 py-3"
                   >
                     <div>
                       <p className="font-medium">
@@ -165,12 +142,12 @@ export default function OrganizationWorkspace({
                       </p>
                       <p className="text-sm app-text-muted">{member.email}</p>
                     </div>
-                    <span className="app-badge">{member.role}</span>
-                  </div>
+                    <Badge>{member.role}</Badge>
+                  </Surface>
                 ))
               )}
             </div>
-          </article>
+          </Surface>
         </section>
       </div>
 
