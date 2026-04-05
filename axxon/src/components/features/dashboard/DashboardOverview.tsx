@@ -1,12 +1,18 @@
+// Renders the top-level organization dashboard and introduces the new shared hero and metrics styling.
 'use client';
 
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FolderGit2, ShieldCheck, Users2 } from 'lucide-react';
 
-import Modal from '@/components/ui/Modal';
 import CreateOrganizationForm from '@/components/features/dashboard/CreateOrganizationForm';
 import OrganizationList from '@/components/features/dashboard/OrganizationList';
+import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import Modal from '@/components/ui/Modal';
+import PageHero from '@/components/ui/PageHero';
+import Surface from '@/components/ui/Surface';
 import { fetchOrganizations } from '@/lib/api/organizations/getOrganizations';
 import { getUserId } from '@/lib/api/users/getUserId';
 
@@ -28,14 +34,14 @@ export default function DashboardOverview() {
 
   if (!isUserLoading && !userId) {
     return (
-      <div className="mx-auto max-w-[1480px]">
-        <section className="glass-panel-strong rounded-[2rem] p-8">
+      <div className="app-page">
+        <Surface variant="strong" className="rounded-[2rem] p-8">
           <p className="app-kicker">Organizations</p>
           <h1 className="mt-3 text-3xl font-semibold">Sign in to access your organizations</h1>
           <p className="mt-3 max-w-2xl app-text-muted">
-            Organization boundaries now sit above boards so repo context, members, and agent work stay coordinated.
+            Organization boundaries sit above boards so repo context, members, and AI work stay coordinated.
           </p>
-        </section>
+        </Surface>
       </div>
     );
   }
@@ -51,29 +57,31 @@ export default function DashboardOverview() {
 
   return (
     <>
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
-        <section className="glass-panel-strong rounded-[2rem] p-8 sm:p-10">
-          <p className="app-kicker">Organizations</p>
-          <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                Choose the organization boundary before you dive into boards.
-              </h1>
-              <p className="mt-4 text-base leading-7 app-text-muted">
-                Axxon treats organizations as the top-level workspace. Boards live inside those orgs so members, repo context, and AI-assisted work stay aligned in one place.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsCreateModalOpen(true)}
-              className="glass-button glass-button-primary"
-            >
+      <div className="app-page">
+        <PageHero
+          kicker="Organizations"
+          title="Choose the organization boundary before you enter execution."
+          description="Axxon treats organizations as the top-level workspace. Boards live inside those orgs so members, repo context, and AI-assisted work stay aligned in one system."
+          accentColor="#2fd087"
+          actions={
+            <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
               Create Organization
-            </button>
-          </div>
-
-          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            </Button>
+          }
+          badges={
+            <>
+              <Badge>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Org-first architecture
+              </Badge>
+              <Badge>
+                <FolderGit2 className="h-3.5 w-3.5" />
+                Repo-aware workspaces
+              </Badge>
+            </>
+          }
+        >
+          <div className="grid gap-4 md:grid-cols-3">
             <MetricCard
               label="Organizations"
               value={organizations.length}
@@ -90,9 +98,9 @@ export default function DashboardOverview() {
               icon={<Users2 className="h-5 w-5" />}
             />
           </div>
-        </section>
+        </PageHero>
 
-        <section className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">
+        <Surface variant="strong" className="rounded-[2rem] p-6 sm:p-8">
           <div className="mb-6">
             <p className="app-kicker">Directory</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight">
@@ -104,7 +112,7 @@ export default function DashboardOverview() {
           </div>
 
           <OrganizationList />
-        </section>
+        </Surface>
       </div>
 
       <Modal
@@ -125,10 +133,10 @@ function MetricCard({
 }: {
   label: string;
   value: number;
-  icon: React.ReactNode;
+  icon: ReactNode;
 }) {
   return (
-    <article className="glass-panel rounded-[1.5rem] p-5">
+    <Surface variant="default" className="rounded-[1.5rem] p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium app-text-muted">{label}</p>
@@ -141,6 +149,6 @@ function MetricCard({
           {icon}
         </span>
       </div>
-    </article>
+    </Surface>
   );
 }

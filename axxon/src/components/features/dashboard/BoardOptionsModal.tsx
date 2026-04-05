@@ -1,9 +1,13 @@
+// Presents board-level quick actions inside a branded modal surface for settings, edits, invites, and deletion.
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import { PencilLine, Settings2, Trash2, UserPlus, X } from "lucide-react";
+import { buttonClassName } from "@/components/ui/Button";
+import { surfaceClassName } from "@/components/ui/Surface";
 import type { UpdateBoard } from "@/lib/types/boardTypes";
 
 type BoardOptionsModalProps = {
@@ -51,7 +55,7 @@ export default function BoardOptionsModal({
   }, [onClose]);
 
   const boardName = board.name || "Untitled Board";
-  const boardColor = board.color || "#0f172a";
+  const boardColor = board.color || "#15784e";
 
   return createPortal(
     <div
@@ -67,7 +71,7 @@ export default function BoardOptionsModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={PANEL_TRANSITION}
-        className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+        className="absolute inset-0 bg-[rgba(2,8,6,0.72)] backdrop-blur-md"
         onClick={onClose}
       />
 
@@ -77,33 +81,34 @@ export default function BoardOptionsModal({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 10, scale: 0.98 }}
         transition={PANEL_TRANSITION}
-        className="relative z-10 w-full max-w-lg overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(241,245,249,0.96))] text-slate-950 shadow-[0_32px_90px_-38px_rgba(15,23,42,0.72)]"
+        className={surfaceClassName({
+          variant: "strong",
+          className: "relative z-10 w-full max-w-lg overflow-hidden rounded-[28px] p-6 sm:p-7",
+        })}
       >
         <div
-          className="absolute inset-x-0 top-0 h-28 opacity-90"
+          className="absolute inset-x-0 top-0 h-32 opacity-90"
           style={{
-            background: `linear-gradient(135deg, ${boardColor}, rgba(15, 23, 42, 0.12))`,
+            background: `linear-gradient(135deg, color-mix(in srgb, ${boardColor} 34%, transparent), transparent)`,
           }}
         />
 
-        <div className="relative p-6 sm:p-7">
+        <div className="relative">
           <div className="flex items-start justify-between gap-4">
             <div className="flex min-w-0 items-center gap-4">
               <div
-                className="h-12 w-12 shrink-0 rounded-2xl border border-white/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]"
+                className="h-12 w-12 shrink-0 rounded-2xl border border-[var(--app-border-strong)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                 style={{ backgroundColor: boardColor }}
               />
               <div className="min-w-0">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-500">
-                  Board actions
-                </p>
+                <p className="app-kicker">Board actions</p>
                 <h2
                   id="board-options-title"
-                  className="mt-1 break-words text-2xl font-semibold tracking-tight text-slate-950"
+                  className="mt-2 break-words text-2xl font-semibold tracking-tight"
                 >
                   {boardName}
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-2 text-sm app-text-muted">
                   Manage this board, invite collaborators, or update its details.
                 </p>
               </div>
@@ -113,7 +118,7 @@ export default function BoardOptionsModal({
               type="button"
               aria-label="Close board options"
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200/90 bg-white/75 text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40"
+              className={buttonClassName({ size: "icon" })}
             >
               <X className="h-4 w-4" />
             </button>
@@ -124,7 +129,7 @@ export default function BoardOptionsModal({
               title="Board settings"
               description="Review access, board members, and repository links."
               icon={<Settings2 className="h-5 w-5" />}
-              iconClassName="bg-sky-500/[0.14] text-sky-700"
+              iconClassName="bg-[color-mix(in_srgb,var(--app-accent)_16%,transparent)] text-[var(--app-accent)]"
               onClick={() => {
                 onSettings();
                 onClose();
@@ -135,7 +140,7 @@ export default function BoardOptionsModal({
               title="Edit board"
               description="Rename the board, change its color, or update its details."
               icon={<PencilLine className="h-5 w-5" />}
-              iconClassName="bg-cyan-400/[0.14] text-cyan-700"
+              iconClassName="bg-[color-mix(in_srgb,var(--app-highlight)_18%,transparent)] text-[var(--app-highlight)]"
               onClick={() => {
                 onEdit();
                 onClose();
@@ -146,7 +151,7 @@ export default function BoardOptionsModal({
               title="Invite members"
               description="Add teammates and share access without leaving the dashboard."
               icon={<UserPlus className="h-5 w-5" />}
-              iconClassName="bg-emerald-500/[0.14] text-emerald-700"
+              iconClassName="bg-[color-mix(in_srgb,var(--app-success)_16%,transparent)] text-[var(--app-success)]"
               onClick={() => {
                 onInvite();
                 onClose();
@@ -157,7 +162,7 @@ export default function BoardOptionsModal({
               title="Delete board"
               description="Permanently remove this board after confirming the action."
               icon={<Trash2 className="h-5 w-5" />}
-              iconClassName="bg-rose-500/[0.14] text-rose-700"
+              iconClassName="bg-[color-mix(in_srgb,var(--app-danger)_14%,transparent)] text-[var(--app-danger)]"
               danger
               onClick={() => {
                 if (confirm(`Delete board "${boardName}"?`)) {
@@ -184,7 +189,7 @@ function ActionButton({
 }: {
   title: string;
   description: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   iconClassName: string;
   danger?: boolean;
   onClick: () => void;
@@ -193,10 +198,10 @@ function ActionButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-start gap-4 rounded-[22px] border px-4 py-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/40 ${
+      className={`flex w-full items-start gap-4 rounded-[22px] border px-4 py-4 text-left transition-[transform,border-color,background-color,box-shadow] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--app-accent)_28%,transparent)] ${
         danger
-          ? "border-rose-200/70 bg-rose-50/80 hover:border-rose-300 hover:bg-rose-50"
-          : "border-slate-200/85 bg-white/78 hover:border-slate-300 hover:bg-white"
+          ? "border-[color-mix(in_srgb,var(--app-danger)_28%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-danger)_8%,var(--app-panel))]"
+          : "border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-soft)_90%,transparent)]"
       }`}
     >
       <span
@@ -208,16 +213,12 @@ function ActionButton({
       <span className="min-w-0 flex-1">
         <span
           className={`block text-sm font-semibold ${
-            danger ? "text-rose-700" : "text-slate-950"
+            danger ? "text-[var(--app-danger)]" : "text-[var(--app-foreground-strong)]"
           }`}
         >
           {title}
         </span>
-        <span
-          className={`mt-1 block break-words text-sm leading-6 ${
-            danger ? "text-rose-600/85" : "text-slate-600"
-          }`}
-        >
+        <span className="mt-1 block break-words text-sm leading-6 app-text-muted">
           {description}
         </span>
       </span>

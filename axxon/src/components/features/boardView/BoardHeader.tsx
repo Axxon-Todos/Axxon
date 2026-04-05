@@ -1,21 +1,25 @@
+// Renders the shared board workspace hero, actions, metrics, and view switching controls.
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { BarChart3, CalendarClock, Layers3, ListTodo, Settings2, Tags } from 'lucide-react'
+import Badge from '@/components/ui/Badge'
+import Button, { buttonClassName } from '@/components/ui/Button'
+import PageHero from '@/components/ui/PageHero'
+import Surface from '@/components/ui/Surface'
+import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams'
+import type { BoardBaseData } from '@/lib/types/boardTypes'
+import type { SprintBaseData } from '@/lib/types/sprintTypes'
+import type { BoardDisplayView } from '@/lib/types/boardViewTypes'
 import {
   buildOrganizationBoardAnalyticsPath,
   buildOrganizationBoardSettingsPath,
 } from '@/lib/utils/routes'
-
-import { SprintIconGlyph } from '@/components/features/boardSprints/sprintIcons'
+import { getSprintStatus, getSprintStatusLabel } from '@/lib/utils/sprintStatus'
 
 import BoardViewSwitcher from './BoardViewSwitcher'
-
-import type { BoardBaseData } from '@/lib/types/boardTypes'
-import type { SprintBaseData } from '@/lib/types/sprintTypes'
-import type { BoardDisplayView } from '@/lib/types/boardViewTypes'
-import { getSprintStatus, getSprintStatusLabel } from '@/lib/utils/sprintStatus'
 
 export default function BoardHeader({
   boardId,
@@ -49,102 +53,85 @@ export default function BoardHeader({
   canAddTodo: boolean
 }) {
   const { organizationId } = useOrganizationRouteParams()
-  const accentColor = board.color || '#2563eb'
+  const accentColor = board.color || '#2fd087'
   const sprintStatus = selectedSprint ? getSprintStatus(selectedSprint) : null
 
   return (
-    <section
-      className="glass-panel-strong rounded-[2rem] p-7 sm:p-9"
-      style={{
-        background: `linear-gradient(135deg, color-mix(in srgb, ${accentColor} 16%, var(--app-panel-strong)), var(--app-panel-strong))`,
-      }}
+    <PageHero
+      kicker={selectedSprint ? 'Sprint Workspace' : 'Board Workspace'}
+      title={board.name}
+      description={
+        selectedSprint
+          ? `Focus this board on ${selectedSprint.name}. Only sprint-assigned work appears here while the same board views and workflow controls stay available.`
+          : 'Switch between list, kanban, and calendar layouts without leaving the board or losing the same task workflow controls.'
+      }
+      accentColor={accentColor}
+      actions={
+        <>
+          <Button
+            variant={canAddTodo ? 'primary' : 'secondary'}
+            onClick={onAddTodo}
+            disabled={!canAddTodo}
+          >
+            <ListTodo className="h-4 w-4" />
+            {canAddTodo ? 'Add Todo' : 'Sprint Archived'}
+          </Button>
+          <Link
+            href={buildOrganizationBoardAnalyticsPath(organizationId, boardId)}
+            className={buttonClassName({})}
+          >
+            <BarChart3 className="h-4 w-4" />
+            Analytics
+          </Link>
+          <Link
+            href={buildOrganizationBoardSettingsPath(organizationId, boardId)}
+            className={buttonClassName({})}
+          >
+            <Settings2 className="h-4 w-4" />
+            Settings
+          </Link>
+          {activeView !== 'calendar' ? (
+            <Button onClick={onToggleManageCategories}>
+              <Layers3 className="h-4 w-4" />
+              {isManagingCategories ? 'Exit Manage Mode' : 'Manage Categories'}
+            </Button>
+          ) : null}
+        </>
+      }
+      badges={
+        <>
+          <Badge>
+            <Layers3 className="h-3.5 w-3.5" />
+            {categoryCount} categories
+          </Badge>
+          <Badge>
+            <ListTodo className="h-3.5 w-3.5" />
+            {todoCount} todos
+          </Badge>
+          <Badge>
+            <Tags className="h-3.5 w-3.5" />
+            {labelCount} labels
+          </Badge>
+          {selectedSprint ? (
+            <Badge style={selectedSprint.color ? { color: selectedSprint.color } : undefined}>
+              <SprintIconGlyph icon={selectedSprint.icon} />
+              {selectedSprint.name}
+            </Badge>
+          ) : null}
+          {sprintStatus ? <Badge>{getSprintStatusLabel(sprintStatus)}</Badge> : null}
+        </>
+      }
     >
-      <div className="flex flex-col gap-9">
-        <div className="flex flex-col gap-9 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <p className="app-kicker">{selectedSprint ? 'Sprint Workspace' : 'Board Workspace'}</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span
-                className="h-4 w-4 rounded-full"
-                style={{
-                  backgroundColor: accentColor,
-                  boxShadow: `0 0 0 8px color-mix(in srgb, ${accentColor} 18%, transparent)`,
-                }}
-              />
-              <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">{board.name}</h1>
-            </div>
-            <p className="mt-4 max-w-2xl text-base leading-7 app-text-muted">
-              {selectedSprint
-                ? `Focus this board on ${selectedSprint.name}. Only sprint-assigned work appears here while the same board views and workflow controls stay available.`
-                : 'Switch between list, kanban, and calendar layouts without leaving the board or losing the same task workflow controls.'}
-            </p>
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <BoardViewSwitcher activeView={activeView} onChangeView={onChangeView} />
 
-            <div className="mt-6 flex flex-wrap gap-2">
-              <span className="app-badge">
-                <Layers3 className="h-3.5 w-3.5" />
-                {categoryCount} categories
-              </span>
-              <span className="app-badge">
-                <ListTodo className="h-3.5 w-3.5" />
-                {todoCount} todos
-              </span>
-              <span className="app-badge">
-                <Tags className="h-3.5 w-3.5" />
-                {labelCount} labels
-              </span>
-              {selectedSprint ? (
-                <span className="app-badge" style={selectedSprint.color ? { color: selectedSprint.color } : undefined}>
-                  <SprintIconGlyph icon={selectedSprint.icon} />
-                  {selectedSprint.name}
-                </span>
-              ) : null}
-              {sprintStatus ? <span className="app-badge">{getSprintStatusLabel(sprintStatus)}</span> : null}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={onAddTodo}
-              className={`glass-button ${canAddTodo ? 'glass-button-primary' : ''}`}
-              disabled={!canAddTodo}
-            >
-              <ListTodo className="h-4 w-4" />
-              {canAddTodo ? 'Add Todo' : 'Sprint Archived'}
-            </button>
-            <Link
-              href={buildOrganizationBoardAnalyticsPath(organizationId, boardId)}
-              className="glass-button"
-            >
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </Link>
-            <Link
-              href={buildOrganizationBoardSettingsPath(organizationId, boardId)}
-              className="glass-button"
-            >
-              <Settings2 className="h-4 w-4" />
-              Settings
-            </Link>
-            {activeView !== 'calendar' ? (
-              <button onClick={onToggleManageCategories} className="glass-button">
-                <Layers3 className="h-4 w-4" />
-                {isManagingCategories ? 'Exit Manage Mode' : 'Manage Categories'}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <BoardViewSwitcher activeView={activeView} onChangeView={onChangeView} />
-
-          <div className="grid gap-4 sm:grid-cols-3 lg:min-w-[560px] lg:flex-1">
-            <BoardMetricCard title="Tracked Todos" value={todoCount} icon={<ListTodo className="h-5 w-5" />} />
-            <BoardMetricCard title="Due This Week" value={dueSoonCount} icon={<CalendarClock className="h-5 w-5" />} />
-            <BoardMetricCard title="Completed" value={completedCount} icon={<Tags className="h-5 w-5" />} />
-          </div>
+        <div className="grid gap-4 sm:grid-cols-3 lg:min-w-[560px] lg:flex-1">
+          <BoardMetricCard title="Tracked Todos" value={todoCount} icon={<ListTodo className="h-5 w-5" />} />
+          <BoardMetricCard title="Due This Week" value={dueSoonCount} icon={<CalendarClock className="h-5 w-5" />} />
+          <BoardMetricCard title="Completed" value={completedCount} icon={<Tags className="h-5 w-5" />} />
         </div>
       </div>
-    </section>
+    </PageHero>
   )
 }
 
@@ -155,10 +142,10 @@ function BoardMetricCard({
 }: {
   title: string
   value: number
-  icon: React.ReactNode
+  icon: ReactNode
 }) {
   return (
-    <article className="glass-panel rounded-[1.5rem] p-5">
+    <Surface variant="default" className="rounded-[1.5rem] p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium app-text-muted">{title}</p>
@@ -171,6 +158,6 @@ function BoardMetricCard({
           {icon}
         </span>
       </div>
-    </article>
+    </Surface>
   )
 }

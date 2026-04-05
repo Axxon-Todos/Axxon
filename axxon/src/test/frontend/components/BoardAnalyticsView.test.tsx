@@ -1,3 +1,4 @@
+// Verifies the board analytics screen renders the refreshed navigation, filters, and empty states.
 import React from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -146,8 +147,8 @@ describe('BoardAnalyticsView', () => {
     expect(await screen.findByRole('heading', { name: 'Engineering Board' })).toBeInTheDocument();
     expect(await screen.findByText('Category Performance')).toBeInTheDocument();
     expect(screen.getByText('Tracked Todos')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Members' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Members' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to Board' })).toHaveAttribute(
       'href',
       '/dashboard/orgs/12/boards/7'
@@ -164,7 +165,7 @@ describe('BoardAnalyticsView', () => {
 
     expect(await screen.findByRole('heading', { name: 'Done' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'active' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Active' }));
 
     expect(await screen.findByText('Top labels by active')).toBeInTheDocument();
   });

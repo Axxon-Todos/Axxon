@@ -1,3 +1,4 @@
+// Verifies the organization dashboard overview renders the refreshed hero copy and organization directory.
 import React from 'react';
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,13 +57,11 @@ describe('DashboardOverview', () => {
 
     expect(
       await screen.findByText(
-        'Choose the organization boundary before you dive into boards.'
+        'Choose the organization boundary before you enter execution.'
       )
     ).toBeInTheDocument();
     expect(await screen.findByText('Engineering')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Organization' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'View All Orgs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Open directory' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Engineering/i })).toHaveAttribute(
       'href',
       '/dashboard/orgs/11'

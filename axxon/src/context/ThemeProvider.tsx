@@ -1,3 +1,4 @@
+// Provides the persisted application theme and keeps the document theme attributes in sync.
 'use client'
 
 import {
@@ -22,7 +23,7 @@ const STORAGE_KEY = 'axxon-theme'
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('light')
+  const [theme, setThemeState] = useState<Theme>('dark')
   const [isReady, setIsReady] = useState(false)
 
   useEffect(() => {
@@ -30,6 +31,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     if (storedTheme === 'light' || storedTheme === 'dark') {
       setThemeState(storedTheme)
+    } else {
+      document.documentElement.dataset.theme = 'dark'
+      document.documentElement.style.colorScheme = 'dark'
     }
 
     setIsReady(true)

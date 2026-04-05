@@ -1,9 +1,11 @@
+// Handles organization creation with the shared form actions and updated default accent color.
 'use client';
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createOrganization } from '@/lib/api/organizations/createOrganization';
 import OrganizationFormFields from '@/components/features/dashboard/OrganizationFormFields';
+import Button from '@/components/ui/Button';
+import { createOrganization } from '@/lib/api/organizations/createOrganization';
 
 interface CreateOrganizationFormProps {
   onClose: () => void;
@@ -15,7 +17,7 @@ export default function CreateOrganizationForm({
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState('#0f766e');
+  const [color, setColor] = useState('#15784e');
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -53,20 +55,18 @@ export default function CreateOrganizationForm({
       />
 
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onClose} className="glass-button">
-          Cancel
-        </button>
-        <button
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
           type="submit"
+          variant="primary"
           disabled={!name.trim() || createMutation.isPending}
-          className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {createMutation.isPending ? 'Creating...' : 'Create Organization'}
-        </button>
+        </Button>
       </div>
 
       {createMutation.isError ? (
-        <p className="text-sm text-rose-400">
+        <p className="text-sm app-error-text">
           {createMutation.error?.message || 'Failed to create organization'}
         </p>
       ) : null}

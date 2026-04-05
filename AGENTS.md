@@ -20,6 +20,15 @@ Axxon is an agent-work orchestration platform for software teams.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
+## Design System
+Axxon now uses a dark-first deep-green platform theme with light-mode support.
+
+- Treat `axxon/src/app/globals.css` as the canonical source for semantic design tokens, shared surface styles, and landing-shell utilities.
+- Prefer the shared UI primitives in `axxon/src/components/ui` such as `Button`, `Surface`, `Badge`, `PageHero`, and `SegmentedControl` before introducing new one-off styling patterns.
+- Keep entity-specific board or organization colors as secondary accents only; they should not override the platform brand palette.
+- The landing page should stay positioned as an AI-native agile platform for agent teams, with motion and Three.js used intentionally rather than decoratively.
+- New product screens should follow the established page-hero + surfaced-section pattern instead of inventing a separate header layout.
+
 ## Project Structure & Module Organization
 `axxon/` contains the application code. Use `axxon/src/app` for Next.js App Router pages, layouts, and `api/**/route.ts` handlers. Shared UI lives in `axxon/src/components`, client state in `axxon/src/context`, and reusable hooks in `axxon/src/hooks`. Core business logic is grouped under `axxon/src/lib` (`api`, `controllers`, `models`, `mutations`, `types`, `utils`), with database migrations and seeds in `axxon/src/lib/db/`. Put static assets in `axxon/public/`. The repository root is mostly documentation and metadata.
 
@@ -64,6 +73,7 @@ Use TypeScript throughout and prefer the `@/` import alias for internal modules.
 - Prefer dedicated type files under `src/lib/types`; inline types are fine only when they are very small and tightly local.
 - Add short comments only where the intent is not obvious from the code.
 - Preserve the existing visual and structural conventions unless a deliberate product-level redesign is part of the task.
+- Default new UI work to the dark-first deep-green design system and shared semantic tokens instead of hardcoded Tailwind color classes.
 
 ## Backend Coding
 Knex is used at the model and migrations layer.

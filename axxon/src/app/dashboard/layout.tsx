@@ -1,5 +1,7 @@
+// Defines the authenticated dashboard shell and keeps the content area aligned with the collapsible sidebar.
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import Sidebar, {
@@ -11,7 +13,7 @@ import Sidebar, {
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const shouldReduceMotion = useReducedMotion();
@@ -35,9 +37,9 @@ export default function DashboardLayout({
           width: `calc(100vw - ${sidebarWidth}px)`,
         }}
         transition={transition}
-        className="box-border min-h-screen min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-4 pb-10 pt-6 sm:px-6 lg:px-8"
+        className="box-border min-h-screen min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8"
       >
-        {children}
+        <div className="mx-auto flex min-h-[calc(100vh-3rem)] flex-col gap-6">{children}</div>
       </motion.main>
     </div>
   );
