@@ -4,15 +4,36 @@ import { NextRequest, NextResponse } from 'next/server';
 import { completeGoogleOAuthLogin } from '@/lib/controllers/auth/authController';
 import { BadRequestError, handleApiError } from '@/lib/utils/apiErrors';
 import { issueSessionCookie } from '@/lib/utils/auth';
+import { clearGoogleOAuthCookies, readGoogleOAuthCookies } from '@/lib/utils/googleOAuth';
 
 export async function GET(req: NextRequest) {
   try {
+    const oauthError = req.nextUrl.searchParams.get('error');
+    const oauthErrorDescription = req.nextUrl.searchParams.get('error_description');
     const code = req.nextUrl.searchParams.get('code');
+    const state = req.nextUrl.searchParams.get('state');
+    const oauthCookies = readGoogleOAuthCookies(req);
+
+    if (oauthError) {
+      throw new BadRequestError(oauthErrorDescription || 'Google OAuth authorization failed');
+    }
+
     if (!code) {
       throw new BadRequestError('Authorization code not provided');
     }
 
-    const user = await completeGoogleOAuthLogin({ code });
+    if (!state || !oauthCookies.state || state !== oauthCookies.state) {
+      throw new BadRequestError('Google OAuth state validation failed');
+    }
+
+    if (!oauthCookies.codeVerifier) {
+      throw new BadRequestError('Google OAuth code verifier is missing');
+    }
+
+    const user = await completeGoogleOAuthLogin({
+      code,
+      codeVerifier: oauthCookies.codeVerifier,
+    });
 
     // Set cookie and redirect
     const response = NextResponse.redirect(
@@ -21,6 +42,7 @@ export async function GET(req: NextRequest) {
         process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_HOSTNAME || req.nextUrl.origin
       )
     );
+    clearGoogleOAuthCookies(response);
     await issueSessionCookie(response, {
       id: user.id,
       email: user.email,
@@ -29,10 +51,12 @@ export async function GET(req: NextRequest) {
 
     return response;
   } catch (error) {
-    return handleApiError(
+    const response = handleApiError(
       error,
       '[GOOGLE_OAUTH_CALLBACK_ERROR]',
       'Failed to complete Google OAuth login'
     );
+    clearGoogleOAuthCookies(response);
+    return response;
   }
 }

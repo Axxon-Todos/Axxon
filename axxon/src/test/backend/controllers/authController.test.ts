@@ -24,7 +24,6 @@ vi.mock('@/lib/models/users', () => ({
 }));
 
 import {
-  buildGoogleOAuthAuthorizationUrl,
   completeGoogleOAuthLogin,
 } from '@/lib/controllers/auth/authController';
 
@@ -34,38 +33,22 @@ describe('authController', () => {
     vi.unstubAllGlobals();
     process.env.GOOGLE_CLIENT_ID = 'google-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'google-client-secret';
-    process.env.NEXT_PUBLIC_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback';
-    delete process.env.GOOGLE_REDIRECT_URI;
-  });
-
-  it('builds the Google authorization URL from runtime config', () => {
-    const authUrl = new URL(buildGoogleOAuthAuthorizationUrl());
-
-    expect(`${authUrl.origin}${authUrl.pathname}`).toBe(
-      'https://accounts.google.com/o/oauth2/v2/auth'
-    );
-    expect(authUrl.searchParams.get('client_id')).toBe('google-client-id');
-    expect(authUrl.searchParams.get('redirect_uri')).toBe(
-      'http://localhost:3000/api/auth/google/callback'
-    );
-    expect(authUrl.searchParams.get('response_type')).toBe('code');
-    expect(authUrl.searchParams.get('scope')).toBe('openid email profile');
-  });
-
-  it('prefers GOOGLE_REDIRECT_URI when it is set', () => {
-    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback/server';
-
-    const authUrl = new URL(buildGoogleOAuthAuthorizationUrl());
-
-    expect(authUrl.searchParams.get('redirect_uri')).toBe(
-      'http://localhost:3000/api/auth/google/callback/server'
-    );
+    process.env.GOOGLE_REDIRECT_URI = 'http://localhost:3000/api/auth/google/callback';
+    delete process.env.NEXT_PUBLIC_REDIRECT_URI;
   });
 
   it('rejects missing authorization codes', async () => {
-    await expect(completeGoogleOAuthLogin({ code: '' })).rejects.toBeInstanceOf(
+    await expect(
+      completeGoogleOAuthLogin({ code: '', codeVerifier: 'code-verifier' })
+    ).rejects.toBeInstanceOf(
       BadRequestError
     );
+  });
+
+  it('rejects missing PKCE code verifiers', async () => {
+    await expect(
+      completeGoogleOAuthLogin({ code: 'valid-code', codeVerifier: '' })
+    ).rejects.toBeInstanceOf(BadRequestError);
   });
 
   it('surfaces token exchange failures as bad requests', async () => {
@@ -78,7 +61,7 @@ describe('authController', () => {
     );
 
     await expect(
-      completeGoogleOAuthLogin({ code: 'bad-code' })
+      completeGoogleOAuthLogin({ code: 'bad-code', codeVerifier: 'code-verifier' })
     ).rejects.toBeInstanceOf(BadRequestError);
   });
 
@@ -98,18 +81,17 @@ describe('authController', () => {
     });
 
     await expect(
-      completeGoogleOAuthLogin({ code: 'valid-code' })
+      completeGoogleOAuthLogin({ code: 'valid-code', codeVerifier: 'code-verifier' })
     ).rejects.toBeInstanceOf(UnauthorizedError);
   });
 
   it('maps Google identity data into a local user lookup', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({ id_token: 'google-id-token' }),
-      })
-    );
+    const mockedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ id_token: 'google-id-token' }),
+    });
+
+    vi.stubGlobal('fetch', mockedFetch);
     mockedJwtVerify.mockResolvedValue({
       payload: {
         email: 'user@example.com',
@@ -121,7 +103,12 @@ describe('authController', () => {
     });
     mockedFindOrCreateByGoogle.mockResolvedValue({ id: 9, email: 'user@example.com' });
 
-    const user = await completeGoogleOAuthLogin({ code: 'valid-code' });
+    const user = await completeGoogleOAuthLogin({
+      code: 'valid-code',
+      codeVerifier: 'code-verifier',
+    });
+    const fetchCall = mockedFetch.mock.calls[0];
+    const requestBody = fetchCall?.[1]?.body;
 
     expect(mockedFindOrCreateByGoogle).toHaveBeenCalledWith({
       email: 'user@example.com',
@@ -129,14 +116,17 @@ describe('authController', () => {
       last_name: 'Hopper',
       avatar_url: 'https://example.com/avatar.png',
     });
+    expect(requestBody instanceof URLSearchParams).toBe(true);
+    expect(requestBody?.get('code_verifier')).toBe('code-verifier');
     expect(user).toEqual({ id: 9, email: 'user@example.com' });
   });
 
-  it('fails when the runtime redirect URI is missing', () => {
+  it('fails when the runtime redirect URI is missing', async () => {
+    delete process.env.GOOGLE_REDIRECT_URI;
     delete process.env.NEXT_PUBLIC_REDIRECT_URI;
 
-    expect(() => buildGoogleOAuthAuthorizationUrl()).toThrow(
-      'Google OAuth configuration is incomplete'
-    );
+    await expect(
+      completeGoogleOAuthLogin({ code: 'valid-code', codeVerifier: 'code-verifier' })
+    ).rejects.toThrow('Google OAuth configuration is incomplete');
   });
 });

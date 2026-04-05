@@ -1,17 +1,7 @@
 'use server';
 
-import { NextResponse } from 'next/server';
-import { buildGoogleOAuthAuthorizationUrl } from '@/lib/controllers/auth/authController';
-import { handleApiError } from '@/lib/utils/apiErrors';
+import { NextRequest, NextResponse } from 'next/server';
 
-export async function GET() {
-  try {
-    return NextResponse.redirect(new URL(buildGoogleOAuthAuthorizationUrl()));
-  } catch (error) {
-    return handleApiError(
-      error,
-      '[GOOGLE_OAUTH_START_ERROR]',
-      'Failed to start Google OAuth login'
-    );
-  }
+export async function GET(req: NextRequest) {
+  return NextResponse.redirect(new URL('/api/auth/google/start', req.url));
 }

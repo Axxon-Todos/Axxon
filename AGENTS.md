@@ -106,6 +106,7 @@ Recent history favors short, single-purpose commit subjects. Use imperative word
 
 ## Security & Configuration Tips
 Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate database, Google OAuth, Redis, and websocket settings locally before merging configuration changes.
+Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIRECT_URI` for the callback URL, and keep websocket production exposure behind an explicit reverse proxy or a loopback-only bind unless public access is intentionally required.
 
 - Maintain current security practices for auth, repo access boundaries, and member-scoped actions.
 - Validate inputs at the API boundary and enforce permissions server-side.

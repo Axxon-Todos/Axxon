@@ -47,8 +47,9 @@ services:
       WS_PORT: 4000
       REDIS_URL: redis://redis:6379
       CLIENT_URL: ${CLIENT_URL:-http://localhost:3000}
+    # Bind to loopback by default so a reverse proxy can expose the websocket service intentionally.
     ports:
-      - "4000:4000"
+      - "${WS_BIND_HOST:-127.0.0.1}:${WS_PUBLIC_PORT:-4000}:4000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
