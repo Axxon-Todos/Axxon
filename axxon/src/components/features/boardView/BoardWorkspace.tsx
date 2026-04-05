@@ -171,7 +171,7 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
 
   if (!board || !categories || !todos || !labels) {
     return (
-      <div className="mx-auto max-w-[1380px]">
+      <div className="app-page">
         <section className="glass-panel-strong rounded-[2rem] p-8">
           <p className="app-kicker">Board Workspace</p>
           <h1 className="mt-3 text-3xl font-semibold">Loading board...</h1>
@@ -193,7 +193,7 @@ export default function BoardWorkspace({ boardId }: { boardId: string }) {
       }
 
   return (
-    <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
+    <div className="app-page">
       <BoardHeader
         boardId={boardId}
         board={board}

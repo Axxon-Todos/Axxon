@@ -7,6 +7,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderGit2, ShieldCheck, Users2 } from 'lucide-react';
 
 import InviteMembersModal from '@/components/features/dashboard/InviteMembersModal';
+import Badge from '@/components/ui/Badge';
+import { buttonClassName } from '@/components/ui/Button';
+import PageHero from '@/components/ui/PageHero';
 import { getBoardRepositories } from '@/lib/api/boardRepositories/getBoardRepositories';
 import { getOrganizationBoardRepositoryAccess } from '@/lib/api/boardRepositories/getOrganizationBoardRepositoryAccess';
 import { updateBoardRepositories } from '@/lib/api/boardRepositories/updateBoardRepositories';
@@ -181,7 +184,7 @@ export default function BoardSettingsView({ boardId }: { boardId: string }) {
 
   if (!board) {
     return (
-      <div className="mx-auto max-w-[1480px]">
+      <div className="app-page">
         <section className="glass-panel-strong rounded-[2rem] p-8">
           <p className="app-kicker">Board Settings</p>
           <h1 className="mt-3 text-3xl font-semibold">Loading board settings...</h1>
@@ -192,62 +195,47 @@ export default function BoardSettingsView({ boardId }: { boardId: string }) {
 
   return (
     <>
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-6">
-        <section
-          className="glass-panel-strong rounded-[2rem] p-8 sm:p-10"
-          style={{
-            background: `linear-gradient(135deg, color-mix(in srgb, ${board.color || '#2563eb'} 16%, var(--app-panel-strong)), var(--app-panel-strong))`,
-          }}
-        >
-          <p className="app-kicker">Board Settings</p>
-          <div className="mt-4 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-4 w-4 rounded-full"
-                  style={{ backgroundColor: board.color || '#2563eb' }}
-                />
-                <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-                  {board.name}
-                </h1>
-              </div>
-              <p className="mt-4 max-w-3xl text-base leading-7 app-text-muted">
-                Review board members, adjust repository access, and inspect how repositories are shared across boards.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-2">
-                <span className="app-badge">
-                  <Users2 className="h-3.5 w-3.5" />
-                  {boardMembers.length} board members
-                </span>
-                <span className="app-badge">
-                  <FolderGit2 className="h-3.5 w-3.5" />
-                  {boardRepositories.length} linked repos
-                </span>
-                {isOwner ? (
-                  <span className="app-badge">
-                    <ShieldCheck className="h-3.5 w-3.5" />
-                    Org owner
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
+      <div className="app-page">
+        <PageHero
+          kicker="Board Settings"
+          title={board.name}
+          description="Review board members, adjust repository access, and inspect how repositories are shared across boards."
+          accentColor={board.color || '#2fd087'}
+          actions={
+            <>
               <Link
                 href={buildOrganizationBoardPath(organizationId, boardId)}
-                className="glass-button"
+                className={buttonClassName({})}
               >
                 Back to Board
               </Link>
               <Link
                 href={buildOrganizationBoardAnalyticsPath(organizationId, boardId)}
-                className="glass-button"
+                className={buttonClassName({})}
               >
                 Analytics
               </Link>
-            </div>
-          </div>
-        </section>
+            </>
+          }
+          badges={
+            <>
+              <Badge>
+                <Users2 className="h-3.5 w-3.5" />
+                {boardMembers.length} board members
+              </Badge>
+              <Badge>
+                <FolderGit2 className="h-3.5 w-3.5" />
+                {boardRepositories.length} linked repos
+              </Badge>
+              {isOwner ? (
+                <Badge>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Org owner
+                </Badge>
+              ) : null}
+            </>
+          }
+        />
 
         <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <article className="glass-panel-strong rounded-[2rem] p-6 sm:p-8">

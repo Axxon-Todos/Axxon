@@ -1,4 +1,7 @@
+// Provides the shared organization form inputs used by create and edit organization flows.
 'use client';
+
+import Surface from '@/components/ui/Surface';
 
 type OrganizationFormFieldsProps = {
   autoFocus?: boolean;
@@ -43,16 +46,16 @@ export default function OrganizationFormFields({
         />
       </div>
 
-      <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
+      <Surface variant="default" className="flex items-center justify-between rounded-2xl p-4">
         <div>
           <p className="text-sm font-medium">Organization Accent</p>
           <p className="mt-1 text-sm app-text-muted">
-            Used across the org hub and navigation.
+            Used as the organization&apos;s visual identifier across the workspace.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span
-            className="h-10 w-10 rounded-2xl border border-white/40 shadow-inner"
+            className="h-10 w-10 rounded-2xl border border-[var(--app-border)] shadow-inner"
             style={{ backgroundColor: color }}
           />
           <input
@@ -62,7 +65,7 @@ export default function OrganizationFormFields({
             className="h-10 w-14 cursor-pointer rounded-xl border-0 bg-transparent"
           />
         </div>
-      </div>
+      </Surface>
     </>
   );
 }

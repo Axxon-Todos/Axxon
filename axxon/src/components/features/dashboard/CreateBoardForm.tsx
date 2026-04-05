@@ -1,6 +1,9 @@
+// Handles board creation with the refreshed form actions and modernized default accent color.
 'use client';
 
 import { useState } from 'react';
+import Button from '@/components/ui/Button';
+import Surface from '@/components/ui/Surface';
 import { useCreateBoard } from '@/lib/mutations/useCreateBoard';
 
 interface CreateBoardFormProps {
@@ -13,7 +16,7 @@ export default function CreateBoardForm({
   onClose,
 }: CreateBoardFormProps) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#2563eb');
+  const [color, setColor] = useState('#15784e');
 
   const createMutation = useCreateBoard(organizationId);
 
@@ -48,16 +51,16 @@ export default function CreateBoardForm({
         />
       </div>
 
-      <div className="glass-panel flex items-center justify-between rounded-2xl p-4">
+      <Surface variant="default" className="flex items-center justify-between rounded-2xl p-4">
         <div>
           <p className="text-sm font-medium">Board Accent</p>
           <p className="mt-1 text-sm app-text-muted">
-            Used as the board’s visual identifier inside the org.
+            Used as the board&apos;s visual identifier inside the org.
           </p>
         </div>
         <div className="flex items-center gap-3">
           <span
-            className="h-10 w-10 rounded-2xl border border-white/40 shadow-inner"
+            className="h-10 w-10 rounded-2xl border border-[var(--app-border)] shadow-inner"
             style={{ backgroundColor: color }}
           />
           <input
@@ -67,23 +70,21 @@ export default function CreateBoardForm({
             className="h-10 w-14 cursor-pointer rounded-xl border-0 bg-transparent"
           />
         </div>
-      </div>
+      </Surface>
 
-      <div className="flex justify-end gap-2 mt-6">
-        <button type="button" onClick={onClose} className="glass-button">
-          Cancel
-        </button>
-        <button
+      <div className="mt-6 flex justify-end gap-2">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
           type="submit"
+          variant="primary"
           disabled={!name.trim() || createMutation.isPending}
-          className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
         >
           {createMutation.isPending ? 'Creating...' : 'Create Board'}
-        </button>
+        </Button>
       </div>
 
       {createMutation.isError ? (
-        <p className="text-sm text-rose-400">
+        <p className="text-sm app-error-text">
           {createMutation.error?.message || 'Failed to create board'}
         </p>
       ) : null}

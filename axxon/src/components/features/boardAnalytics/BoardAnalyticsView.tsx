@@ -1,3 +1,4 @@
+// Renders board analytics with the shared hero language, tokenized filters, and refreshed data sections.
 'use client'
 
 import Link from 'next/link';
@@ -14,6 +15,11 @@ import {
   Users2,
 } from 'lucide-react';
 
+import Badge from '@/components/ui/Badge';
+import { buttonClassName } from '@/components/ui/Button';
+import PageHero from '@/components/ui/PageHero';
+import SegmentedControl from '@/components/ui/SegmentedControl';
+import Surface from '@/components/ui/Surface';
 import { fetchBoardAnalytics } from '@/lib/api/boards/getBoardAnalytics';
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
 import {
@@ -71,11 +77,11 @@ function formatGeneratedAt(value: string) {
   }).format(date);
 }
 
-const SECTION_NAV: Array<{ id: SectionId; label: string }> = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'workflow', label: 'Workflow' },
-  { id: 'members', label: 'Members' },
-  { id: 'labels', label: 'Labels' },
+const SECTION_NAV: Array<{ value: SectionId; label: string }> = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'workflow', label: 'Workflow' },
+  { value: 'members', label: 'Members' },
+  { value: 'labels', label: 'Labels' },
 ];
 
 export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
@@ -94,7 +100,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
 
   useEffect(() => {
     const sections = SECTION_NAV
-      .map((section) => document.getElementById(section.id))
+      .map((section) => document.getElementById(section.value))
       .filter((section): section is HTMLElement => section !== null);
 
     if (!sections.length) return;
@@ -199,7 +205,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
         id: 'active',
         label: 'Active',
         value: active,
-        color: '#94a3b8',
+        color: 'var(--app-muted)',
         description: 'Todos still in backlog or in-progress stages.',
       },
     ];
@@ -231,28 +237,28 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
   if (isLoading) {
     return (
       <div className="mx-auto flex max-w-[1560px] flex-col gap-4">
-        <section className="glass-panel-strong rounded-[2rem] p-6">
+        <Surface variant="strong" className="rounded-[2rem] p-6">
           <div className="h-4 w-36 rounded-full bg-[var(--app-border)]" />
           <div className="mt-4 h-10 w-72 rounded-2xl bg-[var(--app-border)]" />
           <div className="mt-3 h-4 w-full max-w-xl rounded-full bg-[var(--app-border)]" />
-        </section>
+        </Surface>
 
-        <section className="glass-panel-strong rounded-[1.4rem] p-4">
+        <Surface variant="strong" className="rounded-[1.4rem] p-4">
           <div className="h-10 w-full rounded-xl bg-[var(--app-border)]" />
-        </section>
+        </Surface>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,0.85fr)]">
           <div className="grid gap-4">
             <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
-                <div key={index} className="glass-panel h-32 rounded-[1.4rem]" />
+                <Surface key={index} className="h-32 rounded-[1.4rem]" />
               ))}
             </div>
-            <div className="glass-panel-strong h-[320px] rounded-[1.6rem]" />
+            <Surface variant="strong" className="h-[320px] rounded-[1.6rem]" />
           </div>
           <div className="grid gap-4">
-            <div className="glass-panel-strong h-[320px] rounded-[1.6rem]" />
-            <div className="glass-panel-strong h-[300px] rounded-[1.6rem]" />
+            <Surface variant="strong" className="h-[320px] rounded-[1.6rem]" />
+            <Surface variant="strong" className="h-[300px] rounded-[1.6rem]" />
           </div>
         </div>
       </div>
@@ -262,7 +268,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-[1560px]">
-        <section className="glass-panel-strong rounded-[2rem] p-8">
+        <Surface variant="strong" className="rounded-[2rem] p-8">
           <p className="app-kicker">Board Analytics</p>
           <h1 className="mt-3 text-3xl font-semibold">Unable to load analytics</h1>
           <p className="mt-3 text-sm app-text-muted">
@@ -270,12 +276,12 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
           </p>
           <Link
             href={buildOrganizationBoardPath(organizationId, boardId)}
-            className="glass-button mt-6"
+            className={buttonClassName({ className: 'mt-6' })}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Board
           </Link>
-        </section>
+        </Surface>
       </div>
     );
   }
@@ -290,76 +296,52 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
 
   return (
     <div style={analyticsStyles} className="mx-auto flex max-w-[1560px] flex-col gap-4">
-      <section
-        className="glass-panel-strong rounded-[2rem] p-5 sm:p-6"
-        style={{
-          background:
-            'linear-gradient(135deg, color-mix(in srgb, var(--analytics-accent) 16%, var(--app-panel-strong)), var(--app-panel-strong))',
-        }}
-      >
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="app-kicker">Board Analytics</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span
-                className="h-4 w-4 rounded-full"
-                style={{
-                  backgroundColor: 'var(--analytics-accent)',
-                  boxShadow: '0 0 0 8px color-mix(in srgb, var(--analytics-accent) 18%, transparent)',
-                }}
-              />
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{data.board.name}</h1>
-            </div>
-            <p className="mt-3 max-w-2xl text-sm leading-6 app-text-muted">
-              Analytics across workflow stages, member throughput, and label adoption. Completion only counts when a
-              todo is marked complete and currently in a done category.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <span className="app-badge">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                {completionRate} completion
-              </span>
-              <span className="app-badge">
-                <Layers3 className="h-3.5 w-3.5" />
-                {data.summary.category_count} categories
-              </span>
-              <span className="app-badge">
-                <Clock3 className="h-3.5 w-3.5" />
-                Updated {generatedAt}
-              </span>
-            </div>
-          </div>
-
+      <PageHero
+        kicker="Board Analytics"
+        title={data.board.name}
+        description="Analytics across workflow stages, member throughput, and label adoption. Completion only counts when a todo is marked complete and currently in a done category."
+        accentColor={data.board.color || '#2fd087'}
+        actions={
           <Link
             href={buildOrganizationBoardPath(organizationId, boardId)}
-            className="glass-button"
+            className={buttonClassName({})}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Board
           </Link>
-        </div>
-      </section>
+        }
+        badges={
+          <>
+            <Badge>
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {completionRate} completion
+            </Badge>
+            <Badge>
+              <Layers3 className="h-3.5 w-3.5" />
+              {data.summary.category_count} categories
+            </Badge>
+            <Badge>
+              <Clock3 className="h-3.5 w-3.5" />
+              Updated {generatedAt}
+            </Badge>
+          </>
+        }
+      />
 
-      <section className="sticky top-3 z-20 glass-panel-strong rounded-[1.35rem] p-3 sm:p-4">
-        <nav aria-label="Analytics sections" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {SECTION_NAV.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => {
-                setActiveSection(section.id);
-                document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-              className={`glass-button px-3 py-2 text-sm ${activeSection === section.id ? 'glass-button-primary' : ''}`}
-            >
-              {section.label}
-            </button>
-          ))}
-        </nav>
+      <Surface variant="strong" className="sticky top-3 z-20 rounded-[1.35rem] p-3 sm:p-4">
+        <SegmentedControl
+          value={activeSection}
+          onChange={(section) => {
+            setActiveSection(section);
+            document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
+          options={SECTION_NAV}
+          ariaLabel="Analytics sections"
+          className="w-full"
+        />
 
         <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]">
-          <label className="flex items-center gap-2 rounded-xl border border-[var(--app-border)] bg-[var(--app-panel)] px-3 py-2">
+          <label className="app-select-shell flex items-center gap-2 px-3 py-2">
             <Filter className="h-4 w-4 app-text-muted" />
             <span className="sr-only">Filter by category</span>
             <select
@@ -382,20 +364,18 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
             </select>
           </label>
 
-          <div className="flex flex-wrap gap-2">
-            {(['completed', 'active', 'all'] as const).map((mode) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setScope(mode)}
-                className={`glass-button px-4 py-2 text-sm capitalize ${deferredScope === mode ? 'glass-button-primary' : ''}`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            value={deferredScope}
+            onChange={setScope}
+            options={[
+              { value: 'completed', label: 'Completed' },
+              { value: 'active', label: 'Active' },
+              { value: 'all', label: 'All' },
+            ]}
+            ariaLabel="Analytics scope"
+          />
         </div>
-      </section>
+      </Surface>
 
       <section id="overview" className="scroll-mt-28">
         <div className="mb-3 flex items-center justify-between gap-3">
@@ -408,7 +388,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
 
         <div className="grid gap-4">
           <AnalyticsSummaryCards summary={data.summary} />
-          <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+          <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="app-kicker">Progress Split</p>
@@ -424,7 +404,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
                 emptyLabel="No todos to chart yet for this filter."
               />
             </div>
-          </section>
+          </Surface>
         </div>
       </section>
 
@@ -438,10 +418,10 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)]">
-          <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+          <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold capitalize">{deferredScope} workload by category</h3>
-              <span className="app-badge">{selectedCategoryName}</span>
+              <Badge>{selectedCategoryName}</Badge>
             </div>
             <div className="mt-4 min-h-[320px]">
               <AnalyticsCategoryBarChart
@@ -450,14 +430,14 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
                 emptyLabel="No todos in this workflow scope yet."
               />
             </div>
-          </section>
+          </Surface>
 
-          <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+          <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
             <h3 className="text-lg font-semibold">Workflow Detail</h3>
             <div className="mt-4">
               <AnalyticsCategoryBreakdown categories={filtered.categories} />
             </div>
-          </section>
+          </Surface>
         </div>
       </section>
 
@@ -470,9 +450,9 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
           <Users2 className="h-5 w-5 text-[var(--analytics-accent)]" />
         </div>
 
-        <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+        <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
           <AnalyticsMemberLeaderboard members={filtered.members} />
-        </section>
+        </Surface>
       </section>
 
       <section id="labels" className="scroll-mt-28">
@@ -485,7 +465,7 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-          <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+          <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
             <h3 className="text-lg font-semibold">Top labels by {deferredScope}</h3>
             <div className="mt-4 min-h-[300px]">
               <AnalyticsLabelBarChart
@@ -494,14 +474,14 @@ export default function BoardAnalyticsView({ boardId }: { boardId: string }) {
                 emptyLabel="No label activity yet for this filter."
               />
             </div>
-          </section>
+          </Surface>
 
-          <section className="glass-panel-strong rounded-[1.6rem] p-4 sm:p-5">
+          <Surface variant="strong" className="rounded-[1.6rem] p-4 sm:p-5">
             <h3 className="text-lg font-semibold">Label Breakdown</h3>
             <div className="mt-4">
               <AnalyticsLabelBreakdown labels={filtered.labels} />
             </div>
-          </section>
+          </Surface>
         </div>
       </section>
     </div>
