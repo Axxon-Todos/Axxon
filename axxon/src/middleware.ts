@@ -9,6 +9,7 @@ const PUBLIC_API_PATHS = new Set([
   '/api/auth/google/callback',
   '/api/integrations/github/callback',
   '/api/webhooks/github',
+  '/api/auth/google/start',
 ]);
 
 export async function middleware(req: NextRequest) {

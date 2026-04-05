@@ -1,4 +1,7 @@
 import knex from "knex";
+import { loadRuntimeEnv } from "../../env/loadRuntimeEnv";
+
+loadRuntimeEnv();
 
 export async function rollbackSeed() {
   // Inline your DB connection config here:

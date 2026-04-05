@@ -1,12 +1,11 @@
 // Boots the development database by waiting for Postgres, applying migrations, and seeding fresh instances.
 import { spawnSync } from "child_process";
 import { setTimeout as delay } from "timers/promises";
-import dotenv from "dotenv";
 import knex from "knex";
 import type { Knex } from "knex";
+import { loadRuntimeEnv } from "../../env/loadRuntimeEnv";
 
-dotenv.config({ path: ".env.local" });
-dotenv.config();
+loadRuntimeEnv();
 
 const WAIT_INTERVAL_MS = 2000;
 const MAX_WAIT_ATTEMPTS = 30;
@@ -70,6 +69,24 @@ function switchToFallbackHost() {
   return true;
 }
 
+function describeConnectionTarget() {
+  const connection = createConnectionConfig().connection;
+
+  if (typeof connection === "string" && connection.length > 0) {
+    try {
+      const url = new URL(connection);
+      const databaseName = url.pathname.replace(/^\//, "") || "(default)";
+      const port = url.port || "5432";
+
+      return `${url.protocol}//${url.hostname}:${port}/${databaseName}`;
+    } catch {
+      return "[invalid PG_CONNECTION_STRING]";
+    }
+  }
+
+  return `${activeDbHost || process.env.PG_HOST || "(missing-host)"}:${process.env.PG_PORT || "5432"}/${process.env.PG_DB || "(missing-db)"}`;
+}
+
 async function waitForDatabase() {
   for (let attempt = 1; attempt <= MAX_WAIT_ATTEMPTS; attempt += 1) {
     const db = createDbConnection();
@@ -130,6 +147,7 @@ function runPnpmScript(script: string) {
 }
 
 async function main() {
+  console.log(`[db:bootstrap] Using Postgres target ${describeConnectionTarget()}.`);
   await waitForDatabase();
 
   const freshDatabase = await isFreshDatabase();
