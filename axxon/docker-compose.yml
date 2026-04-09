@@ -23,8 +23,10 @@ services:
       target: app-dev
     command: ["pnpm", "db:bootstrap"]
     env_file:
-      - .env.local
-      - .env.docker
+      - path: .env.local
+        required: true
+      - path: .env.docker
+        required: false
     environment:
       NODE_ENV: development
       PG_HOST: db
@@ -50,8 +52,10 @@ services:
     command: ["pnpm", "dev-next"]
     # Load runtime secrets and OAuth config without baking them into the dev image.
     env_file:
-      - .env.local
-      - .env.docker
+      - path: .env.local
+        required: true
+      - path: .env.docker
+        required: false
     environment:
       NODE_ENV: development
       HOSTNAME: 0.0.0.0
@@ -94,8 +98,10 @@ services:
     command: ["pnpm", "dev-ws"]
     # The websocket service needs the same auth and DB envs as the app to validate sessions.
     env_file:
-      - .env.local
-      - .env.docker
+      - path: .env.local
+        required: true
+      - path: .env.docker
+        required: false
     environment:
       NODE_ENV: development
       WS_PORT: 4000
