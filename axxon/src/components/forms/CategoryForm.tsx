@@ -1,8 +1,11 @@
+// Edits board categories while keeping fallback lane colors aligned with the shared brand foundation.
 'use client'
 
 import { useState } from 'react'
 
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
+
+const DEFAULT_CATEGORY_COLOR = '#2563eb'
 
 interface CategoryFormProps {
   category: CategoryBaseData
@@ -13,7 +16,7 @@ interface CategoryFormProps {
 
 export default function UpdateCategoryForm({ category, onSave, onDelete, onClose }: CategoryFormProps) {
   const [name, setName] = useState(category.name)
-  const [color, setColor] = useState(category.color || '#cccccc')
+  const [color, setColor] = useState(category.color || DEFAULT_CATEGORY_COLOR)
   const [isDone, setIsDone] = useState(!!category.is_done)
   const [loading, setLoading] = useState(false)
 
@@ -49,7 +52,7 @@ export default function UpdateCategoryForm({ category, onSave, onDelete, onClose
         </div>
         <div className="flex items-center gap-3">
           <span
-            className="h-10 w-10 rounded-2xl border border-white/40"
+            className="h-10 w-10 rounded-2xl border border-[var(--app-border)]"
             style={{ backgroundColor: color }}
           />
           <input

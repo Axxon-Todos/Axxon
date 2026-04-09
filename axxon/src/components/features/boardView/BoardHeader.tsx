@@ -53,7 +53,7 @@ export default function BoardHeader({
   canAddTodo: boolean
 }) {
   const { organizationId } = useOrganizationRouteParams()
-  const accentColor = board.color || '#2fd087'
+  const accentColor = board.color || '#2563eb'
   const sprintStatus = selectedSprint ? getSprintStatus(selectedSprint) : null
 
   return (

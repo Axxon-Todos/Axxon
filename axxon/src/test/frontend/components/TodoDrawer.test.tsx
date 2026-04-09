@@ -1,3 +1,4 @@
+// Verifies the shared todo drawer preselects and submits the lane and sprint context passed from board entry points.
 import React from 'react';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -224,6 +225,30 @@ describe('TodoDrawer', () => {
         1,
         expect.objectContaining({
           sprint_id: 7,
+        })
+      );
+    });
+  });
+
+  it('preselects and submits the current category for lane creation', async () => {
+    renderWithProviders(<TodoDrawer mode="create" boardId={1} initialCategoryId={4} onClose={vi.fn()} />);
+
+    await screen.findByRole('option', { name: 'Backlog' });
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('4');
+    });
+
+    fireEvent.change(screen.getByPlaceholderText('Ship dashboard polish'), {
+      target: { value: 'Lane scoped todo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Todo' }));
+
+    await waitFor(() => {
+      expect(mockedCreateTodo).toHaveBeenCalledWith(
+        '12',
+        1,
+        expect.objectContaining({
+          category_id: 4,
         })
       );
     });

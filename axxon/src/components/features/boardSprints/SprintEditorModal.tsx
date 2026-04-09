@@ -1,3 +1,4 @@
+// Creates and edits sprint metadata while keeping optional sprint colors aligned with brand defaults.
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -11,6 +12,8 @@ import { updateSprint } from '@/lib/api/sprints/updateSprint';
 import type { SprintBaseData } from '@/lib/types/sprintTypes';
 
 import { SprintIconGlyph, sprintIconOptions } from './sprintIcons';
+
+const DEFAULT_SPRINT_COLOR = '#2563eb';
 
 type SprintEditorModalProps = {
   boardId: number;
@@ -32,7 +35,7 @@ export default function SprintEditorModal({
   const [description, setDescription] = useState(sprint?.description ?? '');
   const [startDate, setStartDate] = useState(sprint?.start_date?.slice(0, 10) ?? '');
   const [endDate, setEndDate] = useState(sprint?.end_date?.slice(0, 10) ?? '');
-  const [color, setColor] = useState(sprint?.color ?? '#2563eb');
+  const [color, setColor] = useState(sprint?.color ?? DEFAULT_SPRINT_COLOR);
   const [useCustomColor, setUseCustomColor] = useState(Boolean(sprint?.color));
   const [icon, setIcon] = useState(sprint?.icon ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -42,7 +45,7 @@ export default function SprintEditorModal({
     setDescription(sprint?.description ?? '');
     setStartDate(sprint?.start_date?.slice(0, 10) ?? '');
     setEndDate(sprint?.end_date?.slice(0, 10) ?? '');
-    setColor(sprint?.color ?? '#2563eb');
+    setColor(sprint?.color ?? DEFAULT_SPRINT_COLOR);
     setUseCustomColor(Boolean(sprint?.color));
     setIcon(sprint?.icon ?? null);
     setErrorMessage(null);
@@ -201,7 +204,7 @@ export default function SprintEditorModal({
           {useCustomColor ? (
             <div className="mt-4 flex items-center gap-3">
               <span
-                className="h-10 w-10 rounded-2xl border border-white/40"
+                className="h-10 w-10 rounded-2xl border border-[var(--app-border)]"
                 style={{ backgroundColor: color }}
               />
               <input

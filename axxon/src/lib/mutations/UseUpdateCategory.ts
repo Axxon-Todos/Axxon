@@ -1,5 +1,7 @@
+// Updates board categories with optimistic cache refresh and post-save invalidation for dependent queries.
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { updateCategoryById } from '@/lib/api/categories/updateCategoryById';
+import type { UpdateCategory } from '@/lib/types/categoryTypes';
 
 export function useUpdateCategory(organizationId: string, boardId: string) {
   const queryClient = useQueryClient();
@@ -10,7 +12,7 @@ export function useUpdateCategory(organizationId: string, boardId: string) {
       data,
     }: {
       categoryId: number;
-      data: Partial<{ name: string; color: string; position: number }>;
+      data: Partial<Pick<UpdateCategory, 'name' | 'color' | 'position' | 'is_done'>>;
     }) => updateCategoryById(organizationId, boardId, categoryId, data),
 
     onMutate: async ({ categoryId, data }) => {
@@ -41,6 +43,9 @@ export function useUpdateCategory(organizationId: string, boardId: string) {
     onSettled: () => {
       queryClient.invalidateQueries({
         queryKey: ['categories', organizationId, boardId],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['todos', organizationId, boardId],
       });
     },
   });

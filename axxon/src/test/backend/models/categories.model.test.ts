@@ -1,3 +1,4 @@
+// Verifies category persistence keeps lane ordering and done-state normalization consistent for board todos.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Categories } from '@/lib/models/categories';
@@ -64,7 +65,7 @@ describe('Categories model', () => {
     ]);
   });
 
-  it('blocks marking a category active while it has completed todos', async () => {
+  it('clears completed todos when a done category becomes active', async () => {
     const creator = await createUser();
     const board = await createBoardRecord({ createdBy: creator.id });
     const doneCategory = await createCategoryRecord({
@@ -74,19 +75,21 @@ describe('Categories model', () => {
       name: 'Done',
     });
 
-    await createTodoRecord({
+    const todo = await createTodoRecord({
       boardId: board.id,
       categoryId: doneCategory.id,
       isComplete: true,
     });
 
-    await expect(
-      Categories.updateCategory({
-        id: doneCategory.id,
-        board_id: board.id,
-        is_done: false,
-      })
-    ).rejects.toThrow('Cannot mark category as active while it contains completed todos');
+    const updatedCategory = await Categories.updateCategory({
+      id: doneCategory.id,
+      board_id: board.id,
+      is_done: false,
+    });
+    const updatedTodo = await db('todos').where({ id: todo.id }).first();
+
+    expect(updatedCategory.is_done).toBe(false);
+    expect(updatedTodo?.is_complete).toBe(false);
   });
 
   it('blocks deleting categories that still contain todos', async () => {

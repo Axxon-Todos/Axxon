@@ -1,3 +1,4 @@
+// Coordinates shared modal and drawer state so board interactions can open consistent overlays from any view.
 'use client'
 
 import { createContext, useContext, useState } from 'react'
@@ -10,7 +11,7 @@ export type ModalType = 'ADD_TODO' | 'UPDATE_TODO' | 'CATEGORY'
 export type ModalVariant = 'modal' | 'drawer'
 
 type ModalPayloadMap = {
-  ADD_TODO: { boardId: number; sprintId?: number | null }
+  ADD_TODO: { boardId: number; sprintId?: number | null; categoryId?: number | null }
   UPDATE_TODO: { boardId: number; todo: TodoWithLabels }
   CATEGORY: CategoryBaseData
 }

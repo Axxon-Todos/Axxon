@@ -1,9 +1,11 @@
+// Renders a droppable lane shell for board categories with local category colors treated as identifiers.
 'use client'
 
 import { useDroppable } from '@dnd-kit/core'
 
 import type { TodoWithLabels } from '@/lib/types/todoTypes'
 
+import CreateTaskLaneButton from './CreateTaskLaneButton'
 import DraggableTodo from './DraggableTodo'
 
 export default function DroppableColumn({
@@ -14,6 +16,8 @@ export default function DroppableColumn({
   todoCount,
   todos,
   onTodoClick,
+  canCreateTodo = true,
+  onCreateTodo,
   managementMode = false,
 }: {
   categoryId: number
@@ -23,20 +27,23 @@ export default function DroppableColumn({
   todoCount?: number
   todos: TodoWithLabels[]
   onTodoClick: (todo: TodoWithLabels) => void
+  canCreateTodo?: boolean
+  onCreateTodo?: (categoryId: number) => void
   managementMode?: boolean
 }) {
   const { setNodeRef } = useDroppable({ id: categoryId })
+  const laneAccent = categoryColor || '#2563eb'
 
   return (
-    <section ref={setNodeRef} className="glass-panel rounded-[1.75rem] p-5 sm:p-6">
+    <section ref={setNodeRef} className="glass-panel group rounded-[1.75rem] p-5 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-3">
             <span
               className="h-4 w-4 rounded-full"
               style={{
-                backgroundColor: categoryColor || '#2563eb',
-                boxShadow: `0 0 0 8px color-mix(in srgb, ${categoryColor || '#2563eb'} 18%, transparent)`,
+                backgroundColor: laneAccent,
+                boxShadow: `0 0 0 8px color-mix(in srgb, ${laneAccent} 18%, transparent)`,
               }}
             />
             <h2 className="truncate text-2xl font-semibold">{categoryName}</h2>
@@ -60,13 +67,26 @@ export default function DroppableColumn({
             ordering.
           </div>
         ) : todos.length > 0 ? (
-          todos.map((todo) => (
-            <DraggableTodo
-              key={todo.id}
-              todo={todo}
-              onClick={() => onTodoClick(todo)}
-            />
-          ))
+          <>
+            {todos.map((todo) => (
+              <DraggableTodo key={todo.id} todo={todo} onClick={() => onTodoClick(todo)} />
+            ))}
+            {onCreateTodo ? (
+              <CreateTaskLaneButton
+                categoryName={categoryName}
+                disabled={!canCreateTodo}
+                disabledMessage="Archived sprints are read-only."
+                onClick={() => onCreateTodo(categoryId)}
+              />
+            ) : null}
+          </>
+        ) : onCreateTodo ? (
+          <CreateTaskLaneButton
+            categoryName={categoryName}
+            disabled={!canCreateTodo}
+            disabledMessage="Archived sprints are read-only."
+            onClick={() => onCreateTodo(categoryId)}
+          />
         ) : (
           <div
             className="rounded-[1.4rem] border border-dashed p-5 text-sm leading-6 app-text-muted"

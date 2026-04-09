@@ -1,3 +1,4 @@
+// Persists board workflow categories and enforces lane ordering and done-state invariants.
 import knex from '@/lib/db/db';
 import type { CategoryBaseData, CreateCategory, UpdateCategory, DeleteCategory, ListCategoriesForBoard, GetCategoryById } from '../types/categoryTypes';
 import { getAvailableColor } from '../utils/colorPicker';
@@ -156,14 +157,12 @@ export class Categories {
         }
 
         if (is_done === false) {
-          const completedTodoCount = await trx('todos')
+          await trx('todos')
             .where({ board_id, category_id: id, is_complete: true })
-            .count<{ count: string }>('id as count')
-            .first();
-
-          if (completedTodoCount && Number(completedTodoCount.count) > 0) {
-            throw new Error('Cannot mark category as active while it contains completed todos');
-          }
+            .update({
+              is_complete: false,
+              updated_at: trx.fn.now(),
+            });
         }
       }
 

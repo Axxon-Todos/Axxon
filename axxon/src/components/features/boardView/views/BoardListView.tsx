@@ -1,3 +1,4 @@
+// Renders the stacked list board view with drag-and-drop lane moves, category management, and lane-level task creation.
 'use client'
 
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core'
@@ -26,6 +27,8 @@ export default function BoardListView({
   onStageCategoryOrder,
   onSaveCategoryChanges,
   hasUnsavedCategoryChanges,
+  canAddTodo,
+  onCreateTodo,
 }: {
   categoryOrder: number[]
   categoryMap: Record<number, CategoryBaseData>
@@ -37,6 +40,8 @@ export default function BoardListView({
   onStageCategoryOrder: (order: number[]) => void
   onSaveCategoryChanges: () => Promise<void>
   hasUnsavedCategoryChanges: boolean
+  canAddTodo: boolean
+  onCreateTodo: (categoryId: number) => void
 }) {
   const [activeTodo, setActiveTodo] = useState<TodoWithLabels | null>(null)
   const [activeTodoWidth, setActiveTodoWidth] = useState<number | null>(null)
@@ -142,6 +147,8 @@ export default function BoardListView({
                   todoCount={categorizedTodos[category.id]?.length ?? 0}
                   todos={categorizedTodos[category.id] || []}
                   onTodoClick={onTodoClick}
+                  canCreateTodo={canAddTodo}
+                  onCreateTodo={onCreateTodo}
                 />
               ))
             )}
