@@ -1,3 +1,4 @@
+// Provides the shared create and edit drawer for board todos, including lane, sprint, assignee, and label controls.
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -28,6 +29,7 @@ interface TodoDrawerProps {
   boardId: number
   todo?: TodoWithLabels
   initialSprintId?: number | null
+  initialCategoryId?: number | null
   onClose: () => void
 }
 
@@ -42,7 +44,14 @@ function formatMemberName(member: User) {
   return [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.email
 }
 
-export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null, onClose }: TodoDrawerProps) {
+export default function TodoDrawer({
+  mode,
+  boardId,
+  todo,
+  initialSprintId = null,
+  initialCategoryId = null,
+  onClose,
+}: TodoDrawerProps) {
   const { organizationId } = useOrganizationRouteParams()
   const queryClient = useQueryClient()
   const boardIdKey = String(boardId)
@@ -73,7 +82,9 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
   const [description, setDescription] = useState(todo?.description || '')
   const [priority, setPriority] = useState(todo?.priority ? String(todo.priority) : '3')
   const [dueDate, setDueDate] = useState(todo?.due_date ? todo.due_date.slice(0, 10) : '')
-  const [categoryId, setCategoryId] = useState(todo?.category_id ? String(todo.category_id) : '')
+  const [categoryId, setCategoryId] = useState(
+    todo?.category_id ? String(todo.category_id) : initialCategoryId ? String(initialCategoryId) : ''
+  )
   const [sprintId, setSprintId] = useState(
     todo?.sprint_id ? String(todo.sprint_id) : initialSprintId ? String(initialSprintId) : ''
   )
@@ -87,13 +98,13 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
     setDescription(todo?.description || '')
     setPriority(todo?.priority ? String(todo.priority) : '3')
     setDueDate(todo?.due_date ? todo.due_date.slice(0, 10) : '')
-    setCategoryId(todo?.category_id ? String(todo.category_id) : '')
+    setCategoryId(todo?.category_id ? String(todo.category_id) : initialCategoryId ? String(initialCategoryId) : '')
     setSprintId(todo?.sprint_id ? String(todo.sprint_id) : initialSprintId ? String(initialSprintId) : '')
     setAssigneeId(todo?.assignee_id ? String(todo.assignee_id) : '')
     setIsComplete(Boolean(todo?.is_complete))
     setCurrentLabels(todo?.labels || [])
     setErrorMessage(null)
-  }, [initialSprintId, mode, todo])
+  }, [initialCategoryId, initialSprintId, mode, todo])
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -328,6 +339,7 @@ export default function TodoDrawer({ mode, boardId, todo, initialSprintId = null
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
                   className="app-input"
+                  aria-label="Category"
                 >
                   <option value="">No category</option>
                   {categories.map((category) => (

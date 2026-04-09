@@ -1,3 +1,4 @@
+// Verifies todo controller validation and realtime publishing behavior around board-scoped updates.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BadRequestError, NotFoundError } from '@/lib/utils/apiErrors';
@@ -131,6 +132,50 @@ describe('todoControllers', () => {
       title: 'Updated',
       priority: 4,
       sprint_id: 8,
+    });
+    expect(mockedPublishBoardUpdate).toHaveBeenCalledWith('5', {
+      type: 'todo:updated',
+      payload: updated,
+    });
+  });
+
+  it('publishes normalized todo updates after active-lane moves clear completion', async () => {
+    mockedUpdateTodo.mockResolvedValue({
+      id: 21,
+      board_id: 5,
+      title: 'Moved todo',
+      category_id: 3,
+      is_complete: false,
+    });
+    mockedGetTodoByIdWithLabels.mockResolvedValue({
+      id: 21,
+      board_id: 5,
+      title: 'Moved todo',
+      category_id: 3,
+      is_complete: false,
+      labels: [],
+    });
+
+    const updated = await updateTodo({
+      boardId: 5,
+      todoId: 21,
+      sessionUserId: 9,
+      data: {
+        category_id: 3,
+        is_complete: true,
+      },
+    });
+
+    expect(mockedUpdateTodo).toHaveBeenCalledWith({
+      id: 21,
+      board_id: 5,
+      category_id: 3,
+      is_complete: true,
+    });
+    expect(updated).toMatchObject({
+      id: 21,
+      category_id: 3,
+      is_complete: false,
     });
     expect(mockedPublishBoardUpdate).toHaveBeenCalledWith('5', {
       type: 'todo:updated',

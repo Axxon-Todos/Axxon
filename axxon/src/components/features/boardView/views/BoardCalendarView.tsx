@@ -1,3 +1,4 @@
+// Renders the board-specific calendar view and unscheduled task rail with board-aware accent styling.
 'use client'
 
 import dayjs from 'dayjs'

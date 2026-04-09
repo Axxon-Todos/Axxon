@@ -1,3 +1,4 @@
+// Verifies todo persistence enforces category-driven completion rules during create and update flows.
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { Todos } from '@/lib/models/todos';
@@ -56,7 +57,7 @@ describe('Todos model', () => {
     ).rejects.toThrow('Completed todos must belong to a done category');
   });
 
-  it('rejects updates that move a completed todo into an active category', async () => {
+  it('normalizes completed todos when they move from done to an active category', async () => {
     const creator = await createUser();
     const board = await createBoardRecord({ createdBy: creator.id });
     const activeCategory = await createCategoryRecord({
@@ -79,11 +80,78 @@ describe('Todos model', () => {
       is_complete: true,
     });
 
+    const updated = await Todos.updateTodo({
+      id: todo.id,
+      board_id: board.id,
+      category_id: activeCategory.id,
+    });
+
+    expect(updated).toMatchObject({
+      id: todo.id,
+      category_id: activeCategory.id,
+      is_complete: false,
+    });
+  });
+
+  it('normalizes completed todos when form saves include is_complete=true during an active move', async () => {
+    const creator = await createUser();
+    const board = await createBoardRecord({ createdBy: creator.id });
+    const activeCategory = await createCategoryRecord({
+      boardId: board.id,
+      position: 0,
+      isDone: false,
+      name: 'Backlog',
+    });
+    const doneCategory = await createCategoryRecord({
+      boardId: board.id,
+      position: 1,
+      isDone: true,
+      name: 'Done',
+    });
+
+    const todo = await Todos.createTodo({
+      board_id: board.id,
+      title: 'Review release notes',
+      category_id: doneCategory.id,
+      is_complete: true,
+    });
+
+    const updated = await Todos.updateTodo({
+      id: todo.id,
+      board_id: board.id,
+      category_id: activeCategory.id,
+      is_complete: true,
+    });
+
+    expect(updated).toMatchObject({
+      id: todo.id,
+      category_id: activeCategory.id,
+      is_complete: false,
+    });
+  });
+
+  it('still rejects marking a todo complete inside an active category without moving it', async () => {
+    const creator = await createUser();
+    const board = await createBoardRecord({ createdBy: creator.id });
+    const activeCategory = await createCategoryRecord({
+      boardId: board.id,
+      position: 0,
+      isDone: false,
+      name: 'Backlog',
+    });
+
+    const todo = await Todos.createTodo({
+      board_id: board.id,
+      title: 'Investigate API issue',
+      category_id: activeCategory.id,
+      is_complete: false,
+    });
+
     await expect(
       Todos.updateTodo({
         id: todo.id,
         board_id: board.id,
-        category_id: activeCategory.id,
+        is_complete: true,
       })
     ).rejects.toThrow('Completed todos must belong to a done category');
   });

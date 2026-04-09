@@ -1,3 +1,4 @@
+// Hosts global drawers so board flows can reuse the same create and edit overlays from any screen.
 'use client'
 
 import SideDrawer from '@/components/ui/SideDrawer'
@@ -23,6 +24,7 @@ export default function GlobalOverlayHost() {
           mode="create"
           boardId={modalState.payload.boardId}
           initialSprintId={modalState.payload.sprintId ?? null}
+          initialCategoryId={modalState.payload.categoryId ?? null}
           onClose={closeModal}
         />
       </SideDrawer>

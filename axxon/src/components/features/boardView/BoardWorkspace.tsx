@@ -1,3 +1,4 @@
+// Coordinates board data, modal flows, and view switching for the board workspace shell.
 'use client'
 
 import dayjs from 'dayjs'
@@ -29,6 +30,23 @@ import BoardHeader from './BoardHeader'
 import BoardCalendarView from './views/BoardCalendarView'
 import BoardKanbanView from './views/BoardKanbanView'
 import BoardListView from './views/BoardListView'
+
+function compareLaneTodoOrder(left: TodoWithLabels, right: TodoWithLabels) {
+  const leftCreatedAt = left.created_at ? new Date(left.created_at).getTime() : Number.NaN
+  const rightCreatedAt = right.created_at ? new Date(right.created_at).getTime() : Number.NaN
+  const leftHasCreatedAt = Number.isFinite(leftCreatedAt)
+  const rightHasCreatedAt = Number.isFinite(rightCreatedAt)
+
+  if (leftHasCreatedAt && rightHasCreatedAt && leftCreatedAt !== rightCreatedAt) {
+    return leftCreatedAt - rightCreatedAt
+  }
+
+  if (leftHasCreatedAt !== rightHasCreatedAt) {
+    return leftHasCreatedAt ? -1 : 1
+  }
+
+  return left.id - right.id
+}
 
 export default function BoardWorkspace({
   boardId,
@@ -112,7 +130,9 @@ export default function BoardWorkspace({
 
     return categories.reduce(
       (acc, category) => {
-        acc[category.id] = sprintScopedTodos.filter((todo) => todo.category_id === category.id)
+        acc[category.id] = sprintScopedTodos
+          .filter((todo) => todo.category_id === category.id)
+          .sort(compareLaneTodoOrder)
         return acc
       },
       {} as Record<number, TodoWithLabels[]>
@@ -132,6 +152,7 @@ export default function BoardWorkspace({
   }).length
 
   const hasUnsavedCategoryChanges = Boolean(unsavedOrder || Object.keys(unsavedCategories).length > 0)
+  const canAddTodo = !selectedSprint?.archived_at
 
   const resetCategoryManagement = () => {
     setIsManagingCategories(false)
@@ -169,6 +190,14 @@ export default function BoardWorkspace({
     updateTodo.mutate({ todoId: todo.id, data: { category_id: categoryId } })
   }
 
+  const handleAddTodo = (categoryId?: number) => {
+    openModal('ADD_TODO', {
+      boardId: Number(boardId),
+      sprintId: selectedSprint?.archived_at ? null : selectedSprint?.id ?? null,
+      categoryId,
+    })
+  }
+
   const handleSaveCategoryChanges = async () => {
     try {
       const updatePromises = Object.entries(unsavedCategories).map(([id, data]) =>
@@ -193,7 +222,7 @@ export default function BoardWorkspace({
 
   if (!board || !categories || !todos || !labels) {
     return (
-      <div className="app-page">
+      <div className="app-page w-full">
         <section className="glass-panel-strong rounded-[2rem] p-8">
           <p className="app-kicker">Board Workspace</p>
           <h1 className="mt-3 text-3xl font-semibold">Loading board...</h1>
@@ -215,28 +244,25 @@ export default function BoardWorkspace({
       }
 
   return (
-    <div className="app-page">
-      <BoardHeader
-        boardId={boardId}
-        board={board}
-        categoryCount={categories.length}
-        todoCount={sprintScopedTodos.length}
-        labelCount={labels.length}
-        dueSoonCount={dueSoonCount}
-        completedCount={completedCount}
-        activeView={activeView}
-        onChangeView={handleChangeView}
-        onAddTodo={() =>
-          openModal('ADD_TODO', {
-            boardId: Number(boardId),
-            sprintId: selectedSprint?.archived_at ? null : selectedSprint?.id ?? null,
-          })
-        }
-        isManagingCategories={isManagingCategories}
-        onToggleManageCategories={handleToggleManageCategories}
-        selectedSprint={selectedSprint}
-        canAddTodo={!selectedSprint?.archived_at}
-      />
+    <div className="flex flex-col gap-6">
+      <div className="app-page w-full">
+        <BoardHeader
+          boardId={boardId}
+          board={board}
+          categoryCount={categories.length}
+          todoCount={sprintScopedTodos.length}
+          labelCount={labels.length}
+          dueSoonCount={dueSoonCount}
+          completedCount={completedCount}
+          activeView={activeView}
+          onChangeView={handleChangeView}
+          onAddTodo={() => handleAddTodo()}
+          isManagingCategories={isManagingCategories}
+          onToggleManageCategories={handleToggleManageCategories}
+          selectedSprint={selectedSprint}
+          canAddTodo={canAddTodo}
+        />
+      </div>
 
       {modalState.type === 'CATEGORY' ? (
         <Modal isOpen onClose={closeModal} title="Edit Category">
@@ -269,16 +295,17 @@ export default function BoardWorkspace({
       ) : null}
 
       <AnimatePresence initial={false} mode="wait" custom={transitionDirection}>
-        <motion.div
-          key={activeView}
-          custom={transitionDirection}
-          variants={motionVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-        >
-          {activeView === 'list' ? (
+        {activeView === 'list' ? (
+          <motion.div
+            key="list"
+            className="app-page min-w-0 w-full"
+            custom={transitionDirection}
+            variants={motionVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="glass-panel relative rounded-[2rem] p-4 sm:p-5">
               <BoardListView
                 categoryOrder={categoryOrder}
@@ -294,11 +321,24 @@ export default function BoardWorkspace({
                 }}
                 onSaveCategoryChanges={handleSaveCategoryChanges}
                 hasUnsavedCategoryChanges={hasUnsavedCategoryChanges}
+                canAddTodo={canAddTodo}
+                onCreateTodo={handleAddTodo}
               />
             </div>
-          ) : null}
+          </motion.div>
+        ) : null}
 
-          {activeView === 'kanban' ? (
+        {activeView === 'kanban' ? (
+          <motion.div
+            key="kanban"
+            className="-mx-4 min-w-0 sm:-mx-6 lg:-mx-8"
+            custom={transitionDirection}
+            variants={motionVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
             <BoardKanbanView
               boardColor={board.color || '#2563eb'}
               categoryOrder={categoryOrder}
@@ -313,10 +353,23 @@ export default function BoardWorkspace({
               }}
               onSaveCategoryChanges={handleSaveCategoryChanges}
               hasUnsavedCategoryChanges={hasUnsavedCategoryChanges}
+              canAddTodo={canAddTodo}
+              onCreateTodo={handleAddTodo}
             />
-          ) : null}
+          </motion.div>
+        ) : null}
 
-          {activeView === 'calendar' ? (
+        {activeView === 'calendar' ? (
+          <motion.div
+            key="calendar"
+            className="app-page min-w-0 w-full"
+            custom={transitionDirection}
+            variants={motionVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="glass-panel relative rounded-[2rem] p-4 sm:p-5">
               <BoardCalendarView
                 board={board}
@@ -325,8 +378,8 @@ export default function BoardWorkspace({
                 onTodoClick={handleOpenTodo}
               />
             </div>
-          ) : null}
-        </motion.div>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
     </div>
   )

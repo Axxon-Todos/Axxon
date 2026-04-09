@@ -1,3 +1,4 @@
+// Persists board todos and enforces assignment, sprint, and completion/category invariants.
 import type { Knex } from 'knex'
 import knex from '@/lib/db/db'
 import type {
@@ -15,6 +16,20 @@ import type {
 } from '../types/todoTypes'
 
 export class Todos {
+    static getCategoryInBoard = async (
+        trx: Knex.Transaction,
+        boardId: number,
+        categoryId: number | undefined
+    ) => {
+        if (!categoryId) {
+            return null;
+        }
+
+        return trx('categories')
+            .where({ id: categoryId, board_id: boardId })
+            .first();
+    };
+
     static validateCompletionCategory = async (
         trx: Knex.Transaction,
         boardId: number,
@@ -29,9 +44,7 @@ export class Todos {
             throw new Error('Completed todos must belong to a done category');
         }
 
-        const category = await trx('categories')
-            .where({ id: categoryId, board_id: boardId })
-            .first();
+        const category = await this.getCategoryInBoard(trx, boardId, categoryId);
 
         if (!category || !category.is_done) {
             throw new Error('Completed todos must belong to a done category');
@@ -148,14 +161,28 @@ export class Todos {
                 return null;
             }
 
+            const isCategoryChanging =
+                Object.prototype.hasOwnProperty.call(updateData, 'category_id') &&
+                updateData.category_id !== undefined &&
+                updateData.category_id !== currentTodo.category_id;
             const nextCategoryId = updateData.category_id ?? currentTodo.category_id;
-            const nextIsComplete = updateData.is_complete ?? currentTodo.is_complete;
+            let nextIsComplete = updateData.is_complete ?? currentTodo.is_complete;
             const nextAssigneeId = Object.prototype.hasOwnProperty.call(updateData, 'assignee_id')
                 ? updateData.assignee_id
                 : currentTodo.assignee_id;
             const nextSprintId = Object.prototype.hasOwnProperty.call(updateData, 'sprint_id')
                 ? updateData.sprint_id
                 : currentTodo.sprint_id;
+            const normalizedUpdateData = { ...updateData };
+
+            if (isCategoryChanging && nextIsComplete) {
+                const nextCategory = await this.getCategoryInBoard(trx, board_id, nextCategoryId);
+
+                if (nextCategory && !nextCategory.is_done) {
+                    normalizedUpdateData.is_complete = false;
+                    nextIsComplete = false;
+                }
+            }
 
             await this.validateCompletionCategory(trx, board_id, nextCategoryId, nextIsComplete);
             await this.validateAssigneeMembership(trx, board_id, nextAssigneeId);
@@ -163,7 +190,7 @@ export class Todos {
 
             const [todo] = await trx('todos')
                 .where({id, board_id})
-                .update(updateData)
+                .update(normalizedUpdateData)
                 .returning('*')
 
             return todo || null;
