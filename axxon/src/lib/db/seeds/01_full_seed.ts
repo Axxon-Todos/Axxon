@@ -1,143 +1,315 @@
-import type { Knex } from "knex";
+// Seeds the development database with org-first demo data, boards, and related workspace records.
+import type { Knex } from 'knex';
+
+type SeedUser = {
+  id: number;
+  email: string;
+};
+
+type SeedOrganization = {
+  id: number;
+  name: string;
+  created_by: number;
+};
+
+type SeedBoard = {
+  id: number;
+  name: string;
+  created_by: number;
+  organization_id: number;
+};
+
+type SeedCategory = {
+  id: number;
+  board_id: number;
+};
+
+type SeedLabel = {
+  id: number;
+  board_id: number;
+};
+
+const RESET_TABLES = [
+  'github_webhook_events',
+  'board_repository_access',
+  'repositories',
+  'github_installations',
+  'message_attachments',
+  'messages',
+  'conversation_members',
+  'conversations',
+  'todo_labels',
+  'todos',
+  'sprints',
+  'labels',
+  'categories',
+  'board_members',
+  'boards',
+  'organization_members',
+  'organizations',
+  'users',
+];
+
+const USER_SEEDS = [
+  {
+    first_name: 'Xavier',
+    last_name: 'Campos',
+    email: 'xaviercampos2425@gmail.com',
+    avatar_url: null,
+  },
+  {
+    first_name: 'Alice',
+    last_name: 'Johnson',
+    email: 'alice.johnson@example.com',
+    avatar_url: null,
+  },
+  {
+    first_name: 'Bob',
+    last_name: 'Smith',
+    email: 'bob.smith@example.com',
+    avatar_url: null,
+  },
+  {
+    first_name: 'Carol',
+    last_name: 'Williams',
+    email: 'carol.williams@example.com',
+    avatar_url: null,
+  },
+] as const;
+
+const ORGANIZATION_SEEDS = [
+  {
+    name: 'Platform Command',
+    description: 'Primary workspace for product planning, roadmap management, and board analytics.',
+    color: '#0f766e',
+  },
+  {
+    name: 'Agent Delivery',
+    description: 'Delivery workspace for execution boards, sprint work, and release coordination.',
+    color: '#14532d',
+  },
+] as const;
+
+const BOARD_COLORS = ['#0F766E', '#15803D', '#0EA5A4', '#65A30D', '#1D4ED8', '#B45309'];
+
+const CATEGORY_SEEDS = [
+  { name: 'Backlog', color: '#94A3B8', is_done: false },
+  { name: 'Todo', color: '#3B82F6', is_done: false },
+  { name: 'In Progress', color: '#F59E0B', is_done: false },
+  { name: 'Done', color: '#10B981', is_done: true },
+  { name: 'Cancelled', color: '#EF4444', is_done: false },
+] as const;
+
+const LABEL_COLORS = ['#F97316', '#8B5CF6', '#14B8A6', '#EAB308', '#EC4899'];
+
+const TOTAL_BOARD_COUNT = 100;
+const TODOS_PER_CATEGORY = 4;
+
+async function clearSeedData(knex: Knex) {
+  await knex.raw(`TRUNCATE TABLE ${RESET_TABLES.join(', ')} RESTART IDENTITY CASCADE`);
+}
+
+function getRequiredUserId(users: SeedUser[], email: string) {
+  const user = users.find((candidate) => candidate.email === email);
+
+  if (!user) {
+    throw new Error(`Missing seeded user for email "${email}".`);
+  }
+
+  return user.id;
+}
+
+function buildBoardMemberIds({
+  boardIndex,
+  ownerId,
+  xavierId,
+  userIds,
+}: {
+  boardIndex: number;
+  ownerId: number;
+  xavierId: number;
+  userIds: number[];
+}) {
+  const memberIds = new Set<number>([ownerId]);
+
+  if (ownerId !== xavierId && boardIndex % 5 === 0) {
+    memberIds.add(xavierId);
+  }
+
+  let offset = 1;
+  while (memberIds.size < Math.min(4, userIds.length)) {
+    const candidateUserId = userIds[(boardIndex + offset) % userIds.length];
+    memberIds.add(candidateUserId);
+    offset += 1;
+  }
+
+  return Array.from(memberIds);
+}
+
+function buildTodoDueDate(categoryIndex: number, todoIndex: number) {
+  return new Date(Date.UTC(2030, 0, 1 + categoryIndex + todoIndex));
+}
 
 export async function seed(knex: Knex): Promise<void> {
-  // Clear in reverse FK order
-  await knex('todo_labels').del();
-  await knex('todos').del();
-  await knex('labels').del();
-  await knex('categories').del();
-  await knex('board_members').del();
-  await knex('boards').del();
-  await knex('users').del();
+  await clearSeedData(knex);
 
-  // Users
-  const users = [
-    { first_name: "Xavier", last_name: "Campos", email: "xaviercampos2425@gmail.com", avatar_url: null },
-    { first_name: "Alice", last_name: "Johnson", email: "alice.johnson@example.com", avatar_url: null },
-    { first_name: "Bob", last_name: "Smith", email: "bob.smith@example.com", avatar_url: null },
-    { first_name: "Carol", last_name: "Williams", email: "carol.williams@example.com", avatar_url: null },
-  ];
-  const insertedUsers = await knex('users').insert(users).returning(['id', 'email']);
+  const insertedUsers = (await knex('users')
+    .insert(USER_SEEDS)
+    .returning(['id', 'email'])) as SeedUser[];
 
-  const userMap = Object.fromEntries(insertedUsers.map(u => [u.email, u.id]));
-  const xavierId = userMap["xaviercampos2425@gmail.com"];
+  const xavierId = getRequiredUserId(insertedUsers, 'xaviercampos2425@gmail.com');
+  const aliceId = getRequiredUserId(insertedUsers, 'alice.johnson@example.com');
+  const userIds = insertedUsers.map((user) => user.id);
 
-  // Boards (100 total, 30+ to Xavier)
-  const boardColors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A8', '#A833FF', '#33FFF2'];
-  const boards = [];
+  const insertedOrganizations = (await knex('organizations')
+    .insert([
+      {
+        ...ORGANIZATION_SEEDS[0],
+        created_by: xavierId,
+        created_at: knex.fn.now(),
+        updated_at: knex.fn.now(),
+      },
+      {
+        ...ORGANIZATION_SEEDS[1],
+        created_by: aliceId,
+        created_at: knex.fn.now(),
+        updated_at: knex.fn.now(),
+      },
+    ])
+    .returning(['id', 'name', 'created_by'])) as SeedOrganization[];
 
-  for (let i = 0; i < 100; i++) {
-    const created_by = i < 30 ? xavierId : insertedUsers[i % insertedUsers.length].id;
-    boards.push({
-      name: `Board ${i + 1}`,
-      created_by,
-      color: boardColors[i % boardColors.length],
-    });
+  const primaryOrganizationId = insertedOrganizations[0]?.id;
+  const secondaryOrganizationId = insertedOrganizations[1]?.id;
+
+  if (!primaryOrganizationId || !secondaryOrganizationId) {
+    throw new Error('Expected both demo organizations to be created during seeding.');
   }
 
-  const insertedBoards = await knex('boards').insert(boards).returning(['id', 'created_by']);
+  await knex('organization_members').insert(
+    insertedOrganizations.flatMap((organization) =>
+      insertedUsers.map((user) => ({
+        organization_id: organization.id,
+        user_id: user.id,
+        role: user.id === organization.created_by ? 'owner' : 'member',
+        created_at: knex.fn.now(),
+      }))
+    )
+  );
 
-  // Board members with deduplication
-  const boardMembers = [];
+  const boardRows = Array.from({ length: TOTAL_BOARD_COUNT }, (_, index) => ({
+    name: `Board ${index + 1}`,
+    organization_id: index < 60 ? primaryOrganizationId : secondaryOrganizationId,
+    created_by: index < 30 ? xavierId : insertedUsers[index % insertedUsers.length].id,
+    color: BOARD_COLORS[index % BOARD_COLORS.length],
+    created_at: knex.fn.now(),
+    updated_at: knex.fn.now(),
+  }));
 
-  for (const board of insertedBoards) {
-    const membersSet = new Set<string>();
+  const insertedBoards = (await knex('boards')
+    .insert(boardRows)
+    .returning(['id', 'name', 'created_by', 'organization_id'])) as SeedBoard[];
 
-    // Add owner
-    boardMembers.push({ board_id: board.id, user_id: board.created_by });
-    membersSet.add(`${board.id}_${board.created_by}`);
+  const boardIndexByName = new Map(boardRows.map((board, index) => [board.name, index]));
 
-    // Add Xavier as member if not owner and 20% chance
-    if (board.created_by !== xavierId && Math.random() < 0.2) {
-      if (!membersSet.has(`${board.id}_${xavierId}`)) {
-        boardMembers.push({ board_id: board.id, user_id: xavierId });
-        membersSet.add(`${board.id}_${xavierId}`);
+  await knex('board_members').insert(
+    insertedBoards.flatMap((board) => {
+      const boardIndex = boardIndexByName.get(board.name);
+
+      if (boardIndex === undefined) {
+        throw new Error(`Missing deterministic board index for "${board.name}".`);
       }
-    }
 
-    // Add 1-2 random collaborators (excluding owner)
-    const otherUsers = insertedUsers.filter(u => u.id !== board.created_by);
-    const collaboratorCount = Math.floor(Math.random() * 2) + 1;
-    for (let i = 0; i < collaboratorCount; i++) {
-      const randomUser = otherUsers[Math.floor(Math.random() * otherUsers.length)];
-      const key = `${board.id}_${randomUser.id}`;
-      if (!membersSet.has(key)) {
-        boardMembers.push({ board_id: board.id, user_id: randomUser.id });
-        membersSet.add(key);
-      }
-    }
-  }
-  await knex('board_members').insert(boardMembers);
-
-  // Categories: 4 per board
-  const categoryColors = boardColors;
-  const categories = [];
-
-  for (const board of insertedBoards) {
-    for (let pos = 1; pos <= 4; pos++) {
-      categories.push({
+      return buildBoardMemberIds({
+        boardIndex,
+        ownerId: board.created_by,
+        xavierId,
+        userIds,
+      }).map((userId) => ({
         board_id: board.id,
-        name: `Category ${pos}`,
-        color: categoryColors[pos % categoryColors.length],
-        position: pos,
-        is_done: pos === 4,
-      });
-    }
+        user_id: userId,
+      }));
+    })
+  );
+
+  const categoryRows = insertedBoards.flatMap((board) =>
+    CATEGORY_SEEDS.map((category, index) => ({
+      board_id: board.id,
+      name: category.name,
+      color: category.color,
+      position: index,
+      is_done: category.is_done,
+      created_at: knex.fn.now(),
+      updated_at: knex.fn.now(),
+    }))
+  );
+
+  const insertedCategories = (await knex('categories')
+    .insert(categoryRows)
+    .returning(['id', 'board_id'])) as SeedCategory[];
+
+  const labelRows = insertedBoards.flatMap((board) =>
+    LABEL_COLORS.map((color, index) => ({
+      board_id: board.id,
+      name: `Label ${index + 1}`,
+      color,
+    }))
+  );
+
+  const insertedLabels = (await knex('labels')
+    .insert(labelRows)
+    .returning(['id', 'board_id'])) as SeedLabel[];
+
+  const labelIdsByBoardId = new Map<number, number[]>();
+  for (const label of insertedLabels) {
+    const labelIds = labelIdsByBoardId.get(label.board_id) ?? [];
+    labelIds.push(label.id);
+    labelIdsByBoardId.set(label.board_id, labelIds);
   }
 
-  const insertedCategories = await knex('categories').insert(categories).returning(['id', 'board_id']);
+  const todos = insertedCategories.flatMap((category, categoryIndex) =>
+    Array.from({ length: TODOS_PER_CATEGORY }, (_, todoIndex) => ({
+      board_id: category.board_id,
+      category_id: category.id,
+      title: `Task ${todoIndex + 1} for Category ${category.id}`,
+      description: `Auto-generated todo ${todoIndex + 1} under category ${category.id}.`,
+      due_date: buildTodoDueDate(categoryIndex, todoIndex),
+      assignee_id: userIds[(categoryIndex + todoIndex) % userIds.length],
+      priority: (todoIndex % 3) + 1,
+      is_complete: todoIndex === TODOS_PER_CATEGORY - 1,
+      created_at: knex.fn.now(),
+      updated_at: knex.fn.now(),
+    }))
+  );
 
-  // Labels: 5 per board
-  const labels = [];
-  for (const board of insertedBoards) {
-    for (let i = 0; i < 5; i++) {
-      labels.push({
-        board_id: board.id,
-        name: `Label ${i + 1}`,
-        color: categoryColors[i % categoryColors.length],
-      });
+  const insertedTodos = await knex('todos')
+    .insert(todos)
+    .returning(['id', 'board_id']);
+
+  const todoLabels = insertedTodos.flatMap((todo, todoIndex) => {
+    const labelIds = labelIdsByBoardId.get(todo.board_id) ?? [];
+
+    if (labelIds.length === 0) {
+      return [];
     }
-  }
 
-  const insertedLabels = await knex('labels').insert(labels).returning(['id', 'board_id']);
+    const selectedLabelIds = [
+      labelIds[todoIndex % labelIds.length],
+      labelIds[(todoIndex + 1) % labelIds.length],
+      ...(todoIndex % 3 === 0 ? [labelIds[(todoIndex + 2) % labelIds.length]] : []),
+    ];
 
-  // Todos: 6 per category (2400+ todos)
-  const todos = [];
-  for (const [i, cat] of insertedCategories.entries()) {
-    for (let j = 1; j <= 6; j++) {
-      todos.push({
-        board_id: cat.board_id,
-        title: `Task ${j} in Category ${cat.id}`,
-        description: `Auto-generated todo ${j} under category ${cat.id}`,
-        due_date: new Date(Date.now() + j * 86400000),
-        assignee_id: xavierId,
-        priority: (j % 3) + 1,
-        category_id: cat.id,
-        is_complete: j === 6,
-      });
-    }
-  }
-
-  const insertedTodos = await knex('todos').insert(todos).returning(['id', 'board_id']);
-
-  // Todo Labels: 1–3 per todo, from same board
-  const todoLabels = [];
-
-  for (const [i, todo] of insertedTodos.entries()) {
-    const boardId = todo.board_id;
-    const labelPool = insertedLabels.filter(l => l.board_id === boardId);
-    const count = Math.floor(Math.random() * 3) + 1;
-    const shuffled = labelPool.sort(() => 0.5 - Math.random()).slice(0, count);
-
-    for (const label of shuffled) {
-      todoLabels.push({ todo_id: todo.id, label_id: label.id });
-    }
-  }
+    return Array.from(new Set(selectedLabelIds)).map((labelId) => ({
+      todo_id: todo.id,
+      label_id: labelId,
+    }));
+  });
 
   await knex('todo_labels').insert(todoLabels);
 
   console.log(`🌱 Seed complete:
   - Users: ${insertedUsers.length}
+  - Organizations: ${insertedOrganizations.length}
+  - Organization members: ${insertedOrganizations.length * insertedUsers.length}
   - Boards: ${insertedBoards.length}
   - Categories: ${insertedCategories.length}
   - Labels: ${insertedLabels.length}
@@ -146,13 +318,6 @@ export async function seed(knex: Knex): Promise<void> {
 }
 
 export async function rollbackSeed(knex: Knex): Promise<void> {
-  // Delete in reverse order of dependencies to avoid FK errors
-  await knex('todo_labels').del();
-  await knex('todos').del();
-  await knex('labels').del();
-  await knex('categories').del();
-  await knex('board_members').del();
-  await knex('boards').del();
-  await knex('users').del();
+  await clearSeedData(knex);
+  console.log('🌱 Rollback complete.');
 }
-  console.log("🌱 Rollback complete.");
