@@ -1,3 +1,4 @@
+// Prepares the backend test database and migration state before Vitest starts.
 import path from 'node:path';
 import 'tsx/cjs';
 import knex from 'knex';
@@ -24,8 +25,7 @@ export default async function globalSetup() {
   const dbConfig = getBackendTestDbConfig();
 
   // Knex loads migrations through CommonJS in the backend test bootstrap.
-  // Register ts-node so TypeScript migration files can be required there.
-  await import('ts-node/register/transpile-only');
+  // `tsx/cjs` is already registered above so TypeScript migration files can be required.
 
   const adminDb = knex({
     client: 'pg',
