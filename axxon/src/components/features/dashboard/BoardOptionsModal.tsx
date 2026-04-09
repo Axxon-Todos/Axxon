@@ -9,6 +9,7 @@ import { PencilLine, Settings2, Trash2, UserPlus, X } from "lucide-react";
 import { buttonClassName } from "@/components/ui/Button";
 import { surfaceClassName } from "@/components/ui/Surface";
 import type { UpdateBoard } from "@/lib/types/boardTypes";
+import { resolveAccentColor } from "@/lib/utils/brandColors";
 
 type BoardOptionsModalProps = {
   board: UpdateBoard;
@@ -55,7 +56,7 @@ export default function BoardOptionsModal({
   }, [onClose]);
 
   const boardName = board.name || "Untitled Board";
-  const boardColor = board.color || "#15784e";
+  const boardColor = resolveAccentColor(board.color);
 
   return createPortal(
     <div
@@ -71,7 +72,7 @@ export default function BoardOptionsModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={PANEL_TRANSITION}
-        className="absolute inset-0 bg-[rgba(2,8,6,0.72)] backdrop-blur-md"
+        className="absolute inset-0 bg-[rgba(2,6,23,0.72)] backdrop-blur-md"
         onClick={onClose}
       />
 

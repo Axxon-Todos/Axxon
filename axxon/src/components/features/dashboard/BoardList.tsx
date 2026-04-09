@@ -1,3 +1,4 @@
+// Lists organization boards across page and sidebar layouts while keeping board colors as local identifiers only.
 'use client';
 
 import clsx from 'clsx';
@@ -11,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { deleteBoardById } from '@/lib/api/boards/deleteBoardById';
 import { fetchBoards } from '@/lib/api/boards/getBoards';
 import type { BoardBaseData } from '@/lib/types/boardTypes';
+import { resolveAccentColor } from '@/lib/utils/brandColors';
 import {
   buildOrganizationBoardAnalyticsPath,
   buildOrganizationBoardPath,
@@ -131,6 +133,7 @@ export default function BoardList({
             {boards.map((board, index) => {
               const boardName = board.name || 'Untitled Board';
               const boardId = String(board.id);
+              const boardAccent = resolveAccentColor(board.color);
               const overviewHref = buildOrganizationBoardPath(organizationId, board.id);
               const sprintsHref = buildOrganizationBoardSprintsPath(organizationId, board.id);
               const analyticsHref = buildOrganizationBoardAnalyticsPath(organizationId, board.id);
@@ -181,8 +184,8 @@ export default function BoardList({
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
                         style={{
-                          backgroundColor: board.color || '#94a3b8',
-                          boxShadow: `0 0 0 6px color-mix(in srgb, ${board.color || '#94a3b8'} 18%, transparent)`,
+                          backgroundColor: boardAccent,
+                          boxShadow: `0 0 0 6px color-mix(in srgb, ${boardAccent} 18%, transparent)`,
                         }}
                       />
 
@@ -263,51 +266,55 @@ export default function BoardList({
           </div>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
-            {boards.map((board, index) => (
-              <motion.article
-                key={board.id}
-                initial={
-                  shouldReduceMotion
-                    ? false
-                    : { opacity: 0, y: 14, scale: 0.985 }
-                }
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  ...itemTransition,
-                  delay: shouldReduceMotion ? 0 : index * 0.04,
-                }}
-                className="group glass-panel relative rounded-[1.8rem] p-5"
-              >
-                <Link
-                  href={buildOrganizationBoardPath(organizationId, board.id)}
-                  className="absolute inset-0 rounded-[1.8rem]"
-                />
-                <div className="pointer-events-none relative flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: board.color || '#2563eb' }}
-                      />
-                      <span className="truncate text-lg font-semibold">
-                        {board.name || 'Untitled Board'}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm app-text-muted">
-                      Execution layer for scoped work inside this organization.
-                    </p>
-                  </div>
+            {boards.map((board, index) => {
+              const boardAccent = resolveAccentColor(board.color);
 
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBoard(board)}
-                    className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </div>
-              </motion.article>
-            ))}
+              return (
+                <motion.article
+                  key={board.id}
+                  initial={
+                    shouldReduceMotion
+                      ? false
+                      : { opacity: 0, y: 14, scale: 0.985 }
+                  }
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    ...itemTransition,
+                    delay: shouldReduceMotion ? 0 : index * 0.04,
+                  }}
+                  className="group glass-panel relative rounded-[1.8rem] p-5"
+                >
+                  <Link
+                    href={buildOrganizationBoardPath(organizationId, board.id)}
+                    className="absolute inset-0 rounded-[1.8rem]"
+                  />
+                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: boardAccent }}
+                        />
+                        <span className="truncate text-lg font-semibold">
+                          {board.name || 'Untitled Board'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm app-text-muted">
+                        Execution layer for scoped work inside this organization.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBoard(board)}
+                      className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </div>
+                </motion.article>
+              );
+            })}
           </div>
         )}
       </div>

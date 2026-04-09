@@ -1,9 +1,11 @@
+// Renders the reusable board calendar timeline with theme-aware accent fallbacks for date cards and tasks.
 "use client";
 
 import { useState } from "react";
 import dayjs from "dayjs";
 import clsx from "clsx";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { resolveAccentColor } from "@/lib/utils/brandColors";
 
 export type CalendarTodo = {
   id: number | string;
@@ -32,7 +34,7 @@ type CalendarProps = {
 const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function todoSurfaceStyle(color?: string) {
-  const accent = color || "#2563eb";
+  const accent = resolveAccentColor(color);
 
   return {
     borderColor: `color-mix(in srgb, ${accent} 28%, var(--app-border))`,
@@ -166,7 +168,7 @@ export default function Calendar({
                       <div className="flex items-center gap-2">
                         <span
                           className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: todo.color || "#2563eb" }}
+                          style={{ backgroundColor: resolveAccentColor(todo.color) }}
                         />
                         <span className="truncate font-medium">{todo.title}</span>
                       </div>
@@ -227,7 +229,7 @@ export default function Calendar({
               >
                 <span
                   className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: todo.color || "#2563eb" }}
+                  style={{ backgroundColor: resolveAccentColor(todo.color) }}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{todo.title}</p>

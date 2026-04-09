@@ -145,7 +145,10 @@ describe('BoardAnalyticsView', () => {
     renderWithProviders(<BoardAnalyticsView boardId="7" />);
 
     expect(await screen.findByRole('heading', { name: 'Engineering Board' })).toBeInTheDocument();
+    expect(await screen.findByText('Operational focus')).toBeInTheDocument();
+    expect(await screen.findByText('Executive Snapshot')).toBeInTheDocument();
     expect(await screen.findByText('Category Performance')).toBeInTheDocument();
+    expect(screen.getByText('Workflow bottleneck')).toBeInTheDocument();
     expect(screen.getByText('Tracked Todos')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Members' })).toBeInTheDocument();
@@ -163,11 +166,12 @@ describe('BoardAnalyticsView', () => {
     const select = await screen.findByRole('combobox', { name: 'Filter by category' });
     fireEvent.change(select, { target: { value: '13' } });
 
-    expect(await screen.findByRole('heading', { name: 'Done' })).toBeInTheDocument();
+    expect(await screen.findByText(/Done is showing 2 tracked todos/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Active' }));
 
-    expect(await screen.findByText('Top labels by active')).toBeInTheDocument();
+    expect((await screen.findAllByText('No assigned work yet for this filter.')).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('No label activity yet for this filter.').length).toBeGreaterThan(0);
   });
 
   it('shows contextual empty states for no analytics data', async () => {
@@ -192,7 +196,7 @@ describe('BoardAnalyticsView', () => {
 
     expect(await screen.findByText('No todos to chart yet for this filter.')).toBeInTheDocument();
     expect(screen.getByText('No workflow categories available for this filter.')).toBeInTheDocument();
-    expect(screen.getByText('No assigned work yet for this filter.')).toBeInTheDocument();
-    expect(screen.getByText('No label activity yet for this filter.')).toBeInTheDocument();
+    expect(screen.getAllByText('No assigned work yet for this filter.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('No label activity yet for this filter.').length).toBeGreaterThan(0);
   });
 });

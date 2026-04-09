@@ -50,7 +50,7 @@ export default function SideDrawer({
       <button
         type="button"
         aria-label="Close drawer"
-        className="absolute inset-0 bg-[rgba(2,8,6,0.66)] backdrop-blur-md"
+        className="absolute inset-0 bg-[rgba(2,6,23,0.66)] backdrop-blur-md"
         onClick={onClose}
       />
 

@@ -1,4 +1,4 @@
-// Verifies the landing page exposes the refreshed AI-native positioning and primary call to action.
+// Verifies the landing page exposes the refreshed AI-native positioning and hero operating-model framing.
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,5 +23,11 @@ describe('LandingPage', () => {
       '/api/auth/google'
     );
     expect(screen.getByText('AI-native agile platform for agent teams')).toBeInTheDocument();
+    expect(screen.getByText('Operating Model')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', {
+        name: 'Organizations frame the work. Boards dispatch it. Reviews close the loop.',
+      })
+    ).toBeInTheDocument();
   });
 });

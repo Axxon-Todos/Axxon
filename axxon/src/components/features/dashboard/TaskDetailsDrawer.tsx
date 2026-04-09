@@ -1,3 +1,4 @@
+// Renders the calendar task detail drawer with source-board context and brand-aligned fallback accents.
 "use client";
 
 import Link from "next/link";
@@ -6,6 +7,7 @@ import { AlertCircle, ArrowRight, CalendarDays, FolderKanban, UserRound } from "
 
 import SideDrawer from "@/components/ui/SideDrawer";
 import type { CalendarTodo } from "@/components/common/calendar";
+import { resolveAccentColor } from "@/lib/utils/brandColors";
 
 const priorityMap: Record<number, string> = {
   1: "None",
@@ -37,7 +39,7 @@ export default function TaskDetailsDrawer({
             <div className="flex items-start gap-3">
               <span
                 className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                style={{ backgroundColor: todo.color || "#2563eb" }}
+                style={{ backgroundColor: resolveAccentColor(todo.color) }}
               />
               <div className="min-w-0 flex-1">
                 <p className="app-kicker">Source Board</p>

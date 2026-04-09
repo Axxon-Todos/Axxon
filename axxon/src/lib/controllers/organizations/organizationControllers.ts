@@ -1,3 +1,4 @@
+// Orchestrates org-scoped reads and mutations for organizations, members, and org-owned board creation.
 import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
@@ -13,6 +14,7 @@ import {
   requireOrganizationMember,
   requireOrganizationOwner,
 } from '@/lib/utils/authorization';
+import { resolvePersistedAccentColor } from '@/lib/utils/brandColors';
 
 type CreateOrganizationInput = {
   sessionUserId: number;
@@ -93,7 +95,7 @@ export async function createOrganization({
     created_by: sessionUserId,
     name,
     description: data.description?.trim() || null,
-    color: data.color?.trim() || null,
+    color: resolvePersistedAccentColor(data.color),
   });
 }
 
@@ -249,7 +251,7 @@ export async function createOrganizationBoard({
     organization_id: organizationId,
     created_by: sessionUserId,
     name: normalizeRequiredName(data.name, 'Board name'),
-    color: data.color?.trim() || '#2563eb',
+    color: resolvePersistedAccentColor(data.color),
     member_emails: [],
   });
 }

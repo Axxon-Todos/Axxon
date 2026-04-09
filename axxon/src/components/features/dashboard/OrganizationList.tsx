@@ -1,3 +1,4 @@
+// Lists organizations across the page and sidebar shells with organization colors treated as secondary identifiers.
 'use client';
 
 import clsx from 'clsx';
@@ -7,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, useReducedMotion } from 'framer-motion';
 import { FolderGit2, Users2 } from 'lucide-react';
 import { fetchOrganizations } from '@/lib/api/organizations/getOrganizations';
+import { resolveAccentColor } from '@/lib/utils/brandColors';
 import { buildOrganizationPath } from '@/lib/utils/routes';
 
 type OrganizationListProps = {
@@ -55,6 +57,7 @@ export default function OrganizationList({
         {organizations.map((organization, index) => {
           const href = buildOrganizationPath(organization.id);
           const isActive = pathname.startsWith(`${href}`);
+          const organizationAccent = resolveAccentColor(organization.color);
 
           return (
             <Link
@@ -86,7 +89,7 @@ export default function OrganizationList({
                 <div className="flex items-center gap-3 px-3 py-3">
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: organization.color || '#0f766e' }}
+                    style={{ backgroundColor: organizationAccent }}
                   />
                   <span className="min-w-0 flex-1 truncate text-sm font-medium">
                     {organization.name}
@@ -104,6 +107,7 @@ export default function OrganizationList({
     <div className="grid gap-4 lg:grid-cols-2">
       {organizations.map((organization, index) => {
         const href = buildOrganizationPath(organization.id);
+        const organizationAccent = resolveAccentColor(organization.color);
 
         return (
           <Link
@@ -143,7 +147,7 @@ export default function OrganizationList({
                   shouldReduceMotion ? 'duration-0' : 'duration-300'
                 )}
                 style={{
-                  background: `linear-gradient(135deg, ${organization.color || '#0f766e'}, transparent)`,
+                  background: `linear-gradient(135deg, ${organizationAccent}, transparent)`,
                 }}
               />
               <div className="relative">
@@ -163,7 +167,7 @@ export default function OrganizationList({
                       'h-4 w-4 shrink-0 rounded-full transition-transform',
                       shouldReduceMotion ? 'duration-0' : 'duration-300 group-hover:scale-110'
                     )}
-                    style={{ backgroundColor: organization.color || '#0f766e' }}
+                    style={{ backgroundColor: organizationAccent }}
                   />
                 </div>
 

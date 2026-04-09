@@ -18,6 +18,7 @@ import Surface from '@/components/ui/Surface';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
 import { getUserId } from '@/lib/api/users/getUserId';
+import { resolveAccentColor } from '@/lib/utils/brandColors';
 
 import type { OrganizationMemberRecord } from '@/lib/types/organizationMemberTypes';
 
@@ -73,7 +74,7 @@ export default function OrganizationWorkspace({
             organization.description ||
             'Top-level workspace for coordinating members, board execution surfaces, connected repositories, and future agent history.'
           }
-          accentColor={organization.color || '#2fd087'}
+          accentColor={resolveAccentColor(organization.color)}
           actions={
             <>
               <Button variant="primary" onClick={() => setIsCreateBoardModalOpen(true)}>

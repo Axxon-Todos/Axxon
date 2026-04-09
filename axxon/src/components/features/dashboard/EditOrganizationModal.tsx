@@ -1,3 +1,4 @@
+// Edits organization details while keeping the org accent aligned with the shared brand defaults.
 'use client';
 
 import { useState } from 'react';
@@ -7,6 +8,7 @@ import Modal from '@/components/ui/Modal';
 import OrganizationFormFields from '@/components/features/dashboard/OrganizationFormFields';
 import { updateOrganizationById } from '@/lib/api/organizations/updateOrganization';
 import type { OrganizationSummary } from '@/lib/types/organizationTypes';
+import { DEFAULT_BRAND_PRIMARY_HEX } from '@/lib/utils/brandColors';
 
 type EditOrganizationModalProps = {
   onClose: () => void;
@@ -20,7 +22,7 @@ export default function EditOrganizationModal({
   const queryClient = useQueryClient();
   const [name, setName] = useState(organization.name);
   const [description, setDescription] = useState(organization.description ?? '');
-  const [color, setColor] = useState(organization.color || '#0f766e');
+  const [color, setColor] = useState(organization.color || DEFAULT_BRAND_PRIMARY_HEX);
 
   const updateMutation = useMutation({
     mutationFn: () =>
