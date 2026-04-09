@@ -1,3 +1,4 @@
+// Verifies the Google OAuth route flow issues PKCE state correctly and validates callbacks.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -49,8 +50,26 @@ describe('Google auth routes', () => {
     expect(response.headers.get('location')).toBe('http://localhost:3000/api/auth/google/start');
   });
 
+  it('keeps the forwarded origin when the legacy auth route is reached through a proxy', async () => {
+    const response = await legacyGoogleLogin(
+      new NextRequest('http://localhost:3000/api/auth/google', {
+        headers: {
+          'x-forwarded-host': 'axxon-preview.example.com',
+          'x-forwarded-proto': 'https',
+        },
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      'https://axxon-preview.example.com/api/auth/google/start'
+    );
+  });
+
   it('starts Google OAuth with state and PKCE cookies', async () => {
-    const response = await startGoogleLogin();
+    const response = await startGoogleLogin(
+      new NextRequest('http://localhost:3000/api/auth/google/start')
+    );
     const location = response.headers.get('location');
     const setCookieHeader = response.headers.get('set-cookie');
 
@@ -65,6 +84,35 @@ describe('Google auth routes', () => {
     expect(authUrl.searchParams.get('state')).toBeTruthy();
     expect(authUrl.searchParams.get('code_challenge')).toBeTruthy();
     expect(authUrl.searchParams.get('code_challenge_method')).toBe('S256');
+  });
+
+  it('uses the incoming request origin for the callback URI in development', async () => {
+    const response = await startGoogleLogin(
+      new NextRequest('https://axxon-preview.example.com/api/auth/google/start')
+    );
+    const location = response.headers.get('location');
+    const authUrl = new URL(location!);
+
+    expect(authUrl.searchParams.get('redirect_uri')).toBe(
+      'https://axxon-preview.example.com/api/auth/google/callback'
+    );
+  });
+
+  it('uses forwarded proxy headers for the callback URI in development', async () => {
+    const response = await startGoogleLogin(
+      new NextRequest('http://localhost:3000/api/auth/google/start', {
+        headers: {
+          'x-forwarded-host': 'axxon-preview.example.com',
+          'x-forwarded-proto': 'https',
+        },
+      })
+    );
+    const location = response.headers.get('location');
+    const authUrl = new URL(location!);
+
+    expect(authUrl.searchParams.get('redirect_uri')).toBe(
+      'https://axxon-preview.example.com/api/auth/google/callback'
+    );
   });
 
   it('rejects callbacks with mismatched OAuth state', async () => {
@@ -113,6 +161,7 @@ describe('Google auth routes', () => {
     expect(mockedCompleteGoogleOAuthLogin).toHaveBeenCalledWith({
       code: 'valid-code',
       codeVerifier: 'code-verifier',
+      redirectUri: 'http://localhost:3000/api/auth/google/callback',
     });
     expect(mockedIssueSessionCookie).toHaveBeenCalledWith(
       expect.anything(),
@@ -124,5 +173,61 @@ describe('Google auth routes', () => {
     );
     expect(setCookieHeader).toContain(`${getGoogleOAuthCodeVerifierCookieName()}=`);
     expect(setCookieHeader).toContain('Max-Age=0');
+  });
+
+  it('redirects successful callbacks back to the same origin in development', async () => {
+    mockedCompleteGoogleOAuthLogin.mockResolvedValue({
+      email: 'user@example.com',
+      first_name: 'Grace',
+      id: 7,
+    });
+
+    const request = new NextRequest(
+      'https://axxon-preview.example.com/api/auth/google/callback?code=valid-code&state=expected-state',
+      {
+        headers: {
+          cookie: `${getGoogleOAuthStateCookieName()}=expected-state; ${getGoogleOAuthCodeVerifierCookieName()}=code-verifier`,
+        },
+      }
+    );
+
+    const response = await completeGoogleLogin(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://axxon-preview.example.com/dashboard');
+    expect(mockedCompleteGoogleOAuthLogin).toHaveBeenCalledWith({
+      code: 'valid-code',
+      codeVerifier: 'code-verifier',
+      redirectUri: 'https://axxon-preview.example.com/api/auth/google/callback',
+    });
+  });
+
+  it('uses forwarded proxy headers for callback completion in development', async () => {
+    mockedCompleteGoogleOAuthLogin.mockResolvedValue({
+      email: 'user@example.com',
+      first_name: 'Grace',
+      id: 7,
+    });
+
+    const request = new NextRequest(
+      'http://localhost:3000/api/auth/google/callback?code=valid-code&state=expected-state',
+      {
+        headers: {
+          cookie: `${getGoogleOAuthStateCookieName()}=expected-state; ${getGoogleOAuthCodeVerifierCookieName()}=code-verifier`,
+          'x-forwarded-host': 'axxon-preview.example.com',
+          'x-forwarded-proto': 'https',
+        },
+      }
+    );
+
+    const response = await completeGoogleLogin(request);
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://axxon-preview.example.com/dashboard');
+    expect(mockedCompleteGoogleOAuthLogin).toHaveBeenCalledWith({
+      code: 'valid-code',
+      codeVerifier: 'code-verifier',
+      redirectUri: 'https://axxon-preview.example.com/api/auth/google/callback',
+    });
   });
 });

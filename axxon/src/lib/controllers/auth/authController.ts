@@ -1,3 +1,4 @@
+// Exchanges Google OAuth codes for verified identity and maps them to local users.
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { Users } from '@/lib/models/users';
 import type { User } from '@/lib/types/users';
@@ -23,12 +24,14 @@ type GoogleIdTokenPayload = JWTPayload & {
 type CompleteGoogleOAuthLoginInput = {
   code: string;
   codeVerifier: string;
+  redirectUri: string;
 };
 
 // Exchanges the Google authorization code and resolves the local user.
 export async function completeGoogleOAuthLogin({
   code,
   codeVerifier,
+  redirectUri,
 }: CompleteGoogleOAuthLoginInput): Promise<User> {
   if (!code) {
     throw new BadRequestError('Authorization code not provided');
@@ -38,7 +41,11 @@ export async function completeGoogleOAuthLogin({
     throw new BadRequestError('OAuth code verifier not provided');
   }
 
-  const { clientId, redirectUri } = getGoogleOAuthConfig();
+  if (!redirectUri) {
+    throw new Error('Google OAuth configuration is incomplete');
+  }
+
+  const { clientId } = getGoogleOAuthConfig();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
   if (!clientSecret) {

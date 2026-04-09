@@ -1,10 +1,17 @@
+// Completes Google OAuth PKCE and redirects back to the same origin used to start the flow in development.
 'use server';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { completeGoogleOAuthLogin } from '@/lib/controllers/auth/authController';
 import { BadRequestError, handleApiError } from '@/lib/utils/apiErrors';
 import { issueSessionCookie } from '@/lib/utils/auth';
-import { clearGoogleOAuthCookies, readGoogleOAuthCookies } from '@/lib/utils/googleOAuth';
+import {
+  clearGoogleOAuthCookies,
+  readGoogleOAuthCookies,
+  resolveGoogleOAuthRedirectUri,
+  resolveGoogleOAuthReturnOrigin,
+  resolveRequestOrigin,
+} from '@/lib/utils/googleOAuth';
 
 export async function GET(req: NextRequest) {
   try {
@@ -30,16 +37,19 @@ export async function GET(req: NextRequest) {
       throw new BadRequestError('Google OAuth code verifier is missing');
     }
 
+    const requestOrigin = resolveRequestOrigin(req);
+    const redirectUri = resolveGoogleOAuthRedirectUri(requestOrigin);
     const user = await completeGoogleOAuthLogin({
       code,
       codeVerifier: oauthCookies.codeVerifier,
+      redirectUri,
     });
 
     // Set cookie and redirect
     const response = NextResponse.redirect(
       new URL(
         '/dashboard',
-        process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_HOSTNAME || req.nextUrl.origin
+        resolveGoogleOAuthReturnOrigin(requestOrigin)
       )
     );
     clearGoogleOAuthCookies(response);

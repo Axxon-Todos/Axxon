@@ -1,3 +1,4 @@
+// Builds and manages Google OAuth PKCE state while keeping callback origins consistent in development.
 import crypto from 'node:crypto';
 
 import type { NextRequest, NextResponse } from 'next/server';
@@ -6,9 +7,14 @@ const GOOGLE_OAUTH_STATE_COOKIE_NAME = 'google_oauth_state';
 const GOOGLE_OAUTH_CODE_VERIFIER_COOKIE_NAME = 'google_oauth_code_verifier';
 const GOOGLE_OAUTH_COOKIE_MAX_AGE_SECONDS = 60 * 10;
 const GOOGLE_OAUTH_COOKIE_PATH = '/api/auth/google';
+const GOOGLE_OAUTH_CALLBACK_PATH = '/api/auth/google/callback';
 const GOOGLE_OAUTH_SCOPE = 'openid email profile';
 
 type RequestWithCookies = Pick<NextRequest, 'cookies'>;
+
+function readForwardedHeaderValue(value?: string | null) {
+  return value?.split(',')[0]?.trim() || '';
+}
 
 export type GoogleOAuthConfig = {
   clientId: string;
@@ -19,6 +25,10 @@ export type GoogleOAuthTransientState = {
   codeVerifier: string;
   state: string;
 };
+
+function normalizeConfiguredUrl(value?: string | null) {
+  return value?.trim() || '';
+}
 
 function isSecureCookieEnabled() {
   return process.env.NODE_ENV === 'production';
@@ -34,13 +44,60 @@ export function getGoogleOAuthCodeVerifierCookieName() {
 
 export function getGoogleOAuthConfig(): GoogleOAuthConfig {
   const clientId = process.env.GOOGLE_CLIENT_ID;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || process.env.NEXT_PUBLIC_REDIRECT_URI;
+  const redirectUri =
+    normalizeConfiguredUrl(process.env.GOOGLE_REDIRECT_URI) ||
+    normalizeConfiguredUrl(process.env.NEXT_PUBLIC_REDIRECT_URI);
 
   if (!clientId || !redirectUri) {
     throw new Error('Google OAuth configuration is incomplete');
   }
 
   return { clientId, redirectUri };
+}
+
+export function resolveRequestOrigin(req: NextRequest) {
+  const protocol =
+    readForwardedHeaderValue(req.headers.get('x-forwarded-proto')) ||
+    req.nextUrl.protocol.replace(/:$/, '');
+  const host =
+    readForwardedHeaderValue(req.headers.get('x-forwarded-host')) ||
+    readForwardedHeaderValue(req.headers.get('host')) ||
+    req.nextUrl.host;
+
+  if (!protocol || !host) {
+    return req.nextUrl.origin;
+  }
+
+  return `${protocol}://${host}`;
+}
+
+export function resolveGoogleOAuthRedirectUri(requestOrigin?: string) {
+  if (requestOrigin && process.env.NODE_ENV !== 'production') {
+    return new URL(GOOGLE_OAUTH_CALLBACK_PATH, requestOrigin).toString();
+  }
+
+  const { redirectUri } = getGoogleOAuthConfig();
+  return redirectUri;
+}
+
+export function resolveGoogleOAuthReturnOrigin(requestOrigin?: string) {
+  if (requestOrigin && process.env.NODE_ENV !== 'production') {
+    return requestOrigin;
+  }
+
+  const configuredOrigin =
+    normalizeConfiguredUrl(process.env.APP_BASE_URL) ||
+    normalizeConfiguredUrl(process.env.NEXT_PUBLIC_HOSTNAME);
+
+  if (configuredOrigin) {
+    return configuredOrigin;
+  }
+
+  if (requestOrigin) {
+    return requestOrigin;
+  }
+
+  throw new Error('Application base URL is not configured');
 }
 
 export function createGoogleOAuthState() {
@@ -57,12 +114,14 @@ export function createGooglePkceCodeChallenge(codeVerifier: string) {
 
 export function buildGoogleAuthorizationUrl({
   codeChallenge,
+  redirectUri,
   state,
 }: {
   codeChallenge: string;
+  redirectUri: string;
   state: string;
 }) {
-  const { clientId, redirectUri } = getGoogleOAuthConfig();
+  const { clientId } = getGoogleOAuthConfig();
   const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
 
   authUrl.searchParams.set('client_id', clientId);
