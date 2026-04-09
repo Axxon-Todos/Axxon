@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Button from '@/components/ui/Button';
 import Surface from '@/components/ui/Surface';
 import { useCreateBoard } from '@/lib/mutations/useCreateBoard';
+import { DEFAULT_BRAND_PRIMARY_HEX } from '@/lib/utils/brandColors';
 
 interface CreateBoardFormProps {
   organizationId: string;
@@ -16,7 +17,7 @@ export default function CreateBoardForm({
   onClose,
 }: CreateBoardFormProps) {
   const [name, setName] = useState('');
-  const [color, setColor] = useState('#15784e');
+  const [color, setColor] = useState(DEFAULT_BRAND_PRIMARY_HEX);
 
   const createMutation = useCreateBoard(organizationId);
 

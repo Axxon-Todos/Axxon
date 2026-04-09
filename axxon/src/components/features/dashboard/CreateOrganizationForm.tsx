@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import OrganizationFormFields from '@/components/features/dashboard/OrganizationFormFields';
 import Button from '@/components/ui/Button';
 import { createOrganization } from '@/lib/api/organizations/createOrganization';
+import { DEFAULT_BRAND_PRIMARY_HEX } from '@/lib/utils/brandColors';
 
 interface CreateOrganizationFormProps {
   onClose: () => void;
@@ -17,7 +18,7 @@ export default function CreateOrganizationForm({
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState('#15784e');
+  const [color, setColor] = useState(DEFAULT_BRAND_PRIMARY_HEX);
 
   const createMutation = useMutation({
     mutationFn: () =>

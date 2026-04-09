@@ -39,7 +39,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 bg-[rgba(2,8,6,0.68)] backdrop-blur-md transition-opacity"
+        className="fixed inset-0 bg-[rgba(2,6,23,0.68)] backdrop-blur-md transition-opacity"
         onClick={onClose}
       />
 

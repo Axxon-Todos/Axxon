@@ -15,6 +15,7 @@ import PageHero from '@/components/ui/PageHero';
 import Surface from '@/components/ui/Surface';
 import { fetchOrganizations } from '@/lib/api/organizations/getOrganizations';
 import { getUserId } from '@/lib/api/users/getUserId';
+import { DEFAULT_THEME_ACCENT } from '@/lib/utils/brandColors';
 
 export default function DashboardOverview() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -62,7 +63,7 @@ export default function DashboardOverview() {
           kicker="Organizations"
           title="Choose the organization boundary before you enter execution."
           description="Axxon treats organizations as the top-level workspace. Boards live inside those orgs so members, repo context, and AI-assisted work stay aligned in one system."
-          accentColor="#2fd087"
+          accentColor={DEFAULT_THEME_ACCENT}
           actions={
             <Button variant="primary" onClick={() => setIsCreateModalOpen(true)}>
               Create Organization

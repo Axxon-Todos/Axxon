@@ -1,27 +1,37 @@
+// Covers organization controller normalization, authorization, and brand-default color behavior.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ForbiddenError } from '@/lib/utils/apiErrors';
+import { DEFAULT_BRAND_PRIMARY_HEX } from '@/lib/utils/brandColors';
 
 const {
+  mockedCreateBoard,
+  mockedCreateOrganizationModel,
   mockedGetSummaryById,
   mockedAddOrganizationMembers,
   mockedListOrganizationInviteCandidates,
   mockedListMembershipsForUserIds,
   mockedUpdateOrganizationModel,
   mockedListUsersByIds,
+  mockedRequireOrganizationMember,
   mockedRequireOrganizationOwner,
 } = vi.hoisted(() => ({
+  mockedCreateBoard: vi.fn(),
+  mockedCreateOrganizationModel: vi.fn(),
   mockedGetSummaryById: vi.fn(),
   mockedAddOrganizationMembers: vi.fn(),
   mockedListOrganizationInviteCandidates: vi.fn(),
   mockedListMembershipsForUserIds: vi.fn(),
   mockedUpdateOrganizationModel: vi.fn(),
   mockedListUsersByIds: vi.fn(),
+  mockedRequireOrganizationMember: vi.fn(),
   mockedRequireOrganizationOwner: vi.fn(),
 }));
 
 vi.mock('@/lib/models/board', () => ({
-  Board: {},
+  Board: {
+    createBoard: mockedCreateBoard,
+  },
 }));
 
 vi.mock('@/lib/models/boardMembers', () => ({
@@ -38,6 +48,7 @@ vi.mock('@/lib/models/organizationMembers', () => ({
 
 vi.mock('@/lib/models/organizations', () => ({
   Organizations: {
+    createOrganization: mockedCreateOrganizationModel,
     getSummaryById: mockedGetSummaryById,
     updateOrganization: mockedUpdateOrganizationModel,
   },
@@ -50,11 +61,13 @@ vi.mock('@/lib/models/users', () => ({
 }));
 
 vi.mock('@/lib/utils/authorization', () => ({
-  requireOrganizationMember: vi.fn(),
+  requireOrganizationMember: mockedRequireOrganizationMember,
   requireOrganizationOwner: mockedRequireOrganizationOwner,
 }));
 
 import {
+  createOrganization,
+  createOrganizationBoard,
   inviteOrganizationMembers,
   searchOrganizationInviteCandidates,
   updateOrganization,
@@ -63,7 +76,21 @@ import {
 describe('organizationControllers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedRequireOrganizationMember.mockResolvedValue({ id: 3 });
     mockedRequireOrganizationOwner.mockResolvedValue({ id: 3 });
+    mockedCreateBoard.mockResolvedValue({
+      id: 9,
+      organization_id: 3,
+      created_by: 7,
+      name: 'Delivery Board',
+      color: DEFAULT_BRAND_PRIMARY_HEX,
+    });
+    mockedCreateOrganizationModel.mockResolvedValue({
+      id: 3,
+      name: 'Platform',
+      description: null,
+      color: DEFAULT_BRAND_PRIMARY_HEX,
+    });
     mockedUpdateOrganizationModel.mockResolvedValue({
       id: 3,
       name: 'Platform',
@@ -91,6 +118,43 @@ describe('organizationControllers', () => {
     mockedListMembershipsForUserIds.mockResolvedValue([]);
     mockedAddOrganizationMembers.mockResolvedValue(1);
     mockedListOrganizationInviteCandidates.mockResolvedValue([]);
+  });
+
+  it('defaults new organizations to the shared brand primary color', async () => {
+    await createOrganization({
+      sessionUserId: 7,
+      data: {
+        name: '  Platform  ',
+        description: '  Org shell  ',
+        color: '   ',
+      },
+    });
+
+    expect(mockedCreateOrganizationModel).toHaveBeenCalledWith({
+      created_by: 7,
+      name: 'Platform',
+      description: 'Org shell',
+      color: DEFAULT_BRAND_PRIMARY_HEX,
+    });
+  });
+
+  it('defaults new org boards to the shared brand primary color', async () => {
+    await createOrganizationBoard({
+      organizationId: 3,
+      sessionUserId: 7,
+      data: {
+        name: '  Delivery Board  ',
+      },
+    });
+
+    expect(mockedRequireOrganizationMember).toHaveBeenCalledWith(3, 7);
+    expect(mockedCreateBoard).toHaveBeenCalledWith({
+      organization_id: 3,
+      created_by: 7,
+      name: 'Delivery Board',
+      color: DEFAULT_BRAND_PRIMARY_HEX,
+      member_emails: [],
+    });
   });
 
   it('normalizes updates before saving and returns the refreshed summary', async () => {

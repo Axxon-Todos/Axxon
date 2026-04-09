@@ -1,3 +1,4 @@
+// Renders the authenticated dashboard sidebar with collapsible navigation, org-aware lists, and utility actions.
 "use client";
 
 import { useState } from "react";
@@ -24,7 +25,7 @@ import Modal from "@/components/ui/Modal";
 import { useTheme } from "@/context/ThemeProvider";
 import { useOrganizationRouteParams } from "@/hooks/useOrganizationRouteParams";
 
-export const SIDEBAR_EXPANDED_WIDTH = 280;
+export const SIDEBAR_EXPANDED_WIDTH = 320;
 export const SIDEBAR_COLLAPSED_WIDTH = 84;
 export const SIDEBAR_TRANSITION = {
   type: "spring",
@@ -35,6 +36,7 @@ export const SIDEBAR_TRANSITION = {
 
 const SIDEBAR_COLLAPSED_BUTTON_SIZE = 52;
 const SIDEBAR_COLLAPSED_ICON_SIZE = 32;
+const SIDEBAR_LABEL_MAX_WIDTH = 208;
 const CONTENT_TRANSITION = {
   duration: 0.26,
   ease: [0.16, 1, 0.3, 1] as const,
@@ -98,7 +100,7 @@ export default function Sidebar({
           className="glass-panel-strong fixed inset-y-0 left-0 z-30 flex h-screen flex-col overflow-hidden border-r border-[var(--app-border)] text-[var(--app-foreground)] shadow-[var(--app-shadow)] backdrop-blur-xl"
         >
           <motion.div
-            className={`px-3 pb-3 pt-4 ${collapsed ? "flex justify-center" : ""}`}
+            className={collapsed ? "flex justify-center px-3 pb-3 pt-4" : "px-4 pb-4 pt-5"}
           >
             <motion.div
               initial={false}
@@ -180,7 +182,7 @@ export default function Sidebar({
             </div>
           </motion.div>
 
-          <div className={`grid gap-2 px-3 ${collapsed ? "justify-center" : ""}`}>
+          <div className={collapsed ? "grid justify-center gap-2 px-3" : "grid gap-2 px-4"}>
             <SidebarNavItem
               href="/dashboard"
               label="Organizations"
@@ -190,7 +192,7 @@ export default function Sidebar({
             />
           </div>
 
-          <div className="px-3 py-3">
+          <div className={collapsed ? "px-3 py-3" : "px-4 py-4"}>
             <Separator.Root
               decorative
               orientation="horizontal"
@@ -198,7 +200,7 @@ export default function Sidebar({
             />
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-col px-3 pb-4">
+          <div className={collapsed ? "flex min-h-0 flex-1 flex-col px-3 pb-4" : "flex min-h-0 flex-1 flex-col px-4 pb-5"}>
             <motion.div
               initial={false}
               animate={{
@@ -215,7 +217,7 @@ export default function Sidebar({
               <motion.div
                 animate={{ opacity: collapsed ? 0 : 1, y: collapsed ? -6 : 0 }}
                 transition={contentTransition}
-                className="px-4 pb-3 pt-4"
+                className="px-5 pb-3 pt-4"
               >
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] app-text-muted">
                   {organizationId ? "Boards" : "Organizations"}
@@ -235,7 +237,7 @@ export default function Sidebar({
 
               <ScrollArea.Root className="min-h-0 flex-1">
                 <ScrollArea.Viewport className="h-full w-full">
-                  <div className="px-3 py-3">
+                  <div className="px-4 py-4">
                     {organizationId ? (
                       <BoardList organizationId={organizationId} variant="sidebar" />
                     ) : (
@@ -253,7 +255,7 @@ export default function Sidebar({
             </motion.div>
           </div>
 
-          <div className="px-3 pb-4">
+          <div className={collapsed ? "px-3 pb-4" : "px-4 pb-5"}>
             <Separator.Root
               decorative
               orientation="horizontal"
@@ -363,7 +365,7 @@ function SidebarNavItem({
       <motion.div
         whileHover={shouldReduceMotion ? undefined : { x: 4 }}
         whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
-        className="glass-button flex min-h-14 items-center justify-between rounded-[20px] px-3.5 transition-colors"
+        className="glass-button flex min-h-14 items-center justify-between rounded-[20px] px-4 transition-colors"
         style={{
           ...(active
             ? {
@@ -468,7 +470,7 @@ function SidebarUtilityButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="glass-button w-full min-h-12 justify-start px-3.5 disabled:cursor-not-allowed disabled:opacity-60"
+      className="glass-button w-full min-h-12 justify-start px-4 disabled:cursor-not-allowed disabled:opacity-60"
     >
       <span
         className="flex h-9 w-9 items-center justify-center rounded-2xl border"
@@ -501,7 +503,7 @@ function SidebarLabel({
       animate={{
         opacity: collapsed ? 0 : 1,
         x: collapsed ? -8 : 0,
-        maxWidth: collapsed ? 0 : 160,
+        maxWidth: collapsed ? 0 : SIDEBAR_LABEL_MAX_WIDTH,
       }}
       transition={transition}
       aria-hidden={collapsed}

@@ -23,6 +23,7 @@ import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
 import type { BoardRepositoryAccessMatrixResponse } from '@/lib/types/boardRepositoryAccessTypes';
 import type { OrganizationMemberRecord } from '@/lib/types/organizationMemberTypes';
 import type { User } from '@/lib/types/users';
+import { resolveAccentColor } from '@/lib/utils/brandColors';
 import {
   buildOrganizationBoardAnalyticsPath,
   buildOrganizationBoardPath,
@@ -200,7 +201,7 @@ export default function BoardSettingsView({ boardId }: { boardId: string }) {
           kicker="Board Settings"
           title={board.name}
           description="Review board members, adjust repository access, and inspect how repositories are shared across boards."
-          accentColor={board.color || '#2fd087'}
+          accentColor={resolveAccentColor(board.color)}
           actions={
             <>
               <Link

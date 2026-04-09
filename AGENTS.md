@@ -21,7 +21,7 @@ Axxon is an agent-work orchestration platform for software teams.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
 ## Design System
-Axxon now uses a dark-first deep-green platform theme with light-mode support.
+Axxon now uses a dark-first slate/graphite platform theme with indigo primary actions, cyan secondary accents, and light-mode support.
 
 - Treat `axxon/src/app/globals.css` as the canonical source for semantic design tokens, shared surface styles, and landing-shell utilities.
 - Prefer the shared UI primitives in `axxon/src/components/ui` such as `Button`, `Surface`, `Badge`, `PageHero`, and `SegmentedControl` before introducing new one-off styling patterns.
@@ -73,7 +73,7 @@ Use TypeScript throughout and prefer the `@/` import alias for internal modules.
 - Prefer dedicated type files under `src/lib/types`; inline types are fine only when they are very small and tightly local.
 - Add short comments only where the intent is not obvious from the code.
 - Preserve the existing visual and structural conventions unless a deliberate product-level redesign is part of the task.
-- Default new UI work to the dark-first deep-green design system and shared semantic tokens instead of hardcoded Tailwind color classes.
+- Default new UI work to the slate/graphite, indigo, and cyan design foundation and shared semantic tokens instead of hardcoded Tailwind color classes.
 
 ## Backend Coding
 Knex is used at the model and migrations layer.

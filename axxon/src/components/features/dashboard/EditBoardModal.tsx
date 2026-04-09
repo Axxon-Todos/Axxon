@@ -1,3 +1,4 @@
+// Edits board details while preserving a brand-aligned fallback accent for boards without a saved color.
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -5,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { updateBoardById } from '@/lib/api/boards/updateBoardById';
 import type { UpdateBoard } from '@/lib/types/boardTypes';
 import Modal from '@/components/ui/Modal';
+import { DEFAULT_BRAND_PRIMARY_HEX } from '@/lib/utils/brandColors';
 
 type EditBoardModalProps = {
   board: UpdateBoard & { organization_id: number };
@@ -18,7 +20,7 @@ export default function EditBoardModal({
   onSuccess,
 }: EditBoardModalProps) {
   const [name, setName] = useState(board.name || '');
-  const [color, setColor] = useState(board.color || '#000000');
+  const [color, setColor] = useState(board.color || DEFAULT_BRAND_PRIMARY_HEX);
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -59,7 +61,7 @@ export default function EditBoardModal({
           </div>
           <div className="flex items-center gap-3">
             <span
-              className="h-10 w-10 rounded-2xl border border-white/40"
+              className="h-10 w-10 rounded-2xl border border-[var(--app-border)]"
               style={{ backgroundColor: color }}
             />
             <input

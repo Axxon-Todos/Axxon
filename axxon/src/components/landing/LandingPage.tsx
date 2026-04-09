@@ -168,18 +168,22 @@ export default function LandingPage() {
                 <div className="relative">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="app-kicker">Execution Graph</p>
+                      <p className="app-kicker">Operating Model</p>
                       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--app-foreground-strong)]">
-                        One control plane for human and agent delivery
+                        Organizations frame the work. Boards dispatch it. Reviews close the loop.
                       </h2>
+                      <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--app-muted-strong)]">
+                        The scene maps Axxon&apos;s actual system shape: org governance, board planning, repo truth,
+                        agent execution, and review all connected inside one governed workflow.
+                      </p>
                     </div>
                     <span className="app-badge">
                       <Bot className="h-3.5 w-3.5" />
-                      Live orchestration
+                      Agent control plane
                     </span>
                   </div>
 
-                  <div className="relative h-[360px] overflow-hidden rounded-[1.6rem] border border-[var(--app-border)] bg-[radial-gradient(circle_at_top,rgba(47,208,135,0.08),transparent_45%),linear-gradient(180deg,rgba(4,10,8,0.86),rgba(8,18,14,0.96))]">
+                  <div className="relative h-[360px] overflow-hidden rounded-[1.6rem] border border-[var(--app-border)] bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--app-accent)_14%,transparent),transparent_45%),linear-gradient(180deg,rgba(15,23,42,0.88),rgba(17,24,39,0.96))]">
                     <HeroScene />
                   </div>
 
@@ -373,9 +377,9 @@ export default function LandingPage() {
 
                 <div className="landing-glass-card rounded-[1.8rem] p-6">
                   <p className="app-kicker">Default theme</p>
-                  <p className="mt-3 text-lg font-semibold text-[var(--app-foreground-strong)]">Dark-first deep green</p>
+                  <p className="mt-3 text-lg font-semibold text-[var(--app-foreground-strong)]">Slate, indigo, and cyan</p>
                   <p className="mt-3 text-sm leading-7 text-[var(--app-muted-strong)]">
-                    The brand defaults to charcoal and pine-green with a controlled lime highlight. Light mode remains available without breaking consistency.
+                    The brand now anchors the product in graphite neutrals, indigo primary actions, and a restrained cyan accent. Light mode stays available without breaking hierarchy.
                   </p>
                 </div>
               </div>

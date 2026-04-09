@@ -1,4 +1,19 @@
-'use client'
+// Renders workflow category load as an immersive stacked chart for board analytics.
+'use client';
+
+import { useReducedMotion } from 'framer-motion';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+
+import AnalyticsEmptyState from './AnalyticsEmptyState';
 
 type ScopeMode = 'all' | 'completed' | 'active';
 
@@ -23,84 +38,144 @@ function getValueForScope(item: AnalyticsCategoryBarItem, scope: ScopeMode) {
   return item.total;
 }
 
+function WorkflowTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: AnalyticsCategoryBarItem }>;
+}) {
+  const category = payload?.[0]?.payload;
+
+  if (!active || !category) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-[1rem] border border-[var(--app-border)] bg-[var(--app-panel-strong)] px-3 py-2.5 shadow-[0_22px_60px_-30px_rgba(2,6,23,0.9)]">
+      <p className="text-sm font-semibold">{category.label}</p>
+      <div className="mt-2 grid gap-1.5 text-xs app-text-muted">
+        <p>{category.total} total</p>
+        <p>{category.completed} completed</p>
+        <p>{category.active} active</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsCategoryBarChart({
   items,
   scope,
   emptyLabel,
 }: AnalyticsCategoryBarChartProps) {
-  if (!items.length) {
-    return (
-      <div className="glass-panel flex h-full items-center justify-center rounded-[1.3rem] p-6 text-sm app-text-muted">
-        {emptyLabel}
-      </div>
-    );
+  const shouldReduceMotion = useReducedMotion() ?? false;
+  const visibleItems = items.filter((item) => getValueForScope(item, scope) > 0 || scope === 'all');
+
+  if (!visibleItems.length) {
+    return <AnalyticsEmptyState label={emptyLabel} className="min-h-[320px]" />;
   }
 
-  const maxValue = Math.max(...items.map((item) => getValueForScope(item, scope)), 1);
+  const chartHeight = Math.max(320, visibleItems.length * 58);
 
   return (
-    <div className="flex h-full min-h-[260px] flex-col gap-3">
-      {scope === 'all' ? (
-        <div className="flex flex-wrap gap-2 text-xs app-text-muted">
+    <div className="flex h-full min-h-[320px] flex-col">
+      <div className="flex flex-wrap gap-2 text-xs app-text-muted">
+        {scope === 'all' ? (
+          <>
+            <span className="app-badge">
+              <span className="h-2.5 w-2.5 rounded-full bg-[var(--app-highlight)]" />
+              Active
+            </span>
+            <span className="app-badge">
+              <span className="h-2.5 w-2.5 rounded-full bg-[var(--analytics-accent,var(--app-accent))]" />
+              Completed
+            </span>
+          </>
+        ) : (
           <span className="app-badge">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: 'var(--app-accent)' }} />
-            Completed
+            <span
+              className="h-2.5 w-2.5 rounded-full"
+              style={{
+                backgroundColor:
+                  scope === 'active'
+                    ? 'var(--app-highlight)'
+                    : 'var(--analytics-accent, var(--app-accent))',
+              }}
+            />
+            {scope === 'active' ? 'Active' : 'Completed'}
           </span>
-          <span className="app-badge">
-            <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
-            Active
-          </span>
-        </div>
-      ) : null}
+        )}
+      </div>
 
-      <div className="space-y-3">
-        {items.map((item) => {
-          const value = getValueForScope(item, scope);
-          const width = `${Math.max((value / maxValue) * 100, value > 0 ? 8 : 0)}%`;
-          const completedWidth = item.total > 0 ? `${(item.completed / item.total) * 100}%` : '0%';
-          const activeWidth = item.total > 0 ? `${(item.active / item.total) * 100}%` : '0%';
+      <div className="mt-4 rounded-[1.35rem] border border-[var(--app-border)] bg-[color:color-mix(in_srgb,var(--app-panel-soft)_72%,transparent)] px-3 py-3">
+        <ResponsiveContainer width="100%" height={chartHeight} minWidth={260}>
+          <BarChart
+            data={visibleItems}
+            layout="vertical"
+            margin={{ top: 4, right: 12, bottom: 4, left: 8 }}
+            barCategoryGap={18}
+          >
+            <CartesianGrid
+              stroke="color-mix(in srgb, var(--app-border) 76%, transparent)"
+              strokeDasharray="4 8"
+              horizontal={false}
+            />
+            <XAxis
+              type="number"
+              tickLine={false}
+              axisLine={false}
+              allowDecimals={false}
+              tick={{ fill: 'var(--app-muted)', fontSize: 12 }}
+            />
+            <YAxis
+              dataKey="label"
+              type="category"
+              width={92}
+              tickLine={false}
+              axisLine={false}
+              tick={{ fill: 'var(--app-muted-strong)', fontSize: 12 }}
+            />
+            <Tooltip cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }} content={<WorkflowTooltip />} />
 
-          return (
-            <article
-              key={item.id}
-              className="glass-panel rounded-[1.2rem] px-3 py-3"
-              title={`${item.label}: ${item.total} total, ${item.completed} completed, ${item.active} active`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                  <p className="truncate text-sm font-medium">{item.label}</p>
-                </div>
-                <span className="shrink-0 text-xs font-semibold app-text-muted">
-                  {value}
-                </span>
-              </div>
-
-              <div className="mt-3 h-3 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--app-border)_78%,transparent)]">
-                {scope === 'all' ? (
-                  <div className="flex h-full overflow-hidden rounded-full" style={{ width }}>
-                    <span style={{ width: completedWidth, backgroundColor: item.color }} />
-                    <span style={{ width: activeWidth, backgroundColor: '#94a3b8' }} />
-                  </div>
-                ) : (
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width,
-                      backgroundColor: scope === 'active' ? '#94a3b8' : item.color,
-                    }}
+            {scope === 'all' ? (
+              <>
+                <Bar
+                  dataKey="active"
+                  stackId="workflow"
+                  radius={[10, 0, 0, 10]}
+                  isAnimationActive={!shouldReduceMotion}
+                >
+                  {visibleItems.map((item) => (
+                    <Cell key={`${item.id}-active`} fill="var(--app-highlight)" fillOpacity={0.78} />
+                  ))}
+                </Bar>
+                <Bar dataKey="completed" stackId="workflow" radius={[0, 10, 10, 0]} isAnimationActive={!shouldReduceMotion}>
+                  {visibleItems.map((item) => (
+                    <Cell key={`${item.id}-completed`} fill={item.color || 'var(--analytics-accent, var(--app-accent))'} fillOpacity={0.92} />
+                  ))}
+                </Bar>
+              </>
+            ) : (
+              <Bar
+                dataKey={scope === 'active' ? 'active' : 'completed'}
+                radius={[10, 10, 10, 10]}
+                isAnimationActive={!shouldReduceMotion}
+              >
+                {visibleItems.map((item) => (
+                  <Cell
+                    key={item.id}
+                    fill={
+                      scope === 'active'
+                        ? 'var(--app-highlight)'
+                        : item.color || 'var(--analytics-accent, var(--app-accent))'
+                    }
+                    fillOpacity={0.9}
                   />
-                )}
-              </div>
-
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs app-text-muted">
-                <span>{item.total} total</span>
-                <span>{item.completed} completed</span>
-                <span>{item.active} active</span>
-              </div>
-            </article>
-          );
-        })}
+                ))}
+              </Bar>
+            )}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
