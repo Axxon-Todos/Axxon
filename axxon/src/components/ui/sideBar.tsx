@@ -24,6 +24,7 @@ import OrganizationList from "@/components/features/dashboard/OrganizationList";
 import Modal from "@/components/ui/Modal";
 import { useTheme } from "@/context/ThemeProvider";
 import { useOrganizationRouteParams } from "@/hooks/useOrganizationRouteParams";
+import { buildOrganizationAiPath } from "@/lib/utils/routes";
 
 export const SIDEBAR_EXPANDED_WIDTH = 320;
 export const SIDEBAR_COLLAPSED_WIDTH = 84;
@@ -58,8 +59,12 @@ export default function Sidebar({
   const shouldReduceMotion = useReducedMotion();
   const sidebarTransition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
   const contentTransition = shouldReduceMotion ? { duration: 0 } : CONTENT_TRANSITION;
+  const organizationAiPath = organizationId ? buildOrganizationAiPath(organizationId) : null;
   const isOrganizationsActive =
     pathname === "/dashboard" || pathname.startsWith("/dashboard/orgs");
+  const isOrganizationAiActive = organizationAiPath
+    ? pathname === organizationAiPath
+    : false;
   const collapsedButtonStyle = collapsed
     ? {
         width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
@@ -190,6 +195,15 @@ export default function Sidebar({
               collapsed={collapsed}
               active={isOrganizationsActive}
             />
+            {organizationAiPath ? (
+              <SidebarNavItem
+                href={organizationAiPath}
+                label="Organization AI"
+                icon={<Sparkles className="h-5 w-5" />}
+                collapsed={collapsed}
+                active={isOrganizationAiActive}
+              />
+            ) : null}
           </div>
 
           <div className={collapsed ? "px-3 py-3" : "px-4 py-4"}>

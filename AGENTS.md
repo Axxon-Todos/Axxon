@@ -9,14 +9,16 @@ Axxon is an agent-work orchestration platform for software teams.
 - GitHub repository connections are installation-based. Persist the GitHub App installation at the org layer and treat imported repositories as org-owned records.
 - The authenticated SPA flow is org-first:
   - `/dashboard`
-  - `/dashboard/orgs`
-  - `/dashboard/orgs/[organizationId]`
-  - `/dashboard/orgs/[organizationId]/boards/[boardId]`
-  - `/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`
-  - `/dashboard/orgs/[organizationId]/boards/[boardId]/analytics`
-  - `/dashboard/orgs/[organizationId]/boards/[boardId]/settings`
+- `/dashboard/orgs`
+- `/dashboard/orgs/[organizationId]`
+- `/dashboard/orgs/[organizationId]/ai`
+- `/dashboard/orgs/[organizationId]/boards/[boardId]`
+- `/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`
+- `/dashboard/orgs/[organizationId]/boards/[boardId]/analytics`
+- `/dashboard/orgs/[organizationId]/boards/[boardId]/settings`
 - GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
 - The canonical API surface is org-scoped under `src/app/api/organizations/**`.
+- The org AI MVP chat endpoint lives at `src/app/api/organizations/[organizationId]/ai/chat/route.ts`.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
@@ -37,6 +39,7 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Keep GitHub App setup bridge pages under `axxon/src/app/dashboard/integrations/**`.
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
+- Organization AI chat UI belongs in `axxon/src/components/features/organizationAi`.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
 - Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, and sprint pages must live under `axxon/src/app/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`.
@@ -60,7 +63,7 @@ Run commands from `axxon/`.
 - `pnpm test:backend`: run backend preflight checks plus backend Vitest coverage.
 - `pnpm test:frontend`: run frontend Vitest coverage.
 - `pnpm migrate:latest`, `pnpm seed`, `pnpm rollback`: apply, seed, or revert Knex migrations.
-- `pnpm docker:dev`: start local dev infrastructure, including the database and Redis.
+- `pnpm docker:dev`: start local dev infrastructure, including the database, Redis, and local Ollama container.
 - `pnpm docker:dev:down`: stop the local dev infrastructure.
 - `pnpm redis:start` / `pnpm redis:stop`: manage Redis directly when needed for realtime development.
 
@@ -121,6 +124,10 @@ Recent history favors short, single-purpose commit subjects. Use imperative word
 ## Security & Configuration Tips
 Do not commit `.env*` files; secrets are ignored by `axxon/.gitignore`. Validate database, Google OAuth, Redis, and websocket settings locally before merging configuration changes.
 Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIRECT_URI` for the callback URL, and keep websocket production exposure behind an explicit reverse proxy or a loopback-only bind unless public access is intentionally required.
+
+- AI runtime selection is controlled by `AXXON_DEPLOY_STAGE`, not by overloading `NODE_ENV`.
+- `development` and `staging` should use the local Ollama container through `AI_LOCAL_BASE_URL` and `AI_LOCAL_MODEL`.
+- Non-local stages should route through the cloud-provider path, even if the first implementation is still a controlled stub.
 
 - Maintain current security practices for auth, repo access boundaries, and member-scoped actions.
 - Validate inputs at the API boundary and enforce permissions server-side.

@@ -1,3 +1,4 @@
+// Defines shared API error types and a single JSON error responder for Next route handlers.
 import { NextResponse } from 'next/server';
 
 //app wide api errors
@@ -32,6 +33,12 @@ export class NotFoundError extends ApiError {
 export class BadRequestError extends ApiError {
   constructor(message = 'Bad request') {
     super(400, message);
+  }
+}
+
+export class ServiceUnavailableError extends ApiError {
+  constructor(message = 'Service unavailable') {
+    super(503, message);
   }
 }
 

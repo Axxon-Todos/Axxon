@@ -1,9 +1,10 @@
 // Renders the org workspace using the shared hero layout and refreshed product surfaces.
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FolderGit2, Users2 } from 'lucide-react';
+import { FolderGit2, Sparkles, Users2 } from 'lucide-react';
 
 import BoardList from '@/components/features/dashboard/BoardList';
 import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
@@ -19,6 +20,7 @@ import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
 import { getUserId } from '@/lib/api/users/getUserId';
 import { resolveAccentColor } from '@/lib/utils/brandColors';
+import { buildOrganizationAiPath } from '@/lib/utils/routes';
 
 import type { OrganizationMemberRecord } from '@/lib/types/organizationMemberTypes';
 
@@ -77,6 +79,13 @@ export default function OrganizationWorkspace({
           accentColor={resolveAccentColor(organization.color)}
           actions={
             <>
+              <Link
+                href={buildOrganizationAiPath(organizationId)}
+                className="app-button app-button-primary"
+              >
+                <Sparkles className="h-4 w-4" />
+                Open AI Workspace
+              </Link>
               <Button variant="primary" onClick={() => setIsCreateBoardModalOpen(true)}>
                 Create Board
               </Button>

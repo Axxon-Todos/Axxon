@@ -1,3 +1,4 @@
+// Centralizes dashboard and org-scoped application paths so feature links stay consistent across UI and API layers.
 export function buildOrganizationApiPath(organizationId: string | number) {
   return `/api/organizations/${organizationId}`;
 }
@@ -35,6 +36,10 @@ export function buildOrganizationGitHubSetupPath(
   organizationId: string | number
 ) {
   return `${buildOrganizationPath(organizationId)}/integrations/github/setup`;
+}
+
+export function buildOrganizationAiPath(organizationId: string | number) {
+  return `${buildOrganizationPath(organizationId)}/ai`;
 }
 
 export function buildOrganizationBoardAnalyticsPath(
@@ -112,4 +117,10 @@ export function buildOrganizationBoardRepositoryAccessApiPath(
   organizationId: string | number
 ) {
   return `${buildOrganizationApiPath(organizationId)}/board-repository-access`;
+}
+
+export function buildOrganizationAiChatApiPath(
+  organizationId: string | number
+) {
+  return `${buildOrganizationApiPath(organizationId)}/ai/chat`;
 }
