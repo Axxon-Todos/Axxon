@@ -1,0 +1,61 @@
+// Describes the org AI MVP request shapes, runtime metadata, and stream event contracts.
+export type AiChatRole = 'system' | 'user' | 'assistant';
+
+export type AiChatMessage = {
+  role: AiChatRole;
+  content: string;
+};
+
+export type AiChatRequest = {
+  messages: AiChatMessage[];
+};
+
+// The provider id is surfaced to the UI so the current runtime mode is visible during beta testing.
+export type AiProviderId = 'local-ollama' | 'cloud-stub';
+
+export type AiRuntimeConfig = {
+  stage: string;
+  provider: AiProviderId;
+  localBaseUrl: string;
+  model: string;
+  useLocalProvider: boolean;
+};
+
+export type AiRuntimeSummary = {
+  stage: string;
+  provider: AiProviderId;
+  providerLabel: string;
+  model: string;
+  available: boolean;
+  statusLabel: string;
+};
+
+export type AiProviderStreamResult = {
+  provider: AiProviderId;
+  model: string;
+  stream: ReadableStream<Uint8Array>;
+};
+
+export type AiChatStreamResponse = {
+  runtime: AiRuntimeSummary;
+  stream: ReadableStream<Uint8Array>;
+};
+
+// NDJSON events keep the client decoupled from provider-specific response formats.
+export type AiStreamEvent =
+  | {
+      type: 'start';
+      provider: AiProviderId;
+      model: string;
+    }
+  | {
+      type: 'delta';
+      delta: string;
+    }
+  | {
+      type: 'done';
+    }
+  | {
+      type: 'error';
+      error: string;
+    };
