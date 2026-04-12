@@ -124,3 +124,16 @@ export function buildOrganizationAiChatApiPath(
 ) {
   return `${buildOrganizationApiPath(organizationId)}/ai/chat`;
 }
+
+export function buildOrganizationAiThreadsApiPath(
+  organizationId: string | number
+) {
+  return `${buildOrganizationApiPath(organizationId)}/ai/threads`;
+}
+
+export function buildOrganizationAiThreadApiPath(
+  organizationId: string | number,
+  threadId: string | number
+) {
+  return `${buildOrganizationAiThreadsApiPath(organizationId)}/${threadId}`;
+}

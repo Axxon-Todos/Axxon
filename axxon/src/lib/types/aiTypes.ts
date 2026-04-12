@@ -6,10 +6,6 @@ export type AiChatMessage = {
   content: string;
 };
 
-export type AiChatRequest = {
-  messages: AiChatMessage[];
-};
-
 // The provider id is surfaced to the UI so the current runtime mode is visible during beta testing.
 export type AiProviderId = 'local-ollama' | 'cloud-stub';
 
@@ -36,9 +32,24 @@ export type AiProviderStreamResult = {
   stream: ReadableStream<Uint8Array>;
 };
 
+export type AiProviderCompletionResult = {
+  provider: AiProviderId;
+  model: string;
+  content: string;
+};
+
+export type AiChatCompletionResult = {
+  provider: AiProviderId;
+  model: string;
+  content: string;
+  status: 'completed' | 'failed';
+  error?: string;
+};
+
 export type AiChatStreamResponse = {
   runtime: AiRuntimeSummary;
   stream: ReadableStream<Uint8Array>;
+  completion: Promise<AiChatCompletionResult>;
 };
 
 // NDJSON events keep the client decoupled from provider-specific response formats.

@@ -10,6 +10,8 @@ let sprintSequence = 1;
 let conversationSequence = 1;
 let githubInstallationSequence = 1;
 let githubRepositorySequence = 1;
+let chatThreadSequence = 1;
+let chatMessageSequence = 1;
 
 export async function createUser(overrides: Partial<Record<'first_name' | 'last_name' | 'email' | 'avatar_url', string | null>> = {}) {
   const sequence = userSequence++;
@@ -274,6 +276,65 @@ export async function createConversationRecord({
     .returning('*');
 
   return conversation;
+}
+
+export async function createChatThreadRecord({
+  organizationId,
+  createdBy,
+  title,
+  summary,
+}: {
+  organizationId: number;
+  createdBy: number;
+  title?: string;
+  summary?: string;
+}) {
+  const sequence = chatThreadSequence++;
+  const [thread] = await db('chat_threads')
+    .insert({
+      organization_id: organizationId,
+      created_by: createdBy,
+      title: title ?? `Thread ${sequence}`,
+      summary: summary ?? `Summary ${sequence}`,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return thread;
+}
+
+export async function createChatMessageRecord({
+  threadId,
+  role,
+  content,
+  sequenceNumber,
+  status = 'completed',
+  model = null,
+}: {
+  threadId: number;
+  role: 'user' | 'assistant';
+  content?: string;
+  sequenceNumber?: number;
+  status?: 'completed' | 'failed';
+  model?: string | null;
+}) {
+  const sequence = chatMessageSequence++;
+  const resolvedSequenceNumber = sequenceNumber ?? sequence;
+  const [message] = await db('chat_messages')
+    .insert({
+      thread_id: threadId,
+      role,
+      content: content ?? `Chat message ${sequence}`,
+      sequence_number: resolvedSequenceNumber,
+      status,
+      model,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return message;
 }
 
 export async function createGitHubInstallationRecord({

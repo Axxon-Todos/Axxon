@@ -1,5 +1,6 @@
 import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
+import { ChatThreads } from '@/lib/models/chatThreads';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
 import { Organizations } from '@/lib/models/organizations';
 import {
@@ -108,4 +109,23 @@ export async function requireBoardCreatorInOrganization(
   }
 
   return board;
+}
+
+export async function requireOrganizationAiThreadCreator(
+  organizationId: number,
+  threadId: number,
+  userId: number
+) {
+  await requireOrganizationMember(organizationId, userId);
+  const thread = await ChatThreads.getThreadById(threadId);
+
+  if (!thread || thread.organization_id !== organizationId) {
+    throw new NotFoundError('Chat thread not found');
+  }
+
+  if (thread.created_by !== userId) {
+    throw new ForbiddenError('You do not have access to this chat thread');
+  }
+
+  return thread;
 }

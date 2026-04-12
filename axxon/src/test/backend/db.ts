@@ -4,6 +4,8 @@ export const TEST_TABLES = [
   'github_webhook_events',
   'repositories',
   'github_installations',
+  'chat_messages',
+  'chat_threads',
   'messages',
   'conversation_members',
   'conversations',
