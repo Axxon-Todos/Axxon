@@ -21,7 +21,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: app-dev
-    command: ["pnpm", "db:bootstrap"]
+    command: ["sh", "./scripts/docker-dev-entrypoint.sh", "pnpm", "db:bootstrap"]
     env_file:
       - .env.local
       - .env.docker
@@ -47,7 +47,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: app-dev
-    command: ["pnpm", "dev-next"]
+    command: ["sh", "./scripts/docker-dev-entrypoint.sh", "pnpm", "dev-next"]
     # Load runtime secrets and OAuth config without baking them into the dev image.
     env_file:
       - .env.local
@@ -121,7 +121,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ws-dev
-    command: ["pnpm", "dev-ws"]
+    command: ["sh", "./scripts/docker-dev-entrypoint.sh", "pnpm", "dev-ws"]
     # The websocket service needs the same auth and DB envs as the app to validate sessions.
     env_file:
       - .env.local

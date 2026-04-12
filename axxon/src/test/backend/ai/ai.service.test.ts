@@ -1,18 +1,21 @@
-// Verifies AI runtime selection and provider stream normalization for the org AI MVP service layer.
+// Verifies AI runtime selection, completion metadata generation, and provider stream normalization.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ServiceUnavailableError } from '@/lib/utils/apiErrors';
 
 const {
   mockedStreamLocalOllamaChat,
+  mockedCompleteLocalOllamaChat,
   mockedStreamCloudAiChatStub,
 } = vi.hoisted(() => ({
   mockedStreamLocalOllamaChat: vi.fn(),
+  mockedCompleteLocalOllamaChat: vi.fn(),
   mockedStreamCloudAiChatStub: vi.fn(),
 }));
 
 vi.mock('@/lib/ai/providers/localOllama', () => ({
   streamLocalOllamaChat: mockedStreamLocalOllamaChat,
+  completeLocalOllamaChat: mockedCompleteLocalOllamaChat,
 }));
 
 vi.mock('@/lib/ai/providers/cloudStub', () => ({
@@ -49,7 +52,7 @@ describe('ai service', () => {
     vi.unstubAllEnvs();
   });
 
-  it('uses the local Ollama provider for development and normalizes SSE chunks', async () => {
+  it('uses the local Ollama provider for development, normalizes SSE chunks, and resolves stream completion', async () => {
     vi.stubEnv('AXXON_DEPLOY_STAGE', 'development');
     vi.stubEnv('AI_LOCAL_BASE_URL', 'http://ollama:11434');
     vi.stubEnv('AI_LOCAL_MODEL', 'qwen2.5-coder:14b');
@@ -107,12 +110,54 @@ describe('ai service', () => {
         type: 'done',
       },
     ]);
+    await expect(response.completion).resolves.toEqual({
+      provider: 'local-ollama',
+      model: 'qwen2.5-coder:14b',
+      content: 'Hello world',
+      status: 'completed',
+    });
+  });
+
+  it('generates thread metadata from a short non-stream completion prompt', async () => {
+    vi.stubEnv('AXXON_DEPLOY_STAGE', 'development');
+    vi.stubEnv('AI_LOCAL_BASE_URL', 'http://ollama:11434');
+    vi.stubEnv('AI_LOCAL_MODEL', 'qwen2.5-coder:14b');
+
+    mockedCompleteLocalOllamaChat.mockResolvedValue({
+      provider: 'local-ollama',
+      model: 'qwen2.5-coder:14b',
+      content:
+        'Here is the metadata: {"title":"Sprint planning chat","summary":"Plan the next sprint."}',
+    });
+
+    const { generateAiThreadMetadata } = await import('@/lib/ai/service');
+    const metadata = await generateAiThreadMetadata({
+      conversationStarter: 'Plan the next sprint',
+    });
+
+    expect(mockedCompleteLocalOllamaChat).toHaveBeenCalledWith({
+      baseUrl: 'http://ollama:11434',
+      model: 'qwen2.5-coder:14b',
+      messages: expect.arrayContaining([
+        expect.objectContaining({ role: 'system' }),
+        expect.objectContaining({
+          role: 'user',
+          content: 'Conversation starter:\nPlan the next sprint',
+        }),
+      ]),
+    });
+    expect(metadata).toEqual({
+      title: 'Sprint planning chat',
+      summary: 'Plan the next sprint.',
+    });
   });
 
   it('switches to the cloud stub outside development-like stages', async () => {
     vi.stubEnv('AXXON_DEPLOY_STAGE', 'production');
     mockedStreamCloudAiChatStub.mockRejectedValue(
-      new ServiceUnavailableError('Cloud AI provider is not configured for this environment yet')
+      new ServiceUnavailableError(
+        'Cloud AI provider is not configured for this environment yet'
+      )
     );
 
     const { createAiChatEventStream } = await import('@/lib/ai/service');

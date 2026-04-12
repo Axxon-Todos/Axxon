@@ -1,7 +1,7 @@
 // Streams org-scoped AI chat responses to authenticated organization members.
 import { NextRequest, NextResponse } from 'next/server';
 import { createOrganizationAiChatStream } from '@/lib/controllers/ai/organizationAiControllers';
-import type { AiChatRequest } from '@/lib/types/aiTypes';
+import type { OrganizationAiChatRequest } from '@/lib/types/organizationAiChatTypes';
 import { handleApiError } from '@/lib/utils/apiErrors';
 import { requireSession } from '@/lib/utils/auth';
 import {
@@ -21,7 +21,7 @@ export async function POST(
   try {
     const session = await requireSession(req);
     const { organizationId } = await context.params;
-    const data = await parseJsonBody<AiChatRequest>(req);
+    const data = await parseJsonBody<OrganizationAiChatRequest>(req);
     const response = await createOrganizationAiChatStream({
       organizationId: parseNumericRouteParam(organizationId, 'organization id'),
       sessionUserId: session.userId,
@@ -36,6 +36,7 @@ export async function POST(
         'Content-Type': 'application/x-ndjson; charset=utf-8',
         'X-Axxon-Ai-Model': response.runtime.model,
         'X-Axxon-Ai-Provider': response.runtime.provider,
+        'X-Axxon-Ai-Thread-Id': String(response.threadId),
       },
     });
   } catch (error) {

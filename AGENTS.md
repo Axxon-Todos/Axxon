@@ -19,6 +19,8 @@ Axxon is an agent-work orchestration platform for software teams.
 - GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
 - The canonical API surface is org-scoped under `src/app/api/organizations/**`.
 - The org AI MVP chat endpoint lives at `src/app/api/organizations/[organizationId]/ai/chat/route.ts`.
+- Persisted org AI thread reads live at `src/app/api/organizations/[organizationId]/ai/threads/route.ts` and `src/app/api/organizations/[organizationId]/ai/threads/[threadId]/route.ts`.
+- Organization AI chats are creator-owned within the organization, with persisted threads in `chat_threads` and append-only messages in `chat_messages`.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
@@ -39,7 +41,7 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Keep GitHub App setup bridge pages under `axxon/src/app/dashboard/integrations/**`.
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
-- Organization AI chat UI belongs in `axxon/src/components/features/organizationAi`.
+- Organization AI chat UI belongs in `axxon/src/components/features/organizationAi`, including the persisted left-side thread mini-sidebar.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
 - Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, and sprint pages must live under `axxon/src/app/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`.
@@ -47,6 +49,7 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Reusable domain types should live under `axxon/src/lib/types`.
 - GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
+- Persisted organization AI chat thread persistence belongs in `axxon/src/lib/models/chatThreads.ts`, and append-only AI message persistence belongs in `axxon/src/lib/models/chatMessages.ts`.
 - Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
 - Sprint persistence belongs in the existing `src/lib` layers and should extend shared todo payloads through shared types instead of adding separate view-only task models.
 
@@ -89,6 +92,7 @@ Knex is used at the model and migrations layer.
 - Board member adds should use org-member `userIds`, not raw email entry, and only allow users who already belong to the org.
 - Board-to-repository access is an explicit allowlist stored in `board_repository_access`; only org owners should mutate it.
 - Restrict GitHub install/finalize/sync actions to org owners. Repository listing can remain visible to org members.
+- Restrict persisted organization AI thread reads and continuations to the thread creator after org membership is validated.
 - Do not bypass authorization helpers for org-scoped resources.
 - Maintain secure defaults for auth, cookies, secrets, and socket access.
 - Read GitHub webhook request bodies raw before JSON parsing, verify `X-Hub-Signature-256`, and persist deliveries before processing.
@@ -107,6 +111,7 @@ Vitest is available for backend and frontend suites. Tests are part of the expec
 - Prioritize coverage for:
   - organization creation and membership rules
   - org-scoped board creation and access
+  - organization AI thread creation, creator-only access, and append-only message ordering
   - auth and authorization helpers
   - analytics and board workspace behavior
   - sprint CRUD, sprint assignment rules, and sprint-filtered board views
@@ -135,7 +140,7 @@ Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIREC
 
 ## Rules
 - Follow proper separation of concerns and maintain up-to-date security practices.
-- ALWAYS Write commens at the top of files to briefly describe its purpose and functionality
+- ALWAYS Write commens at the top of files to briefly describe its purpose and functionality and on new functions
 - When developing features aim for reusable functions to enforce clean code
 - Maintain consistency with the surrounding codebase.
 - Keep functions and components organized in their appropriate layers.

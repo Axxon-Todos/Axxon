@@ -41,6 +41,7 @@ describe('organization AI chat route', () => {
       NextResponse.json({ error: String(error) }, { status: 500 })
     );
     mockedCreateOrganizationAiChatStream.mockResolvedValue({
+      threadId: 44,
       runtime: {
         stage: 'development',
         provider: 'local-ollama',
@@ -51,11 +52,15 @@ describe('organization AI chat route', () => {
       },
       stream: new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(
-            new TextEncoder().encode('{"type":"done"}\n')
-          );
+          controller.enqueue(new TextEncoder().encode('{"type":"done"}\n'));
           controller.close();
         },
+      }),
+      completion: Promise.resolve({
+        provider: 'local-ollama',
+        model: 'qwen2.5-coder:14b',
+        content: 'Done',
+        status: 'completed',
       }),
     });
   });
@@ -64,12 +69,8 @@ describe('organization AI chat route', () => {
     const response = await organizationAiChatPost(
       {
         json: async () => ({
-          messages: [
-            {
-              role: 'user',
-              content: 'Hello',
-            },
-          ],
+          content: 'Hello',
+          threadId: 12,
         }),
       } as never,
       {
@@ -81,17 +82,14 @@ describe('organization AI chat route', () => {
       organizationId: 3,
       sessionUserId: 21,
       data: {
-        messages: [
-          {
-            role: 'user',
-            content: 'Hello',
-          },
-        ],
+        content: 'Hello',
+        threadId: 12,
       },
     });
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toContain('application/x-ndjson');
     expect(response.headers.get('x-axxon-ai-model')).toBe('qwen2.5-coder:14b');
+    expect(response.headers.get('x-axxon-ai-thread-id')).toBe('44');
   });
 
   it('delegates failures to the shared API error handler', async () => {
@@ -100,7 +98,7 @@ describe('organization AI chat route', () => {
     const response = await organizationAiChatPost(
       {
         json: async () => ({
-          messages: [],
+          content: 'Hello',
         }),
       } as never,
       {
