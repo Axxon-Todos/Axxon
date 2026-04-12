@@ -140,7 +140,7 @@ Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIREC
 
 ## Rules
 - Follow proper separation of concerns and maintain up-to-date security practices.
-- ALWAYS Write commens at the top of files to briefly describe its purpose and functionality
+- ALWAYS Write commens at the top of files to briefly describe its purpose and functionality and on new functions
 - When developing features aim for reusable functions to enforce clean code
 - Maintain consistency with the surrounding codebase.
 - Keep functions and components organized in their appropriate layers.
