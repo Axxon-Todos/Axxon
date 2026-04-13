@@ -1,3 +1,4 @@
+// Handles organization persistence plus org summary queries used across the dashboard shell and org-scoped surfaces.
 import knex from '@/lib/db/db';
 import type {
   OrganizationBaseData,
@@ -5,11 +6,13 @@ import type {
   OrganizationSummary,
   OrganizationUpdate,
 } from '@/lib/types/organizationTypes';
+import type { OrganizationMemberRole } from '@/lib/types/organizationMemberTypes';
 
 type RawOrganizationSummary = OrganizationBaseData & {
   member_count: string | number;
   accessible_board_count: string | number;
   repo_count: string | number;
+  current_user_role: OrganizationMemberRole;
 };
 
 function normalizeOrganizationSummary(
@@ -20,6 +23,7 @@ function normalizeOrganizationSummary(
     member_count: Number(organization.member_count ?? 0),
     accessible_board_count: Number(organization.accessible_board_count ?? 0),
     repo_count: Number(organization.repo_count ?? 0),
+    current_user_role: organization.current_user_role,
   };
 }
 
@@ -60,6 +64,7 @@ export class Organizations {
       })
       .select(
         'organizations.*',
+        'organization_scope.role as current_user_role',
         knex('organization_members')
           .countDistinct('user_id')
           .whereRaw('organization_members.organization_id = organizations.id')
@@ -111,9 +116,16 @@ export class Organizations {
     userId: number
   ): Promise<OrganizationSummary | null> {
     const organization = await knex('organizations')
+      .join('organization_members as organization_scope', function joinScope() {
+        this.on('organizations.id', '=', 'organization_scope.organization_id').andOnVal(
+          'organization_scope.user_id',
+          userId
+        );
+      })
       .where('organizations.id', organizationId)
       .select(
         'organizations.*',
+        'organization_scope.role as current_user_role',
         knex('organization_members')
           .countDistinct('user_id')
           .whereRaw('organization_members.organization_id = organizations.id')

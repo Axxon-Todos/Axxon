@@ -62,6 +62,7 @@ describe('OrganizationAiWorkspace', () => {
       member_count: 4,
       accessible_board_count: 2,
       repo_count: 1,
+      current_user_role: 'owner',
     });
     mockedFetchOrganizationAiThreads.mockResolvedValue([]);
     mockedFetchOrganizationAiThread.mockResolvedValue({

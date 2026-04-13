@@ -1,3 +1,6 @@
+// Defines organization record shapes, mutation payloads, and summary fields shared across org-scoped UI and APIs.
+import type { OrganizationMemberRole } from '@/lib/types/organizationMemberTypes';
+
 export type OrganizationBaseData = {
   id: number;
   name: string;
@@ -26,4 +29,5 @@ export type OrganizationSummary = OrganizationBaseData & {
   member_count: number;
   accessible_board_count: number;
   repo_count: number;
+  current_user_role: OrganizationMemberRole;
 };
