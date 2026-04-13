@@ -50,6 +50,8 @@ describe('DashboardOverview', () => {
         color: '#2563eb',
         accessible_board_count: 3,
         member_count: 8,
+        repo_count: 1,
+        current_user_role: 'owner',
       },
     ]);
 

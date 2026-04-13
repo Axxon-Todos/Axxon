@@ -1,3 +1,4 @@
+// Verifies the organization workspace keeps owner-only controls tied to the org summary role while rendering member management data.
 import React from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -5,11 +6,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   mockedFetchOrganization,
   mockedFetchOrganizationMembers,
-  mockedGetUserId,
 } = vi.hoisted(() => ({
   mockedFetchOrganization: vi.fn(),
   mockedFetchOrganizationMembers: vi.fn(),
-  mockedGetUserId: vi.fn(),
 }));
 
 vi.mock('@/lib/api/organizations/getOrganization', () => ({
@@ -18,10 +17,6 @@ vi.mock('@/lib/api/organizations/getOrganization', () => ({
 
 vi.mock('@/lib/api/organizations/getOrganizationMembers', () => ({
   fetchOrganizationMembers: mockedFetchOrganizationMembers,
-}));
-
-vi.mock('@/lib/api/users/getUserId', () => ({
-  getUserId: mockedGetUserId,
 }));
 
 vi.mock('@/components/features/dashboard/BoardList', () => ({
@@ -62,11 +57,11 @@ describe('OrganizationWorkspace', () => {
       accessible_board_count: 2,
       member_count: 2,
       repo_count: 0,
+      current_user_role: 'owner',
     });
   });
 
   it('shows edit controls for organization owners', async () => {
-    mockedGetUserId.mockResolvedValue('7');
     mockedFetchOrganizationMembers.mockResolvedValue([
       {
         id: 7,
@@ -98,7 +93,19 @@ describe('OrganizationWorkspace', () => {
   });
 
   it('hides edit controls for non-owners while keeping board creation visible', async () => {
-    mockedGetUserId.mockResolvedValue('9');
+    mockedFetchOrganization.mockResolvedValue({
+      id: 3,
+      name: 'Platform',
+      description: 'Org workspace',
+      color: '#0f766e',
+      created_by: 7,
+      created_at: '2025-01-01T00:00:00.000Z',
+      updated_at: '2025-01-01T00:00:00.000Z',
+      accessible_board_count: 2,
+      member_count: 2,
+      repo_count: 0,
+      current_user_role: 'member',
+    });
     mockedFetchOrganizationMembers.mockResolvedValue([
       {
         id: 9,

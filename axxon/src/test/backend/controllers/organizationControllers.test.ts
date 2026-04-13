@@ -108,6 +108,7 @@ describe('organizationControllers', () => {
       member_count: 2,
       accessible_board_count: 4,
       repo_count: 0,
+      current_user_role: 'owner',
     });
     mockedListUsersByIds.mockResolvedValue([
       {

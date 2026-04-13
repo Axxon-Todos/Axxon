@@ -24,8 +24,8 @@ function mockSidebarDependencies() {
     default: () => <div>Create organization form</div>,
   }));
 
-  vi.doMock('@/components/features/dashboard/OrganizationList', () => ({
-    default: () => <div>Organizations</div>,
+  vi.doMock('@/components/features/dashboard/SidebarOrganizationTree', () => ({
+    default: () => <div>Sidebar org tree</div>,
   }));
 
   vi.doMock('@/components/ui/Modal', () => ({

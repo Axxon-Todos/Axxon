@@ -18,7 +18,6 @@ import PageHero from '@/components/ui/PageHero';
 import Surface from '@/components/ui/Surface';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
-import { getUserId } from '@/lib/api/users/getUserId';
 import { resolveAccentColor } from '@/lib/utils/brandColors';
 import { buildOrganizationAiPath } from '@/lib/utils/routes';
 
@@ -36,12 +35,6 @@ export default function OrganizationWorkspace({
   const { data: organization, isLoading: isOrganizationLoading } = useQuery({
     queryKey: ['organization', organizationId],
     queryFn: () => fetchOrganization(organizationId),
-  });
-
-  const { data: userId } = useQuery({
-    queryKey: ['id'],
-    queryFn: getUserId,
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: members = [], isLoading: isMembersLoading } = useQuery<
@@ -62,9 +55,7 @@ export default function OrganizationWorkspace({
     );
   }
 
-  const isOwner = members.some(
-    (member) => String(member.id) === userId && member.role === 'owner'
-  );
+  const isOwner = organization.current_user_role === 'owner';
 
   return (
     <>

@@ -17,14 +17,13 @@ import {
   Sparkles,
   SunMedium,
 } from "lucide-react";
-import BoardList from "@/components/features/dashboard/BoardList";
 import CreateBoardForm from "@/components/features/dashboard/CreateBoardForm";
 import CreateOrganizationForm from "@/components/features/dashboard/CreateOrganizationForm";
-import OrganizationList from "@/components/features/dashboard/OrganizationList";
+import SidebarOrganizationTree from "@/components/features/dashboard/SidebarOrganizationTree";
 import Modal from "@/components/ui/Modal";
 import { useTheme } from "@/context/ThemeProvider";
 import { useOrganizationRouteParams } from "@/hooks/useOrganizationRouteParams";
-import { buildOrganizationAiPath } from "@/lib/utils/routes";
+import { buildOrganizationAiPath, buildOrganizationPath } from "@/lib/utils/routes";
 
 export const SIDEBAR_EXPANDED_WIDTH = 320;
 export const SIDEBAR_COLLAPSED_WIDTH = 84;
@@ -59,12 +58,19 @@ export default function Sidebar({
   const shouldReduceMotion = useReducedMotion();
   const sidebarTransition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
   const contentTransition = shouldReduceMotion ? { duration: 0 } : CONTENT_TRANSITION;
+  const organizationPath = organizationId ? buildOrganizationPath(organizationId) : null;
   const organizationAiPath = organizationId ? buildOrganizationAiPath(organizationId) : null;
+  const isOrganizationAiActive = Boolean(
+    organizationAiPath && pathname.startsWith(organizationAiPath)
+  );
   const isOrganizationsActive =
-    pathname === "/dashboard" || pathname.startsWith("/dashboard/orgs");
-  const isOrganizationAiActive = organizationAiPath
-    ? pathname === organizationAiPath
-    : false;
+    pathname === "/dashboard" ||
+    Boolean(
+      organizationPath &&
+        pathname.startsWith(organizationPath) &&
+        !isOrganizationAiActive
+    ) ||
+    (!organizationPath && pathname.startsWith("/dashboard/orgs"));
   const collapsedButtonStyle = collapsed
     ? {
         width: SIDEBAR_COLLAPSED_BUTTON_SIZE,
@@ -234,12 +240,10 @@ export default function Sidebar({
                 className="px-5 pb-3 pt-4"
               >
                 <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] app-text-muted">
-                  {organizationId ? "Boards" : "Organizations"}
+                  Workspace Tree
                 </p>
                 <p className="mt-1 text-sm app-text-muted">
-                  {organizationId
-                    ? "Scoped execution surfaces inside the selected organization."
-                    : "Top-level workspaces for members, repos, and boards."}
+                  Jump between organizations and their boards without leaving the shell.
                 </p>
               </motion.div>
 
@@ -252,11 +256,7 @@ export default function Sidebar({
               <ScrollArea.Root className="min-h-0 flex-1">
                 <ScrollArea.Viewport className="h-full w-full">
                   <div className="px-4 py-4">
-                    {organizationId ? (
-                      <BoardList organizationId={organizationId} variant="sidebar" />
-                    ) : (
-                      <OrganizationList variant="sidebar" />
-                    )}
+                    <SidebarOrganizationTree />
                   </div>
                 </ScrollArea.Viewport>
                 <ScrollArea.Scrollbar
@@ -341,7 +341,7 @@ function SidebarNavItem({
   if (collapsed) {
     return (
       <SidebarTooltip label={label}>
-        <Link href={href} aria-current={active ? "page" : undefined} className="block">
+        <Link href={href} aria-current={active ? "page" : undefined} className="block w-full">
           <motion.div
             whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
             className="glass-button mx-auto flex min-h-12 min-w-12 items-center justify-center rounded-[20px] px-0 transition-colors"
@@ -375,11 +375,11 @@ function SidebarNavItem({
   }
 
   return (
-    <Link href={href} aria-current={active ? "page" : undefined} className="block">
+    <Link href={href} aria-current={active ? "page" : undefined} className="block w-full">
       <motion.div
         whileHover={shouldReduceMotion ? undefined : { x: 4 }}
         whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
-        className="glass-button flex min-h-14 items-center justify-between rounded-[20px] px-4 transition-colors"
+        className="glass-button flex min-h-14 w-full items-center justify-between rounded-[20px] px-4 transition-colors"
         style={{
           ...(active
             ? {

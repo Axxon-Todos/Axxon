@@ -360,6 +360,27 @@ select {
   color: var(--app-danger);
 }
 
+.app-hover-reveal {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .app-hover-reveal {
+    opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+  }
+
+  .group:hover .app-hover-reveal,
+  .group:focus-within .app-hover-reveal {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+}
+
 .app-input {
   width: 100%;
   border-radius: 1rem;
