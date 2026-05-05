@@ -31,18 +31,58 @@ function resolveLocalBaseUrl() {
     : DEFAULT_LOCAL_HOST_BASE_URL;
 }
 
+// Read the external runtime base URL once so production selection stays deterministic.
+function resolveExternalBaseUrl() {
+  const configuredBaseUrl = process.env.AI_CLOUD_BASE_URL?.trim();
+
+  if (!configuredBaseUrl) {
+    return null;
+  }
+
+  return configuredBaseUrl.replace(/\/+$/, '');
+}
+
 // Centralize provider selection so routes and UI read the same runtime decision.
 export function getAiRuntimeConfig(): AiRuntimeConfig {
   const stage = normalizeStage(process.env.AXXON_DEPLOY_STAGE);
   const useLocalProvider = stage === 'development' || stage === 'staging';
   const localModel = process.env.AI_LOCAL_MODEL?.trim() || DEFAULT_LOCAL_MODEL;
+  const externalBaseUrl = resolveExternalBaseUrl();
+  const externalModel = process.env.AI_CLOUD_MODEL?.trim() || CLOUD_PENDING_MODEL;
+  const externalApiKey = process.env.AI_CLOUD_API_KEY?.trim() || null;
+
+  if (useLocalProvider) {
+    return {
+      stage,
+      provider: 'local-ollama',
+      baseUrl: resolveLocalBaseUrl(),
+      apiKey: null,
+      model: localModel,
+      available: true,
+      useLocalProvider: true,
+    };
+  }
+
+  if (externalBaseUrl && externalModel !== CLOUD_PENDING_MODEL) {
+    return {
+      stage,
+      provider: 'openai-compatible',
+      baseUrl: externalBaseUrl,
+      apiKey: externalApiKey,
+      model: externalModel,
+      available: true,
+      useLocalProvider: false,
+    };
+  }
 
   return {
     stage,
-    provider: useLocalProvider ? 'local-ollama' : 'cloud-stub',
-    localBaseUrl: resolveLocalBaseUrl(),
-    model: useLocalProvider ? localModel : CLOUD_PENDING_MODEL,
-    useLocalProvider,
+    provider: 'cloud-stub',
+    baseUrl: null,
+    apiKey: null,
+    model: CLOUD_PENDING_MODEL,
+    available: false,
+    useLocalProvider: false,
   };
 }
 
@@ -54,10 +94,14 @@ export function getAiRuntimeSummary(): AiRuntimeSummary {
     stage: runtime.stage,
     provider: runtime.provider,
     providerLabel:
-      runtime.provider === 'local-ollama' ? 'Local Ollama' : 'Cloud provider',
+      runtime.provider === 'local-ollama'
+        ? 'Local Ollama'
+        : runtime.provider === 'openai-compatible'
+          ? 'External AI'
+          : 'Cloud provider',
     model: runtime.model,
-    available: runtime.useLocalProvider,
-    statusLabel: runtime.useLocalProvider ? 'Configured' : 'Cloud setup required',
+    available: runtime.available,
+    statusLabel: runtime.available ? 'Configured' : 'External AI not configured',
   };
 }
 
@@ -66,17 +110,26 @@ export async function getAiWorkspaceRuntimeSummary(): Promise<AiRuntimeSummary> 
   const runtimeConfig = getAiRuntimeConfig();
   const runtimeSummary = getAiRuntimeSummary();
 
+  if (runtimeConfig.provider === 'openai-compatible') {
+    return {
+      ...runtimeSummary,
+      accelerationState: 'unknown',
+      planningReady: true,
+      planningStatusLabel: 'Planning is available through the external AI provider.',
+    };
+  }
+
   if (!runtimeConfig.useLocalProvider) {
     return {
       ...runtimeSummary,
       accelerationState: 'unknown',
       planningReady: false,
-      planningStatusLabel: 'Planning needs a configured cloud runtime.',
+      planningStatusLabel: 'Planning needs a configured external AI provider.',
     };
   }
 
   const runtimeStatus = await getLocalOllamaRuntimeStatus({
-    baseUrl: runtimeConfig.localBaseUrl,
+    baseUrl: runtimeConfig.baseUrl ?? resolveLocalBaseUrl(),
     model: runtimeConfig.model,
   });
 

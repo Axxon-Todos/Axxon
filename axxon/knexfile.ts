@@ -14,21 +14,26 @@ const directoryConfig = {
   },
 } as const;
 
+// Reuse the same PG_* fallback logic across local, CI, and production container runs.
+function createConnectionConfig() {
+  return process.env.PG_CONNECTION_STRING || {
+    host: process.env.PG_HOST,
+    port: process.env.PG_PORT ? Number(process.env.PG_PORT) : undefined,
+    user: process.env.PG_USER,
+    password: process.env.PG_PASS,
+    database: process.env.PG_DB,
+  };
+}
+
 const config: Record<string, Knex.Config> = {
   development: {
     client: 'pg',
-    connection: process.env.PG_CONNECTION_STRING || {
-      host: process.env.PG_HOST,
-      port: process.env.PG_PORT ? Number(process.env.PG_PORT) : undefined,
-      user: process.env.PG_USER,
-      password: process.env.PG_PASS,
-      database: process.env.PG_DB,
-    },
+    connection: createConnectionConfig(),
     ...directoryConfig,
   },
   production: {
     client: 'pg',
-    connection: process.env.PG_CONNECTION_STRING,
+    connection: createConnectionConfig(),
     ...directoryConfig,
   },
 };

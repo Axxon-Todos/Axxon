@@ -7,16 +7,25 @@ import { ServiceUnavailableError } from '@/lib/utils/apiErrors';
 const {
   mockedStreamLocalOllamaChat,
   mockedCompleteLocalOllamaChat,
+  mockedStreamOpenAiCompatibleChat,
+  mockedCompleteOpenAiCompatibleChat,
   mockedStreamCloudAiChatStub,
 } = vi.hoisted(() => ({
   mockedStreamLocalOllamaChat: vi.fn(),
   mockedCompleteLocalOllamaChat: vi.fn(),
+  mockedStreamOpenAiCompatibleChat: vi.fn(),
+  mockedCompleteOpenAiCompatibleChat: vi.fn(),
   mockedStreamCloudAiChatStub: vi.fn(),
 }));
 
 vi.mock('@/lib/ai/providers/localOllama', () => ({
   streamLocalOllamaChat: mockedStreamLocalOllamaChat,
   completeLocalOllamaChat: mockedCompleteLocalOllamaChat,
+}));
+
+vi.mock('@/lib/ai/providers/openAiCompatible', () => ({
+  streamOpenAiCompatibleChat: mockedStreamOpenAiCompatibleChat,
+  completeOpenAiCompatibleChat: mockedCompleteOpenAiCompatibleChat,
 }));
 
 vi.mock('@/lib/ai/providers/cloudStub', () => ({
@@ -280,7 +289,74 @@ describe('ai service', () => {
     });
   });
 
-  it('switches to the cloud stub outside development-like stages', async () => {
+  it('uses the external OpenAI-compatible provider in production when configured', async () => {
+    vi.stubEnv('AXXON_DEPLOY_STAGE', 'production');
+    vi.stubEnv('AI_CLOUD_BASE_URL', 'https://llm.example.com');
+    vi.stubEnv('AI_CLOUD_MODEL', 'gpt-4o-mini');
+    vi.stubEnv('AI_CLOUD_API_KEY', 'secret-token');
+
+    mockedStreamOpenAiCompatibleChat.mockResolvedValue({
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      stream: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              'data: {"choices":[{"delta":{"content":"Hello from prod"}}]}\n\ndata: [DONE]\n\n'
+            )
+          );
+          controller.close();
+        },
+      }),
+    });
+
+    const { createAiChatEventStream } = await import('@/lib/ai/service');
+    const response = await createAiChatEventStream({
+      messages: [
+        {
+          role: 'user',
+          content: 'Hello',
+        },
+      ],
+    });
+
+    expect(mockedStreamOpenAiCompatibleChat).toHaveBeenCalledWith({
+      apiKey: 'secret-token',
+      baseUrl: 'https://llm.example.com',
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: 'Hello',
+        },
+      ],
+      provider: 'openai-compatible',
+    });
+    await expect(readEventStream(response.stream)).resolves.toEqual([
+      {
+        type: 'start',
+        provider: 'openai-compatible',
+        model: 'gpt-4o-mini',
+      },
+      {
+        type: 'delta',
+        delta: 'Hello from prod',
+      },
+      {
+        type: 'done',
+      },
+    ]);
+    await expect(response.completion).resolves.toEqual({
+      provider: 'openai-compatible',
+      model: 'gpt-4o-mini',
+      content: 'Hello from prod',
+      status: 'completed',
+    });
+    expect(mockedStreamCloudAiChatStub).not.toHaveBeenCalled();
+    expect(mockedStreamLocalOllamaChat).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the cloud stub when production external AI is not configured', async () => {
     vi.stubEnv('AXXON_DEPLOY_STAGE', 'production');
     mockedStreamCloudAiChatStub.mockRejectedValue(
       new ServiceUnavailableError(
@@ -304,6 +380,7 @@ describe('ai service', () => {
     );
 
     expect(mockedStreamCloudAiChatStub).toHaveBeenCalledOnce();
+    expect(mockedStreamOpenAiCompatibleChat).not.toHaveBeenCalled();
     expect(mockedStreamLocalOllamaChat).not.toHaveBeenCalled();
   });
 });

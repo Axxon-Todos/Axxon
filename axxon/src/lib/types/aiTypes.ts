@@ -7,7 +7,7 @@ export type AiChatMessage = {
 };
 
 // The provider id is surfaced to the UI so the current runtime mode is visible during beta testing.
-export type AiProviderId = 'local-ollama' | 'cloud-stub';
+export type AiProviderId = 'local-ollama' | 'openai-compatible' | 'cloud-stub';
 export type AiRuntimeAccelerationState =
   | 'gpu'
   | 'mixed'
@@ -18,8 +18,10 @@ export type AiRuntimeAccelerationState =
 export type AiRuntimeConfig = {
   stage: string;
   provider: AiProviderId;
-  localBaseUrl: string;
+  baseUrl: string | null;
+  apiKey: string | null;
   model: string;
+  available: boolean;
   useLocalProvider: boolean;
 };
 

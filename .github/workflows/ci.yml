@@ -1,11 +1,16 @@
+# Runs pull request validation for main, verifies migrations against a throwaway database, and deploys production on main pushes.
 name: CI
 
 on:
   pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
-      - master
+
+permissions:
+  contents: read
 
 jobs:
   lint_and_typecheck:
@@ -42,6 +47,51 @@ jobs:
       - run: pnpm lint:ci
       - run: pnpm typecheck
       - run: pnpm build
+
+  migration_check:
+    runs-on: ubuntu-latest
+    needs: lint_and_typecheck
+    defaults:
+      run:
+        working-directory: axxon
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: axxon_migration_check
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d axxon_migration_check"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      NODE_ENV: test
+      PG_HOST: 127.0.0.1
+      PG_PORT: 5432
+      PG_USER: postgres
+      PG_PASS: postgres
+      PG_DB: axxon_migration_check
+      PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/axxon_migration_check
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: axxon/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm migrate:latest
+      - run: pnpm migrate:latest
 
   backend_tests:
     runs-on: ubuntu-latest
@@ -124,3 +174,38 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:frontend
+
+  deploy_production:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - lint_and_typecheck
+      - migration_check
+      - backend_tests
+      - frontend_tests
+    environment: production
+    concurrency:
+      group: production-deploy-main
+      cancel-in-progress: false
+    steps:
+      - name: Prepare SSH credentials
+        env:
+          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy production stack
+        env:
+          PRODUCTION_APP_PATH: ${{ secrets.PRODUCTION_APP_PATH }}
+          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          PRODUCTION_SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT }}
+          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+        run: |
+          ssh_port="${PRODUCTION_SSH_PORT:-22}"
+          ssh -i ~/.ssh/id_ed25519 -p "$ssh_port" "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "cd \"$PRODUCTION_APP_PATH\" && git fetch --all --prune && git checkout main && git pull --ff-only && sh ./scripts/deploy-production.sh"
