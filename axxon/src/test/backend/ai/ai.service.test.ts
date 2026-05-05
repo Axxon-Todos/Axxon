@@ -1,5 +1,6 @@
 // Verifies AI runtime selection, completion metadata generation, and provider stream normalization.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { ServiceUnavailableError } from '@/lib/utils/apiErrors';
 
@@ -149,6 +150,133 @@ describe('ai service', () => {
     expect(metadata).toEqual({
       title: 'Sprint planning chat',
       summary: 'Plan the next sprint.',
+    });
+  });
+
+  it('retries one malformed structured JSON response before failing the planner stage', async () => {
+    vi.stubEnv('AXXON_DEPLOY_STAGE', 'development');
+    vi.stubEnv('AI_LOCAL_BASE_URL', 'http://ollama:11434');
+    vi.stubEnv('AI_LOCAL_MODEL', 'qwen2.5-coder:14b');
+
+    mockedCompleteLocalOllamaChat
+      .mockResolvedValueOnce({
+        provider: 'local-ollama',
+        model: 'qwen2.5-coder:14b',
+        content: 'I think the answer is probably scope-first.',
+      })
+      .mockResolvedValueOnce({
+        provider: 'local-ollama',
+        model: 'qwen2.5-coder:14b',
+        content: '{"status":"ok"}',
+      });
+
+    const { completeAiStructuredJson } = await import('@/lib/ai/service');
+    const result = await completeAiStructuredJson({
+      messages: [
+        {
+          role: 'user',
+          content: 'Return strict JSON',
+        },
+      ],
+      schema: z.object({
+        status: z.literal('ok'),
+      }),
+      failureMessage: 'Failed to parse structured JSON',
+    });
+
+    expect(result).toEqual({ status: 'ok' });
+    expect(mockedCompleteLocalOllamaChat).toHaveBeenCalledTimes(2);
+  });
+
+  it('surfaces structured JSON validation diagnostics after the retry budget is exhausted', async () => {
+    vi.stubEnv('AXXON_DEPLOY_STAGE', 'development');
+    vi.stubEnv('AI_LOCAL_BASE_URL', 'http://ollama:11434');
+    vi.stubEnv('AI_LOCAL_MODEL', 'qwen2.5-coder:14b');
+
+    mockedCompleteLocalOllamaChat
+      .mockResolvedValueOnce({
+        provider: 'local-ollama',
+        model: 'qwen2.5-coder:14b',
+        content: '{"status":"almost"}',
+      })
+      .mockResolvedValueOnce({
+        provider: 'local-ollama',
+        model: 'qwen2.5-coder:14b',
+        content: '{"status":"still-wrong"}',
+      });
+
+    const { completeAiStructuredJson } = await import('@/lib/ai/service');
+
+    await expect(
+      completeAiStructuredJson({
+        messages: [
+          {
+            role: 'user',
+            content: 'Return strict JSON',
+          },
+        ],
+        schema: z.object({
+          status: z.literal('ok'),
+        }),
+        failureMessage: 'Failed to parse structured JSON',
+      })
+    ).rejects.toEqual(
+      expect.objectContaining({
+        message: 'Failed to parse structured JSON',
+        failureCode: 'schema_validation_failed',
+        responseExcerpt: '{"status":"still-wrong"}',
+        validationIssues: expect.arrayContaining(['status: Invalid literal value, expected "ok"']),
+      })
+    );
+  });
+
+  it('fails fast when the local runtime returns an interactive shell hint instead of model JSON', async () => {
+    vi.stubEnv('AXXON_DEPLOY_STAGE', 'development');
+    vi.stubEnv('AI_LOCAL_BASE_URL', 'http://ollama:11434');
+    vi.stubEnv('AI_LOCAL_MODEL', 'qwen2.5-coder:14b');
+
+    mockedCompleteLocalOllamaChat.mockResolvedValue({
+      provider: 'local-ollama',
+      model: 'qwen2.5-coder:14b',
+      content: '› Use /skills to list available skills',
+    });
+
+    const { completeAiStructuredJson } = await import('@/lib/ai/service');
+
+    await expect(
+      completeAiStructuredJson({
+        messages: [
+          {
+            role: 'user',
+            content: 'Return strict JSON',
+          },
+        ],
+        schema: z.object({
+          status: z.literal('ok'),
+        }),
+        failureMessage: 'Failed to parse structured JSON',
+      })
+    ).rejects.toEqual(
+      expect.objectContaining({
+        message:
+          'Local AI returned an interactive shell hint instead of model output. Check AI_LOCAL_BASE_URL and AI_LOCAL_MODEL.',
+        failureCode: 'json_parse_failed',
+        responseExcerpt: '› Use /skills to list available skills',
+      })
+    );
+
+    expect(mockedCompleteLocalOllamaChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('repairs malformed bare-string arrays when extracting generated JSON', async () => {
+    const { parseGeneratedJson } = await import('@/lib/ai/service');
+
+    expect(
+      parseGeneratedJson(`{
+        "openQuestions": [AI model metrics are displayed in Grafana dashboard]
+      }`)
+    ).toEqual({
+      openQuestions: ['AI model metrics are displayed in Grafana dashboard'],
     });
   });
 

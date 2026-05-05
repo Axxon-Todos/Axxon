@@ -1,8 +1,9 @@
 // Resolves the active AI provider and runtime defaults from server environment variables.
+import { getLocalOllamaRuntimeStatus } from '@/lib/ai/localOllamaRuntime';
 import type { AiRuntimeConfig, AiRuntimeSummary } from '@/lib/types/aiTypes';
 
 const DEFAULT_LOCAL_MODEL = 'qwen2.5-coder:14b';
-const DEFAULT_LOCAL_DOCKER_BASE_URL = 'http://ollama:11434';
+const DEFAULT_LOCAL_DOCKER_BASE_URL = 'http://host.docker.internal:11434';
 const DEFAULT_LOCAL_HOST_BASE_URL = 'http://127.0.0.1:11434';
 const CLOUD_PENDING_MODEL = 'cloud-pending';
 
@@ -17,7 +18,7 @@ function normalizeStage(value?: string | null) {
   return process.env.NODE_ENV === 'production' ? 'production' : 'development';
 }
 
-// Default to the Compose service name in Docker and localhost for host-based development.
+// Default to the host gateway in Docker and localhost for host-based development.
 function resolveLocalBaseUrl() {
   const configuredBaseUrl = process.env.AI_LOCAL_BASE_URL?.trim();
 
@@ -57,5 +58,32 @@ export function getAiRuntimeSummary(): AiRuntimeSummary {
     model: runtime.model,
     available: runtime.useLocalProvider,
     statusLabel: runtime.useLocalProvider ? 'Configured' : 'Cloud setup required',
+  };
+}
+
+// Adds local-runtime readiness details for the AI workspace without changing the provider contract used by chat routes.
+export async function getAiWorkspaceRuntimeSummary(): Promise<AiRuntimeSummary> {
+  const runtimeConfig = getAiRuntimeConfig();
+  const runtimeSummary = getAiRuntimeSummary();
+
+  if (!runtimeConfig.useLocalProvider) {
+    return {
+      ...runtimeSummary,
+      accelerationState: 'unknown',
+      planningReady: false,
+      planningStatusLabel: 'Planning needs a configured cloud runtime.',
+    };
+  }
+
+  const runtimeStatus = await getLocalOllamaRuntimeStatus({
+    baseUrl: runtimeConfig.localBaseUrl,
+    model: runtimeConfig.model,
+  });
+
+  return {
+    ...runtimeSummary,
+    accelerationState: runtimeStatus.accelerationState,
+    planningReady: runtimeStatus.planningReady,
+    planningStatusLabel: runtimeStatus.planningStatusLabel,
   };
 }

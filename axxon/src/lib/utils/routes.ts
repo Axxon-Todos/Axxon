@@ -137,3 +137,42 @@ export function buildOrganizationAiThreadApiPath(
 ) {
   return `${buildOrganizationAiThreadsApiPath(organizationId)}/${threadId}`;
 }
+
+export function buildOrganizationBoardAiPlanningSessionsApiPath(
+  organizationId: string | number,
+  boardId: string | number
+) {
+  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/ai/planning/sessions`;
+}
+
+export function buildOrganizationBoardAiPlanningSessionApiPath(
+  organizationId: string | number,
+  boardId: string | number,
+  sessionId: string | number
+) {
+  return `${buildOrganizationBoardAiPlanningSessionsApiPath(organizationId, boardId)}/${sessionId}`;
+}
+
+export function buildOrganizationBoardAiPlanningSessionMessagesApiPath(
+  organizationId: string | number,
+  boardId: string | number,
+  sessionId: string | number
+) {
+  return `${buildOrganizationBoardAiPlanningSessionApiPath(
+    organizationId,
+    boardId,
+    sessionId
+  )}/messages`;
+}
+
+export function buildOrganizationBoardAiPlanningSessionProcessApiPath(
+  organizationId: string | number,
+  boardId: string | number,
+  sessionId: string | number
+) {
+  return `${buildOrganizationBoardAiPlanningSessionApiPath(
+    organizationId,
+    boardId,
+    sessionId
+  )}/process`;
+}

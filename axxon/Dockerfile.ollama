@@ -1,8 +1,0 @@
-# Builds the local Ollama runtime used by the org AI MVP inside the Docker development stack.
-FROM ollama/ollama:latest
-
-# Delegate startup behavior to a small script so model bootstrapping stays explicit and editable.
-COPY scripts/ollama-entrypoint.sh /usr/local/bin/ollama-entrypoint.sh
-RUN chmod +x /usr/local/bin/ollama-entrypoint.sh
-
-ENTRYPOINT ["/usr/local/bin/ollama-entrypoint.sh"]

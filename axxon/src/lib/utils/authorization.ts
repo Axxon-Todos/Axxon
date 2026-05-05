@@ -3,6 +3,7 @@ import { BoardMembers } from '@/lib/models/boardMembers';
 import { ChatThreads } from '@/lib/models/chatThreads';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
 import { Organizations } from '@/lib/models/organizations';
+import { PlanningSessions } from '@/lib/models/planningSessions';
 import {
   ForbiddenError,
   NotFoundError,
@@ -128,4 +129,24 @@ export async function requireOrganizationAiThreadCreator(
   }
 
   return thread;
+}
+
+export async function requirePlanningSessionCreator(
+  organizationId: number,
+  boardId: number,
+  sessionId: number,
+  userId: number
+) {
+  await requireBoardInOrganization(organizationId, boardId, userId);
+  const session = await PlanningSessions.getSessionById(sessionId);
+
+  if (!session || session.organization_id !== organizationId || session.board_id !== boardId) {
+    throw new NotFoundError('Planning session not found');
+  }
+
+  if (session.created_by !== userId) {
+    throw new ForbiddenError('You do not have access to this planning session');
+  }
+
+  return session;
 }

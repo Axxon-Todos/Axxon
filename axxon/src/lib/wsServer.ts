@@ -1,4 +1,4 @@
-// wsServer.ts
+// Hosts authenticated Socket.IO rooms for board-scoped realtime updates and private user-scoped events.
 import { Server } from "socket.io";
 import http from "http";
 import Redis from "ioredis";
@@ -127,25 +127,36 @@ function getSubscriber() {
   return sub;
 }
 
-function emitRedisMessageToBoards(channel: string, message: string) {
+function emitRedisScopedMessage(channel: string, message: string) {
   try {
-    const [, boardId] = channel.split(":");
+    const [scope, targetId] = channel.split(":");
     const parsed = JSON.parse(message);
     const { type, payload } = parsed;
 
+    if (!scope || !targetId) {
+      console.warn("Redis message had an invalid scoped channel:", channel);
+      return;
+    }
+
     if (!type) {
-      console.warn("Redis message missing type field, defaulting to board:update");
+      const fallbackEventName = `${scope}:update`;
+      const roomName = scope === 'board' ? targetId : `${scope}:${targetId}`;
+
+      console.warn(
+        `Redis message missing type field, defaulting to ${fallbackEventName}`
+      );
       for (const io of activeIoServers) {
-        io.to(boardId).emit("board:update", parsed);
+        io.to(roomName).emit(fallbackEventName, parsed);
       }
       return;
     }
 
     const normalizedType = type.replace(/([a-z])([A-Z])/g, "$1:$2").toLowerCase();
-    const eventName = `board:${normalizedType}`;
+    const roomName = scope === 'board' ? targetId : `${scope}:${targetId}`;
+    const eventName = scope === 'board' ? `board:${normalizedType}` : normalizedType;
 
     for (const io of activeIoServers) {
-      io.to(boardId).emit(eventName, payload);
+      io.to(roomName).emit(eventName, payload);
     }
   } catch (error) {
     console.error("Failed to forward Redis message:", error);
@@ -207,7 +218,7 @@ export function createWsServer(server: http.Server) {
   if (!isRedisForwarderRegistered) {
     isRedisForwarderRegistered = true;
     subscriber.on("pmessage", (_pattern, channel, message) => {
-      emitRedisMessageToBoards(channel, message);
+      emitRedisScopedMessage(channel, message);
     });
   }
 
@@ -215,14 +226,15 @@ export function createWsServer(server: http.Server) {
     isSubscribed = true;
 
     // Subscribe to all Redis channels
-    subscriber.psubscribe("board:*", (err) => {
+    subscriber.psubscribe("board:*", "user:*", (err) => {
       if (err) console.error("Redis psubscribe error:", err);
-      else console.log("Subscribed to Redis channels: board:*");
+      else console.log("Subscribed to Redis channels: board:* and user:*");
     });
   }
 
   io.on("connection", (socket) => {
     console.log(`Client connected: ${socket.id}`);
+    socket.join(`user:${socket.data.userId}`);
 
     let currentBoard: string | null = null;
 
@@ -290,6 +302,12 @@ export async function publishBoardUpdate(boardId: string, payload: unknown) {
   await getPublisher().publish(`board:${boardId}`, JSON.stringify(payload));
 }
 
+// Helper to publish user-scoped events so creator-owned resources stay private.
+export async function publishUserUpdate(userId: string | number, payload: unknown) {
+  console.log(`Publishing update to Redis user:${userId}`, payload);
+  await getPublisher().publish(`user:${userId}`, JSON.stringify(payload));
+}
+
 export async function closeWsInfrastructure() {
   for (const io of activeIoServers) {
     await new Promise<void>((resolve) => {
@@ -301,7 +319,7 @@ export async function closeWsInfrastructure() {
   if (sub) {
     try {
       if (isSubscribed) {
-        await sub.punsubscribe("board:*");
+        await sub.punsubscribe("board:*", "user:*");
       }
       sub.removeAllListeners("pmessage");
       await sub.quit();

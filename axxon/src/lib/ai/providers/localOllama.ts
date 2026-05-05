@@ -4,6 +4,10 @@ import type {
   AiProviderCompletionResult,
   AiProviderStreamResult,
 } from '@/lib/types/aiTypes';
+import {
+  buildOllamaConnectionFailureMessage,
+  fetchOllamaWithFallback,
+} from '@/lib/ai/ollamaConnection';
 import { ApiError } from '@/lib/utils/apiErrors';
 
 type OpenAiCompatibleErrorResponse = {
@@ -19,11 +23,6 @@ type OpenAiCompatibleCompletionResponse = {
     };
   }>;
 };
-
-// Strip trailing slashes so endpoint joins do not accidentally create double separators.
-function normalizeBaseUrl(baseUrl: string) {
-  return baseUrl.replace(/\/+$/, '');
-}
 
 // Fall back gracefully when Ollama returns a non-JSON error body.
 async function readProviderError(response: Response) {
@@ -54,18 +53,36 @@ export async function streamLocalOllamaChat({
   model: string;
   messages: AiChatMessage[];
 }): Promise<AiProviderStreamResult> {
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/chat/completions`, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: true,
-    }),
-  });
+  let response: Response;
+
+  try {
+    const providerResponse = await fetchOllamaWithFallback({
+      baseUrl,
+      path: '/v1/chat/completions',
+      init: {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: true,
+        }),
+      },
+    });
+
+    response = providerResponse.response;
+  } catch (error) {
+    throw new ApiError(
+      502,
+      buildOllamaConnectionFailureMessage({
+        baseUrl,
+        error,
+      })
+    );
+  }
 
   if (!response.ok) {
     const errorMessage = await readProviderError(response);
@@ -93,18 +110,36 @@ export async function completeLocalOllamaChat({
   model: string;
   messages: AiChatMessage[];
 }): Promise<AiProviderCompletionResult> {
-  const response = await fetch(`${normalizeBaseUrl(baseUrl)}/v1/chat/completions`, {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-    }),
-  });
+  let response: Response;
+
+  try {
+    const providerResponse = await fetchOllamaWithFallback({
+      baseUrl,
+      path: '/v1/chat/completions',
+      init: {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false,
+        }),
+      },
+    });
+
+    response = providerResponse.response;
+  } catch (error) {
+    throw new ApiError(
+      502,
+      buildOllamaConnectionFailureMessage({
+        baseUrl,
+        error,
+      })
+    );
+  }
 
   if (!response.ok) {
     const errorMessage = await readProviderError(response);
