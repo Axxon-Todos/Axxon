@@ -1,3 +1,4 @@
+// Creates backend test records for organizations, planning sessions, questions, and related domain fixtures.
 import db from '@/lib/db/db';
 
 let userSequence = 1;
@@ -12,6 +13,10 @@ let githubInstallationSequence = 1;
 let githubRepositorySequence = 1;
 let chatThreadSequence = 1;
 let chatMessageSequence = 1;
+let planningSessionSequence = 1;
+let planningSessionMessageSequence = 1;
+let planningQuestionSequence = 1;
+let planningRunSequence = 1;
 
 export async function createUser(overrides: Partial<Record<'first_name' | 'last_name' | 'email' | 'avatar_url', string | null>> = {}) {
   const sequence = userSequence++;
@@ -316,7 +321,7 @@ export async function createChatMessageRecord({
   role: 'user' | 'assistant';
   content?: string;
   sequenceNumber?: number;
-  status?: 'completed' | 'failed';
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
   model?: string | null;
 }) {
   const sequence = chatMessageSequence++;
@@ -335,6 +340,272 @@ export async function createChatMessageRecord({
     .returning('*');
 
   return message;
+}
+
+export async function createPlanningSessionRecord({
+  organizationId,
+  boardId,
+  createdBy,
+  title,
+  summary,
+  originalPrompt,
+  plannerState = 'clarifying',
+  context = null,
+  readiness = null,
+  clarificationTurnCount = 1,
+  planArtifact = null,
+}: {
+  organizationId: number;
+  boardId: number;
+  createdBy: number;
+  title?: string;
+  summary?: string;
+  originalPrompt?: string;
+  plannerState?:
+    | 'analyzing'
+    | 'clarifying'
+    | 'planning'
+    | 'plan_generated'
+    | 'failed';
+  context?: Record<string, unknown> | null;
+  readiness?: Record<string, unknown> | null;
+  clarificationTurnCount?: number;
+  planArtifact?: Record<string, unknown> | null;
+}) {
+  const sequence = planningSessionSequence++;
+  const [session] = await db('planning_sessions')
+    .insert({
+      organization_id: organizationId,
+      board_id: boardId,
+      created_by: createdBy,
+      title: title ?? `Planning Session ${sequence}`,
+      summary: summary ?? `Planning summary ${sequence}`,
+      original_prompt: originalPrompt ?? `Plan prompt ${sequence}`,
+      planner_state: plannerState,
+      context_json:
+        context ?? {
+          objective: `Objective ${sequence}`,
+          summary: `Summary ${sequence}`,
+          targetOutcome: `Target outcome ${sequence}`,
+          inScope: ['API'],
+          outOfScope: ['Task creation'],
+          assumptions: [],
+          constraints: [],
+          acceptanceCriteria: ['User can review the plan'],
+          knownRequirements: ['Keep it board-bound'],
+          unresolvedUnknowns: [],
+          blockingUnknowns: [],
+          affectedAreas: ['frontend'],
+          risks: [],
+          dependencies: [],
+          technicalDecisions: [],
+          estimatedComplexity: 'medium',
+          planningConfidence: 0.75,
+        },
+      readiness_json:
+        readiness ?? {
+          objectiveClear: true,
+          scopeBounded: true,
+          hasAcceptanceCriteria: true,
+          knownRequirements: ['Keep it board-bound'],
+          unresolvedUnknowns: [],
+          blockingUnknowns: [],
+          confidence: 0.75,
+          recommendedNextAction: 'generate_plan',
+          reasonSummary: ['Ready'],
+        },
+      clarification_turn_count: clarificationTurnCount,
+      plan_artifact_json: planArtifact,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return session;
+}
+
+export async function createPlanningSessionMessageRecord({
+  sessionId,
+  role,
+  messageKind = 'user_input',
+  content,
+  sequenceNumber,
+  status = 'completed',
+  metadata = null,
+}: {
+  sessionId: number;
+  role: 'user' | 'assistant';
+  messageKind?:
+    | 'user_input'
+    | 'clarification_questions'
+    | 'planner_status'
+    | 'plan_summary';
+  content?: string;
+  sequenceNumber?: number;
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  metadata?: Record<string, unknown> | null;
+}) {
+  const sequence = planningSessionMessageSequence++;
+  const resolvedSequenceNumber = sequenceNumber ?? sequence;
+  const [message] = await db('planning_session_messages')
+    .insert({
+      session_id: sessionId,
+      role,
+      message_kind: messageKind,
+      content: content ?? `Planning message ${sequence}`,
+      sequence_number: resolvedSequenceNumber,
+      status,
+      metadata_json: metadata,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return message;
+}
+
+export async function createPlanningQuestionRecord({
+  sessionId,
+  questionKey,
+  questionText,
+  category = 'scope',
+  whyThisMatters = 'Need scope clarity.',
+  options = [
+    {
+      optionKey: 'workspace-ui',
+      label: 'Workspace UI',
+      description: 'Keep the work in the org AI workspace.',
+    },
+    {
+      optionKey: 'board-view',
+      label: 'Board view',
+      description: 'Put the planning flow directly on the board.',
+    },
+    {
+      optionKey: 'new-surface',
+      label: 'New surface',
+      description: 'Create a dedicated planning surface.',
+    },
+    {
+      optionKey: 'none-of-the-above',
+      label: 'None of the above',
+      description: 'The right answer is not listed; add a note if needed.',
+    },
+  ],
+  selectedOptionKey = null,
+  answerNote = null,
+  isRequired = true,
+  isBlocking = true,
+  status = 'open',
+  askedInMessageId = null,
+  answeredInMessageId = null,
+}: {
+  sessionId: number;
+  questionKey?: string;
+  questionText?: string;
+  category?:
+    | 'scope'
+    | 'technical'
+    | 'constraints'
+    | 'dependencies'
+    | 'acceptance_criteria'
+    | 'priority'
+    | 'ux'
+    | 'rollout';
+  whyThisMatters?: string;
+  options?: Array<{
+    optionKey: string;
+    label: string;
+    description: string;
+  }>;
+  selectedOptionKey?: string | null;
+  answerNote?: string | null;
+  isRequired?: boolean;
+  isBlocking?: boolean;
+  status?: 'open' | 'answered' | 'superseded';
+  askedInMessageId?: number | null;
+  answeredInMessageId?: number | null;
+}) {
+  const sequence = planningQuestionSequence++;
+  const [question] = await db('planning_session_questions')
+    .insert({
+      session_id: sessionId,
+      question_key: questionKey ?? `question-${sequence}`,
+      category,
+      question_text: questionText ?? `Question ${sequence}`,
+      why_this_matters: whyThisMatters,
+      options_json: JSON.stringify(options),
+      selected_option_key: selectedOptionKey,
+      answer_note: answerNote,
+      is_required: isRequired,
+      is_blocking: isBlocking,
+      status,
+      asked_in_message_id: askedInMessageId,
+      answered_in_message_id: answeredInMessageId,
+      asked_at: askedInMessageId ? db.fn.now() : null,
+      answered_at: answeredInMessageId ? db.fn.now() : null,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return question;
+}
+
+export async function createPlanningRunRecord({
+  sessionId,
+  triggerMessageId,
+  statusMessageId,
+  executorKind = 'local_ollama',
+  state = 'queued',
+  stage = 'queued',
+  attemptCount = 0,
+  providerJobId = null,
+  metadata = null,
+  errorMessage = null,
+  startedAt = null,
+  finishedAt = null,
+}: {
+  sessionId: number;
+  triggerMessageId: number;
+  statusMessageId: number;
+  executorKind?: 'local_ollama' | 'external_llm' | 'headless_agent';
+  state?:
+    | 'queued'
+    | 'running'
+    | 'waiting_for_clarification'
+    | 'completed'
+    | 'failed'
+    | 'cancelled';
+  stage?: 'queued' | 'analyzing' | 'clarifying' | 'planning' | 'completed' | 'failed';
+  attemptCount?: number;
+  providerJobId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  errorMessage?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+}) {
+  planningRunSequence += 1;
+  const [run] = await db('planning_runs')
+    .insert({
+      session_id: sessionId,
+      trigger_message_id: triggerMessageId,
+      status_message_id: statusMessageId,
+      executor_kind: executorKind,
+      state,
+      stage,
+      attempt_count: attemptCount,
+      provider_job_id: providerJobId,
+      metadata_json: metadata,
+      error_message: errorMessage,
+      started_at: startedAt,
+      finished_at: finishedAt,
+      created_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    })
+    .returning('*');
+
+  return run;
 }
 
 export async function createGitHubInstallationRecord({

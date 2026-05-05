@@ -1,7 +1,8 @@
+// Manages a shared authenticated Socket.IO client and optional board-room membership for realtime UI updates.
 import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
-export function useSocket(boardId: string) {
+export function useSocket(boardId: string | null) {
   const socketRef = useRef<Socket | null>(null);
   const currentBoardRef = useRef<string | null>(null);
 
@@ -49,6 +50,16 @@ export function useSocket(boardId: string) {
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
+
+    if (!boardId) {
+      if (currentBoardRef.current) {
+        socket.emit("leaveBoard", currentBoardRef.current);
+        console.log(`Left board ${currentBoardRef.current}`);
+        currentBoardRef.current = null;
+      }
+
+      return;
+    }
 
     if (currentBoardRef.current === boardId) return;
 

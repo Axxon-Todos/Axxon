@@ -8,6 +8,12 @@ export type AiChatMessage = {
 
 // The provider id is surfaced to the UI so the current runtime mode is visible during beta testing.
 export type AiProviderId = 'local-ollama' | 'cloud-stub';
+export type AiRuntimeAccelerationState =
+  | 'gpu'
+  | 'mixed'
+  | 'cpu'
+  | 'idle'
+  | 'unknown';
 
 export type AiRuntimeConfig = {
   stage: string;
@@ -24,6 +30,9 @@ export type AiRuntimeSummary = {
   model: string;
   available: boolean;
   statusLabel: string;
+  accelerationState?: AiRuntimeAccelerationState;
+  planningReady?: boolean;
+  planningStatusLabel?: string;
 };
 
 export type AiProviderStreamResult = {

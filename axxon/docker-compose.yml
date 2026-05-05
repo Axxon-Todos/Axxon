@@ -54,7 +54,8 @@ services:
       - .env.docker
     environment:
       AXXON_DEPLOY_STAGE: ${AXXON_DEPLOY_STAGE:-development}
-      AI_LOCAL_BASE_URL: ${AI_LOCAL_BASE_URL:-http://ollama:11434}
+      # Docker dev talks to a host-run Ollama instance through the host gateway instead of a sibling container.
+      AI_LOCAL_BASE_URL: ${AI_LOCAL_BASE_URL:-http://host.docker.internal:11434}
       AI_LOCAL_MODEL: ${AI_LOCAL_MODEL:-qwen2.5-coder:14b}
       NODE_ENV: development
       HOSTNAME: 0.0.0.0
@@ -76,33 +77,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      ollama:
-        condition: service_healthy
-
-  ollama:
-    build:
-      context: .
-      dockerfile: Dockerfile.ollama
-    environment:
-      AI_LOCAL_MODEL: ${AI_LOCAL_MODEL:-qwen2.5-coder:14b}
-    volumes:
-      - ollama_data:/root/.ollama
-    # The app talks to Ollama over the Compose network, so we avoid binding a host port by default.
-    # Keep both Compose GPU hints so local Docker installs consistently request the Nvidia device.
-    gpus: all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: ["gpu"]
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 15s
-      timeout: 10s
-      retries: 20
-      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -151,7 +125,6 @@ volumes:
   app_next:
   ws_node_modules:
   db_init_node_modules:
-  ollama_data:
   redis_data:
   postgres_data:
     name: axxon_postgres_data

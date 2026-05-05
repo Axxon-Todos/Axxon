@@ -1,6 +1,6 @@
 // Loads the org-scoped AI workspace and passes the active runtime summary into the client shell.
 import OrganizationAiWorkspace from '@/components/features/organizationAi/OrganizationAiWorkspace';
-import { getAiRuntimeSummary } from '@/lib/ai/config';
+import { getAiWorkspaceRuntimeSummary } from '@/lib/ai/config';
 
 type OrganizationAiPageProps = {
   params: Promise<{
@@ -17,7 +17,7 @@ export default async function OrganizationAiPage({
   return (
     <OrganizationAiWorkspace
       organizationId={organizationId}
-      runtime={getAiRuntimeSummary()}
+      runtime={await getAiWorkspaceRuntimeSummary()}
     />
   );
 }

@@ -1,3 +1,4 @@
+// Verifies the shared socket hook handles board membership changes and idle AI-workspace connections.
 import React, { StrictMode } from 'react';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -87,5 +88,16 @@ describe('useSocket', () => {
     socket.trigger('connect');
 
     expect(socket.emit).toHaveBeenCalledWith('joinBoard', 'board-99');
+  });
+
+  it('connects without joining a board room when no board id is active', () => {
+    const socket = createMockSocket();
+    mockedIo.mockReturnValue(socket);
+
+    renderHook(() => useSocket(null), {
+      wrapper: ({ children }: { children: React.ReactNode }) => <StrictMode>{children}</StrictMode>,
+    });
+
+    expect(socket.emit).not.toHaveBeenCalledWith('joinBoard', expect.anything());
   });
 });
