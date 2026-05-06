@@ -1,4 +1,4 @@
-# Defines the Coolify production stack with hosted Postgres, bundled Redis, and a migration task excluded from Coolify health checks.
+# Defines the Coolify production stack with bundled Postgres, Redis, and a migration task excluded from Coolify health checks.
 x-runtime-env: &runtime-env
   AXXON_DEPLOY_STAGE: ${AXXON_DEPLOY_STAGE:-production}
   AXXON_ENV_MODE: docker
@@ -26,6 +26,21 @@ x-runtime-env: &runtime-env
   GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
 
 services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER:?PG_USER is required}
+      POSTGRES_PASSWORD: ${PG_PASS:?PG_PASS is required}
+      POSTGRES_DB: ${PG_DB:?PG_DB is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -48,6 +63,11 @@ services:
     # Run schema migrations once per deploy before the long-lived app services start.
     command: ["pnpm", "migrate:latest:prod"]
     environment: *runtime-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   app:
     build:
@@ -68,6 +88,8 @@ services:
     expose:
       - "3000"
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -92,6 +114,8 @@ services:
     expose:
       - "4000"
     depends_on:
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       migrate:
@@ -108,4 +132,5 @@ services:
       start_period: 15s
 
 volumes:
+  postgres_data:
   redis_data:
