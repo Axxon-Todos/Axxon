@@ -3,34 +3,26 @@ import { spawnSync } from "child_process";
 import { setTimeout as delay } from "timers/promises";
 import knex from "knex";
 import type { Knex } from "knex";
-import { loadRuntimeEnv } from "../../env/loadRuntimeEnv";
-
-loadRuntimeEnv();
+import {
+  describePostgresConnectionTarget,
+  getPostgresConnectionConfig,
+  getPostgresFallbackHost,
+  getPostgresPort,
+} from "../../env/connectionConfig";
 
 const WAIT_INTERVAL_MS = 2000;
 const MAX_WAIT_ATTEMPTS = 30;
-const DEFAULT_PG_PORT = 5432;
 const PRIMARY_DB_HOST = process.env.PG_HOST;
-const FALLBACK_DB_HOST = process.env.PG_HOST_FALLBACK;
+const FALLBACK_DB_HOST = getPostgresFallbackHost();
 let activeDbHost = PRIMARY_DB_HOST;
 
 function createConnectionConfig(): Knex.Config {
-  if (process.env.PG_CONNECTION_STRING) {
-    return {
-      client: "pg",
-      connection: process.env.PG_CONNECTION_STRING,
-    };
-  }
-
   return {
     client: "pg",
-    connection: {
+    connection: getPostgresConnectionConfig({
       host: activeDbHost,
-      port: process.env.PG_PORT ? Number(process.env.PG_PORT) : DEFAULT_PG_PORT,
-      user: process.env.PG_USER,
-      password: process.env.PG_PASS,
-      database: process.env.PG_DB,
-    },
+      port: getPostgresPort(),
+    }),
   };
 }
 
@@ -70,21 +62,10 @@ function switchToFallbackHost() {
 }
 
 function describeConnectionTarget() {
-  const connection = createConnectionConfig().connection;
-
-  if (typeof connection === "string" && connection.length > 0) {
-    try {
-      const url = new URL(connection);
-      const databaseName = url.pathname.replace(/^\//, "") || "(default)";
-      const port = url.port || "5432";
-
-      return `${url.protocol}//${url.hostname}:${port}/${databaseName}`;
-    } catch {
-      return "[invalid PG_CONNECTION_STRING]";
-    }
-  }
-
-  return `${activeDbHost || process.env.PG_HOST || "(missing-host)"}:${process.env.PG_PORT || "5432"}/${process.env.PG_DB || "(missing-db)"}`;
+  return describePostgresConnectionTarget({
+    host: activeDbHost,
+    port: getPostgresPort(),
+  });
 }
 
 async function waitForDatabase() {

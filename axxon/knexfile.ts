@@ -1,9 +1,7 @@
 // Loads runtime environment variables before exposing Knex configs for local and Docker workflows.
 import path from 'node:path';
 import type { Knex } from 'knex';
-import { loadRuntimeEnv } from './src/lib/env/loadRuntimeEnv';
-
-loadRuntimeEnv();
+import { getPostgresConnectionConfig } from './src/lib/env/connectionConfig';
 
 const directoryConfig = {
   migrations: {
@@ -14,31 +12,20 @@ const directoryConfig = {
   },
 } as const;
 
-// Reuse the same PG_* fallback logic across local, CI, and production container runs.
-function createConnectionConfig() {
-  return process.env.PG_CONNECTION_STRING || {
-    host: process.env.PG_HOST,
-    port: process.env.PG_PORT ? Number(process.env.PG_PORT) : undefined,
-    user: process.env.PG_USER,
-    password: process.env.PG_PASS,
-    database: process.env.PG_DB,
-  };
-}
-
 const config: Record<string, Knex.Config> = {
   development: {
     client: 'pg',
-    connection: createConnectionConfig(),
+    connection: getPostgresConnectionConfig(),
     ...directoryConfig,
   },
   test: {
     client: 'pg',
-    connection: createConnectionConfig(),
+    connection: getPostgresConnectionConfig(),
     ...directoryConfig,
   },
   production: {
     client: 'pg',
-    connection: createConnectionConfig(),
+    connection: getPostgresConnectionConfig(),
     ...directoryConfig,
   },
 };

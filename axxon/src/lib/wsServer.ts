@@ -2,6 +2,10 @@
 import { Server } from "socket.io";
 import http from "http";
 import Redis from "ioredis";
+import {
+  getConfiguredClientOrigins,
+  getRedisUrl,
+} from '@/lib/env/connectionConfig';
 import { BoardMembers } from '@/lib/models/boardMembers';
 import {
   getSessionTokenFromCookieHeader,
@@ -27,29 +31,7 @@ const SOCKET_HANDSHAKE_MAX_FAILURES = 10;
 const SOCKET_MAX_HTTP_BUFFER_SIZE_BYTES = 1_000_000;
 
 function getAllowedSocketOrigins() {
-  const configuredOrigins = [
-    process.env.CLIENT_URL,
-    process.env.NEXT_PUBLIC_HOSTNAME,
-  ]
-    .flatMap((value) => (value ? value.split(',') : []))
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const normalizedOrigins = configuredOrigins.map((entry) => {
-    try {
-      return new URL(entry).origin;
-    } catch {
-      return null;
-    }
-  });
-
-  const allowedOrigins = Array.from(new Set(normalizedOrigins.filter(Boolean))) as string[];
-
-  if (allowedOrigins.length > 0) {
-    return allowedOrigins;
-  }
-
-  return ['http://127.0.0.1:3000', 'http://localhost:3000'];
+  return getConfiguredClientOrigins();
 }
 
 function isAllowedSocketOrigin(origin?: string | null) {
@@ -104,7 +86,7 @@ function clearUnauthorizedHandshake(clientKey: string) {
 }
 
 function createRedisClient(role: 'publisher' | 'subscriber') {
-  const client = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+  const client = new Redis(getRedisUrl());
   client.on('error', (error) => {
     console.error(`Redis ${role} error:`, error);
   });
