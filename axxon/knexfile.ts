@@ -31,6 +31,11 @@ const config: Record<string, Knex.Config> = {
     connection: createConnectionConfig(),
     ...directoryConfig,
   },
+  test: {
+    client: 'pg',
+    connection: createConnectionConfig(),
+    ...directoryConfig,
+  },
   production: {
     client: 'pg',
     connection: createConnectionConfig(),
