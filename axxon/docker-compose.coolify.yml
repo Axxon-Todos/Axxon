@@ -3,13 +3,14 @@ x-runtime-env: &runtime-env
   AXXON_DEPLOY_STAGE: ${AXXON_DEPLOY_STAGE:-production}
   AXXON_ENV_MODE: docker
   NODE_ENV: production
-  APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
-  CLIENT_URL: ${CLIENT_URL:?CLIENT_URL is required}
-  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-  NEXT_PUBLIC_HOSTNAME: ${NEXT_PUBLIC_HOSTNAME:?NEXT_PUBLIC_HOSTNAME is required}
-  NEXT_PUBLIC_REDIRECT_URI: ${NEXT_PUBLIC_REDIRECT_URI:?NEXT_PUBLIC_REDIRECT_URI is required}
-  NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:?NEXT_PUBLIC_WS_URL is required}
-  PG_CONNECTION_STRING: ${PG_CONNECTION_STRING:?PG_CONNECTION_STRING is required}
+  # Coolify parses the full compose file during image builds before runtime-only envs are injected.
+  APP_BASE_URL: ${APP_BASE_URL:-}
+  CLIENT_URL: ${CLIENT_URL:-}
+  JWT_SECRET: ${JWT_SECRET:-}
+  NEXT_PUBLIC_HOSTNAME: ${NEXT_PUBLIC_HOSTNAME:-}
+  NEXT_PUBLIC_REDIRECT_URI: ${NEXT_PUBLIC_REDIRECT_URI:-}
+  NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
+  PG_CONNECTION_STRING: ${PG_CONNECTION_STRING:-}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
   AI_CLOUD_BASE_URL: ${AI_CLOUD_BASE_URL:-}
   AI_CLOUD_MODEL: ${AI_CLOUD_MODEL:-}
@@ -30,9 +31,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${PG_USER:?PG_USER is required}
-      POSTGRES_PASSWORD: ${PG_PASS:?PG_PASS is required}
-      POSTGRES_DB: ${PG_DB:?PG_DB is required}
+      POSTGRES_USER: ${PG_USER:-}
+      POSTGRES_PASSWORD: ${PG_PASS:-}
+      POSTGRES_DB: ${PG_DB:-}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
