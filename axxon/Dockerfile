@@ -40,12 +40,11 @@ EXPOSE 4000
 CMD ["pnpm", "dev-ws"]
 
 FROM deps AS runtime-prod
-COPY . .
 # Keep a full production runtime image available for non-Next.js processes like websockets and migrations.
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs \
-    && chown -R nextjs:nodejs /app
+    && adduser --system --uid 1001 nextjs
+COPY --chown=nextjs:nodejs . .
 USER nextjs
 
 FROM base AS app-prod
