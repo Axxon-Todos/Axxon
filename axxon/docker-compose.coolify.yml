@@ -1,4 +1,4 @@
-# Defines the standard production-style stack with hosted Postgres, bundled Redis, and a one-shot migration task.
+# Defines the Coolify production stack with hosted Postgres, bundled Redis, and a migration task excluded from Coolify health checks.
 x-runtime-env: &runtime-env
   AXXON_DEPLOY_STAGE: ${AXXON_DEPLOY_STAGE:-production}
   AXXON_ENV_MODE: docker
@@ -44,6 +44,7 @@ services:
       dockerfile: Dockerfile
       target: runtime-prod
     restart: "no"
+    exclude_from_hc: true
     # Run schema migrations once per deploy before the long-lived app services start.
     command: ["pnpm", "migrate:latest:prod"]
     environment: *runtime-env
@@ -64,8 +65,8 @@ services:
       <<: *runtime-env
       HOSTNAME: 0.0.0.0
       PORT: 3000
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       redis:
         condition: service_healthy
@@ -88,9 +89,8 @@ services:
     environment:
       <<: *runtime-env
       WS_PORT: 4000
-    # Bind to loopback by default so a reverse proxy can expose the websocket service intentionally.
-    ports:
-      - "${WS_BIND_HOST:-127.0.0.1}:${WS_PUBLIC_PORT:-4000}:4000"
+    expose:
+      - "4000"
     depends_on:
       redis:
         condition: service_healthy

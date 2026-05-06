@@ -23,7 +23,7 @@
     "docker:dev": "docker compose --env-file .env.local --env-file .env.docker up -d",
     "docker:dev:down": "docker compose --env-file .env.local --env-file .env.docker down",
     "docker:dev:reset-db": "sh ./scripts/reset-dev-db.sh",
-    "docker:prod": "docker compose --env-file .env.production -f docker-compose.prod.yml up --build -d db redis && pnpm docker:prod:migrate && docker compose --env-file .env.production -f docker-compose.prod.yml up --build -d app ws",
+    "docker:prod": "docker compose --env-file .env.production -f docker-compose.prod.yml up --build -d redis && pnpm docker:prod:migrate && docker compose --env-file .env.production -f docker-compose.prod.yml up --build -d app ws",
     "docker:prod:migrate": "docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrate",
     "docker:prod:down": "docker compose --env-file .env.production -f docker-compose.prod.yml down",
     "redis:start": "docker compose up -d redis",
