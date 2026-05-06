@@ -1,4 +1,4 @@
-# Runs pull request validation for main, verifies migrations against a throwaway database, and deploys production on main pushes.
+# Runs pull request validation for main, verifies migrations against a throwaway database, and applies production migrations on main pushes.
 name: CI
 
 on:
@@ -20,7 +20,12 @@ jobs:
         working-directory: axxon
     env:
       NODE_ENV: test
+      APP_BASE_URL: http://127.0.0.1:3000
+      CLIENT_URL: http://127.0.0.1:3000
       JWT_SECRET: test-jwt-secret
+      NEXT_PUBLIC_HOSTNAME: http://127.0.0.1:3000
+      NEXT_PUBLIC_REDIRECT_URI: http://127.0.0.1:3000/api/auth/google/callback
+      NEXT_PUBLIC_WS_URL: http://127.0.0.1:4000
       PG_HOST: 127.0.0.1
       PG_PORT: 5432
       PG_USER: postgres
@@ -28,8 +33,6 @@ jobs:
       PG_DB: axxon_test
       PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/axxon_test
       REDIS_URL: redis://127.0.0.1:6379
-      CLIENT_URL: http://127.0.0.1:3000
-      NEXT_PUBLIC_WS_URL: http://127.0.0.1:4000
     steps:
       - uses: actions/checkout@v4
 
@@ -124,7 +127,12 @@ jobs:
           --health-retries 5
     env:
       NODE_ENV: test
+      APP_BASE_URL: http://127.0.0.1:3000
+      CLIENT_URL: http://127.0.0.1:3000
       JWT_SECRET: test-jwt-secret
+      NEXT_PUBLIC_HOSTNAME: http://127.0.0.1:3000
+      NEXT_PUBLIC_REDIRECT_URI: http://127.0.0.1:3000/api/auth/google/callback
+      NEXT_PUBLIC_WS_URL: http://127.0.0.1:4000
       PG_HOST: 127.0.0.1
       PG_PORT: 5432
       PG_USER: postgres
@@ -132,8 +140,6 @@ jobs:
       PG_DB: axxon_test
       PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/axxon_test
       REDIS_URL: redis://127.0.0.1:6379
-      CLIENT_URL: http://127.0.0.1:3000
-      NEXT_PUBLIC_WS_URL: http://127.0.0.1:4000
     steps:
       - uses: actions/checkout@v4
 
@@ -158,7 +164,10 @@ jobs:
         working-directory: axxon
     env:
       NODE_ENV: test
+      APP_BASE_URL: http://127.0.0.1:3000
       JWT_SECRET: test-jwt-secret
+      NEXT_PUBLIC_HOSTNAME: http://127.0.0.1:3000
+      NEXT_PUBLIC_REDIRECT_URI: http://127.0.0.1:3000/api/auth/google/callback
     steps:
       - uses: actions/checkout@v4
 
@@ -175,7 +184,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:frontend
 
-  deploy_production:
+  run_production_migrations:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
@@ -183,29 +192,29 @@ jobs:
       - migration_check
       - backend_tests
       - frontend_tests
+    defaults:
+      run:
+        working-directory: axxon
     environment: production
     concurrency:
-      group: production-deploy-main
+      group: production-migrations-main
       cancel-in-progress: false
+    env:
+      AXXON_DEPLOY_STAGE: production
+      NODE_ENV: production
+      PG_CONNECTION_STRING: ${{ secrets.PRODUCTION_DATABASE_URL }}
     steps:
-      - name: Prepare SSH credentials
-        env:
-          PRODUCTION_SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
-          PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$PRODUCTION_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
+      - uses: actions/checkout@v4
 
-      - name: Deploy production stack
-        env:
-          PRODUCTION_APP_PATH: ${{ secrets.PRODUCTION_APP_PATH }}
-          PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
-          PRODUCTION_SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT }}
-          PRODUCTION_SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
-        run: |
-          ssh_port="${PRODUCTION_SSH_PORT:-22}"
-          ssh -i ~/.ssh/id_ed25519 -p "$ssh_port" "${PRODUCTION_SSH_USER}@${PRODUCTION_SSH_HOST}" "cd \"$PRODUCTION_APP_PATH\" && git fetch --all --prune && git checkout main && git pull --ff-only && sh ./scripts/deploy-production.sh"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: axxon/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm migrate:latest:prod

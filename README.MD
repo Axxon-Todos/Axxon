@@ -99,9 +99,9 @@ The containerized Postgres instance is exposed on `localhost:5432`, so the host 
 ### Production Compose
 
 ```bash
-# Create .env.production with PG_*, auth, public URL, and AI_CLOUD_* values.
+# Create .env.production with PG_CONNECTION_STRING, auth, public URL, and AI_CLOUD_* values.
 
-# Start the production-style stack locally: postgres, redis, migrations, app, and websocket server
+# Start the production-style stack locally: redis, migrations, app, and websocket server
 pnpm docker:prod
 
 # Run just the production migration step
@@ -111,7 +111,20 @@ pnpm docker:prod:migrate
 pnpm docker:prod:down
 ```
 
-The production compose stack now keeps Postgres, Redis, the Next.js app, and the websocket server inside Docker. Ollama is not part of the production stack; non-local AI runs through the external OpenAI-compatible endpoint configured with `AI_CLOUD_BASE_URL`, `AI_CLOUD_MODEL`, and `AI_CLOUD_API_KEY` when needed.
+The standard production compose stack expects a hosted Postgres database through `PG_CONNECTION_STRING`, keeps Redis, the Next.js app, and the websocket server inside Docker, and runs migrations through the dedicated `migrate` service. Ollama is not part of the production stack; non-local AI runs through the external OpenAI-compatible endpoint configured with `AI_CLOUD_BASE_URL`, `AI_CLOUD_MODEL`, and `AI_CLOUD_API_KEY` when needed.
+
+### Coolify Compose
+
+Use Coolify's Docker Compose build pack with:
+
+- Base Directory: `/axxon`
+- Docker Compose Location: `/docker-compose.coolify.yml`
+- Custom Build Command: leave blank
+- Custom Start Command: leave blank
+
+Set the required runtime envs in Coolify, especially `PG_CONNECTION_STRING`, `APP_BASE_URL`, `CLIENT_URL`, `NEXT_PUBLIC_HOSTNAME`, `NEXT_PUBLIC_REDIRECT_URI`, `NEXT_PUBLIC_WS_URL`, `JWT_SECRET`, and any Google, GitHub App, or AI envs you use. The Coolify-specific compose file keeps the same Redis/app/ws stack but marks the one-shot `migrate` service out of Coolify health checks.
+
+GitHub Actions now runs the migration check against a throwaway database on pull requests to `main` and applies the real production migration against `PRODUCTION_DATABASE_URL` on pushes to `main`.
 
 📈 Status
 
