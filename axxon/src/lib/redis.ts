@@ -1,7 +1,8 @@
 // lib/redis.ts
 import Redis from "ioredis";
+import { getRedisUrl } from './env/connectionConfig';
 
-const redis = new Redis(process.env.REDIS_URL || "redis://localhost:6379");
+const redis = new Redis(getRedisUrl());
 
 redis.on("error", (err) => {
   console.error("Redis connection error:", err);

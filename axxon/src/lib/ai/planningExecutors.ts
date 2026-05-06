@@ -15,6 +15,7 @@ import type {
   PlanningReadiness,
   PlanningTurnAnalysis,
 } from '@/lib/types/organizationAiPlanningTypes';
+import { ServiceUnavailableError } from '@/lib/utils/apiErrors';
 
 type PlanningExecutorInput = {
   sessionTitle: string;
@@ -41,9 +42,25 @@ const localOllamaPlanningExecutor: PlanningExecutor = {
     const runtime = getAiRuntimeConfig();
 
     await ensureLocalOllamaPlanningReady({
-      baseUrl: runtime.localBaseUrl,
+      baseUrl: runtime.baseUrl ?? 'http://127.0.0.1:11434',
       model: runtime.model,
     });
+  },
+  analyzeTurn: analyzePlanningTurn,
+  generateClarificationQuestions: generatePlanningClarificationQuestions,
+  generatePlan: generatePlanningArtifact,
+};
+
+const externalPlanningExecutor: PlanningExecutor = {
+  kind: 'external_llm',
+  async assertReady() {
+    const runtime = getAiRuntimeConfig();
+
+    if (runtime.provider !== 'openai-compatible' || !runtime.available) {
+      throw new ServiceUnavailableError(
+        'External AI provider is not configured for this environment'
+      );
+    }
   },
   analyzeTurn: analyzePlanningTurn,
   generateClarificationQuestions: generatePlanningClarificationQuestions,
@@ -55,6 +72,10 @@ export function resolvePlanningExecutor(
 ): PlanningExecutor {
   if (executorKind === 'local_ollama') {
     return localOllamaPlanningExecutor;
+  }
+
+  if (executorKind === 'external_llm') {
+    return externalPlanningExecutor;
   }
 
   throw new Error(`Planning executor "${executorKind}" is not available yet`);

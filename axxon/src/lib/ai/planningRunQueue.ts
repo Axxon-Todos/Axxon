@@ -1,6 +1,8 @@
 // Queues persisted planning run ids onto Redis in runtime and falls back to an in-memory queue for tests.
 import Redis from 'ioredis';
 
+import { getRedisUrl } from '@/lib/env/connectionConfig';
+
 const PLANNING_RUN_QUEUE_KEY = 'planning:runs:queue';
 const TEST_QUEUE: number[] = [];
 
@@ -9,7 +11,7 @@ function isTestEnvironment() {
 }
 
 function createRedisClient() {
-  const client = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  const client = new Redis(getRedisUrl());
   client.on('error', (error) => {
     console.error('Planning run queue Redis error:', error);
   });

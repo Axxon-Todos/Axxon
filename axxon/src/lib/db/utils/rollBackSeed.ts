@@ -1,19 +1,12 @@
+// Rolls back the seeded development workspace data using the shared Postgres connection env helpers.
 import knex from "knex";
-import { loadRuntimeEnv } from "../../env/loadRuntimeEnv";
+import { getPostgresConnectionConfig } from "../../env/connectionConfig";
 
-loadRuntimeEnv();
-
+// Create the rollback connection from the centralized runtime Postgres env parser.
 export async function rollbackSeed() {
-  // Inline your DB connection config here:
   const db = knex({
     client: "pg",
-    connection: process.env.PG_CONNECTION_STRING || {
-      host: process.env.PG_HOST,
-      port: Number(process.env.PG_PORT) || 5432,
-      user: process.env.PG_USER,
-      password: process.env.PG_PASS,
-      database: process.env.PG_DB,
-    },
+    connection: getPostgresConnectionConfig(),
   });
 
   try {

@@ -1,6 +1,8 @@
 import Redis from 'ioredis';
 import knex from 'knex';
 
+import { getRedisUrl } from '@/lib/env/connectionConfig';
+
 import { applyBackendTestEnv, getBackendTestDbConfig } from './env';
 
 type PgRoleRow = {
@@ -36,7 +38,7 @@ function formatPgConnectionError(error: unknown) {
 
 function formatRedisConnectionError(error: unknown) {
   const resolvedError = asError(error) as Error & { code?: string };
-  const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
+  const redisUrl = getRedisUrl('redis://127.0.0.1:6379');
 
   switch (resolvedError.code) {
     case 'ECONNREFUSED':
@@ -91,7 +93,7 @@ async function verifyPostgres() {
 }
 
 async function verifyRedis() {
-  const redisUrl = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
+  const redisUrl = getRedisUrl('redis://127.0.0.1:6379');
   const redis = new Redis(redisUrl, {
     lazyConnect: true,
     maxRetriesPerRequest: 0,
@@ -117,7 +119,7 @@ async function main() {
 
   const dbConfig = getBackendTestDbConfig();
   process.stdout.write(
-    `Backend test preflight passed. Using Postgres ${dbConfig.database} and Redis ${process.env.REDIS_URL}.\n`
+    `Backend test preflight passed. Using Postgres ${dbConfig.database} and Redis ${getRedisUrl('redis://127.0.0.1:6379')}.\n`
   );
 }
 

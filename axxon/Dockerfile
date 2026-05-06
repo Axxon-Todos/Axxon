@@ -39,6 +39,15 @@ ENV WS_PORT=4000
 EXPOSE 4000
 CMD ["pnpm", "dev-ws"]
 
+FROM deps AS runtime-prod
+COPY . .
+# Keep a full production runtime image available for non-Next.js processes like websockets and migrations.
+ENV NODE_ENV=production
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs \
+    && chown -R nextjs:nodejs /app
+USER nextjs
+
 FROM base AS app-prod
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -53,14 +62,8 @@ USER nextjs
 EXPOSE 3000
 CMD ["node", "server.js"]
 
-FROM deps AS ws-prod
-COPY . .
+FROM runtime-prod AS ws-prod
 # The websocket image reads its auth, DB, and Redis settings from Compose at runtime.
-ENV NODE_ENV=production
 ENV WS_PORT=4000
-RUN addgroup --system --gid 1001 nodejs \
-    && adduser --system --uid 1001 nextjs \
-    && chown -R nextjs:nodejs /app
-USER nextjs
 EXPOSE 4000
 CMD ["node", "--import", "tsx", "src/lib/server.ts"]

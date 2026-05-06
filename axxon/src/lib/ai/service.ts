@@ -7,6 +7,10 @@ import {
   completeLocalOllamaChat,
   streamLocalOllamaChat,
 } from '@/lib/ai/providers/localOllama';
+import {
+  completeOpenAiCompatibleChat,
+  streamOpenAiCompatibleChat,
+} from '@/lib/ai/providers/openAiCompatible';
 import type {
   AiChatCompletionResult,
   AiChatMessage,
@@ -195,11 +199,21 @@ async function resolveProviderStream(
 ): Promise<AiProviderStreamResult> {
   const runtime = getAiRuntimeConfig();
 
-  if (runtime.useLocalProvider) {
+  if (runtime.useLocalProvider && runtime.baseUrl) {
     return streamLocalOllamaChat({
-      baseUrl: runtime.localBaseUrl,
+      baseUrl: runtime.baseUrl,
       model: runtime.model,
       messages,
+    });
+  }
+
+  if (runtime.provider === 'openai-compatible' && runtime.baseUrl) {
+    return streamOpenAiCompatibleChat({
+      apiKey: runtime.apiKey,
+      baseUrl: runtime.baseUrl,
+      model: runtime.model,
+      messages,
+      provider: runtime.provider,
     });
   }
 
@@ -212,11 +226,21 @@ async function resolveProviderCompletion(
 ): Promise<AiProviderCompletionResult> {
   const runtime = getAiRuntimeConfig();
 
-  if (runtime.useLocalProvider) {
+  if (runtime.useLocalProvider && runtime.baseUrl) {
     return completeLocalOllamaChat({
-      baseUrl: runtime.localBaseUrl,
+      baseUrl: runtime.baseUrl,
       model: runtime.model,
       messages,
+    });
+  }
+
+  if (runtime.provider === 'openai-compatible' && runtime.baseUrl) {
+    return completeOpenAiCompatibleChat({
+      apiKey: runtime.apiKey,
+      baseUrl: runtime.baseUrl,
+      model: runtime.model,
+      messages,
+      provider: runtime.provider,
     });
   }
 

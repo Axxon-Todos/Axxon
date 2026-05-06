@@ -76,9 +76,12 @@ Run commands from `axxon/`.
 - `pnpm test`: run backend and frontend test suites.
 - `pnpm test:backend`: run backend preflight checks plus backend Vitest coverage.
 - `pnpm test:frontend`: run frontend Vitest coverage.
-- `pnpm migrate:latest`, `pnpm seed`, `pnpm rollback`: apply, seed, or revert Knex migrations.
+- `pnpm migrate:latest`, `pnpm migrate:latest:prod`, `pnpm seed`, `pnpm rollback`: apply, seed, or revert Knex migrations.
 - `pnpm docker:dev`: start local dev infrastructure, including the database, Redis, and Dockerized app services. Ollama is expected to run on the host.
 - `pnpm docker:dev:down`: stop the local dev infrastructure.
+- `pnpm docker:prod`: start the production-style Docker stack with Postgres, Redis, migrations, the app server, and the websocket server using `.env.production`.
+- `pnpm docker:prod:migrate`: run the production migration container against the production-style Docker stack.
+- `pnpm docker:prod:down`: stop the production-style Docker stack.
 - `pnpm redis:start` / `pnpm redis:stop`: manage Redis directly when needed for realtime development.
 
 ## Coding Style & Naming Conventions
@@ -145,9 +148,11 @@ Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIREC
 
 - AI runtime selection is controlled by `AXXON_DEPLOY_STAGE`, not by overloading `NODE_ENV`.
 - `development` and `staging` should use the local Ollama runtime through `AI_LOCAL_BASE_URL` and `AI_LOCAL_MODEL`.
+- `production` should use the external OpenAI-compatible runtime through `AI_CLOUD_BASE_URL`, `AI_CLOUD_MODEL`, and `AI_CLOUD_API_KEY` when AI is enabled.
 - When the app runs in Docker and Ollama runs on the host, use `http://host.docker.internal:11434` and ensure the Ollama server is reachable beyond host loopback.
 - Planning mode in local Ollama environments should verify GPU-backed execution before processing persisted planning turns; do not silently accept CPU-bound planning runs.
-- Non-local stages should route through the cloud-provider path, even if the first implementation is still a controlled stub.
+- The production Docker stack should keep Postgres, Redis, the Next.js app, and the websocket server inside Compose, and run migrations through the dedicated one-shot `migrate` service before app startup.
+- GitHub Actions should run a throwaway-database migration check on pull requests to `main`, and main-branch deployments should execute the real production migration on the deploy host before restarting app services.
 
 - Maintain current security practices for auth, repo access boundaries, and member-scoped actions.
 - Validate inputs at the API boundary and enforce permissions server-side.

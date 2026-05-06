@@ -96,6 +96,23 @@ pnpm dev
 
 The containerized Postgres instance is exposed on `localhost:5432`, so the host workflow continues to work with `.env.local` unchanged.
 
+### Production Compose
+
+```bash
+# Create .env.production with PG_*, auth, public URL, and AI_CLOUD_* values.
+
+# Start the production-style stack locally: postgres, redis, migrations, app, and websocket server
+pnpm docker:prod
+
+# Run just the production migration step
+pnpm docker:prod:migrate
+
+# Stop the production-style stack
+pnpm docker:prod:down
+```
+
+The production compose stack now keeps Postgres, Redis, the Next.js app, and the websocket server inside Docker. Ollama is not part of the production stack; non-local AI runs through the external OpenAI-compatible endpoint configured with `AI_CLOUD_BASE_URL`, `AI_CLOUD_MODEL`, and `AI_CLOUD_API_KEY` when needed.
+
 📈 Status
 
 The backend and API are fully implemented with seeded data and type-safe queries.
