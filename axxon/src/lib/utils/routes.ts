@@ -119,60 +119,9 @@ export function buildOrganizationBoardRepositoryAccessApiPath(
   return `${buildOrganizationApiPath(organizationId)}/board-repository-access`;
 }
 
-export function buildOrganizationAiChatApiPath(
-  organizationId: string | number
-) {
-  return `${buildOrganizationApiPath(organizationId)}/ai/chat`;
-}
-
-export function buildOrganizationAiThreadsApiPath(
-  organizationId: string | number
-) {
-  return `${buildOrganizationApiPath(organizationId)}/ai/threads`;
-}
-
-export function buildOrganizationAiThreadApiPath(
-  organizationId: string | number,
-  threadId: string | number
-) {
-  return `${buildOrganizationAiThreadsApiPath(organizationId)}/${threadId}`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionsApiPath(
+export function buildOrganizationBoardAgentRunsApiPath(
   organizationId: string | number,
   boardId: string | number
 ) {
-  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/ai/planning/sessions`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionApiPath(
-  organizationId: string | number,
-  boardId: string | number,
-  sessionId: string | number
-) {
-  return `${buildOrganizationBoardAiPlanningSessionsApiPath(organizationId, boardId)}/${sessionId}`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionMessagesApiPath(
-  organizationId: string | number,
-  boardId: string | number,
-  sessionId: string | number
-) {
-  return `${buildOrganizationBoardAiPlanningSessionApiPath(
-    organizationId,
-    boardId,
-    sessionId
-  )}/messages`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionProcessApiPath(
-  organizationId: string | number,
-  boardId: string | number,
-  sessionId: string | number
-) {
-  return `${buildOrganizationBoardAiPlanningSessionApiPath(
-    organizationId,
-    boardId,
-    sessionId
-  )}/process`;
+  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/agents/runs`;
 }

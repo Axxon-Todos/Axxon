@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n NEXT,WS -c \"blue.bold,green.bold\" \"pnpm dev-next\" \"pnpm dev-ws\"",
+    "dev": "concurrently -n NEXT,WS,AGENT -c \"blue.bold,green.bold,magenta.bold\" \"pnpm dev-next\" \"pnpm dev-ws\" \"pnpm agent:worker\"",
     "dev-next": "next dev",
     "dev-ws": "pnpm exec tsx watch src/lib/server.ts",
+    "agent:worker": "pnpm exec tsx watch src/lib/agents/worker.ts",
+    "start:agent:worker": "pnpm exec tsx src/lib/agents/worker.ts",
     "db:bootstrap": "pnpm exec tsx src/lib/db/utils/bootstrapDevDb.ts",
     "build": "next build",
     "start": "next start",
