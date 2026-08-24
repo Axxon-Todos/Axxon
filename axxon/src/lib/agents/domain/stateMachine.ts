@@ -9,8 +9,8 @@ type Transition = {
 
 const transitions: Transition[] = [
   { event: 'worker.claimed', from: 'queued', to: 'preparing' },
-  { event: 'input.required', from: 'preparing', to: 'awaiting_input' },
   { event: 'planning.started', from: 'preparing', to: 'planning' },
+  { event: 'input.required', from: 'planning', to: 'awaiting_input' },
   { event: 'input.submitted', from: 'awaiting_input', to: 'queued' },
   { event: 'plan.generated', from: 'planning', to: 'awaiting_plan_review' },
   { event: 'plan.approved', from: 'awaiting_plan_review', to: 'dispatching' },

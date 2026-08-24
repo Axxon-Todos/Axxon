@@ -7,6 +7,10 @@ describe('agent run state machine', () => {
   it('allows the review-gated planning and dispatch lifecycle', () => {
     expect(assertAgentTransition('queued', 'worker.claimed')).toBe('preparing');
     expect(assertAgentTransition('preparing', 'planning.started')).toBe('planning');
+    expect(assertAgentTransition('planning', 'input.required')).toBe('awaiting_input');
+    expect(assertAgentTransition('awaiting_input', 'input.submitted')).toBe('queued');
+    expect(assertAgentTransition('queued', 'worker.claimed')).toBe('preparing');
+    expect(assertAgentTransition('preparing', 'planning.started')).toBe('planning');
     expect(assertAgentTransition('planning', 'plan.generated')).toBe('awaiting_plan_review');
     expect(assertAgentTransition('awaiting_plan_review', 'plan.approved')).toBe('dispatching');
     expect(assertAgentTransition('dispatching', 'dispatch.delivered')).toBe('dispatched');
@@ -14,6 +18,7 @@ describe('agent run state machine', () => {
 
   it('rejects transitions that skip a required lifecycle node', () => {
     expect(resolveAgentTransition('queued', 'plan.approved')).toBeNull();
+    expect(resolveAgentTransition('preparing', 'input.required')).toBeNull();
     expect(() => assertAgentTransition('completed', 'run.cancelled')).toThrow('not allowed');
   });
 

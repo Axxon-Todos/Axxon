@@ -1,7 +1,15 @@
-// Implements the local Ollama planning adapter behind the unified agent-provider contract.
-import type { AgentPlanArtifact, AgentQuestion, AgentRun } from '../domain';
+// Implements structured local Ollama calls for planning analysis and final plan generation.
+import { z } from 'zod';
+import type { AgentPlanArtifact, AgentPlanningTurnAnalysis, AgentRun } from '../domain';
+import { agentPlanArtifactSchema, agentPlanningTurnAnalysisSchema } from '../domain';
 
-type AgentPlanningResult = { questions?: AgentQuestion[]; artifact?: AgentPlanArtifact };
+type AgentProviderMessage = { role: string; content: string; metadata?: unknown };
+
+type OllamaChatResponse = {
+  message?: {
+    content?: string;
+  };
+};
 
 function getOllamaConfig() {
   const baseUrl = (process.env.AI_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
@@ -9,85 +17,137 @@ function getOllamaConfig() {
   return { baseUrl, model };
 }
 
-function fallbackPlan(run: AgentRun): AgentPlanArtifact {
-  return {
-    summary: run.prompt,
-    implementationPhases: [{ title: 'Implementation', tasks: [{ title: run.title, acceptanceCriteria: ['Deliver the requested behavior', 'Add focused automated coverage'] }] }],
-    assumptions: [],
-    risks: [],
-  };
-}
-
-function normalizeQuestions(value: unknown): AgentQuestion[] {
-  if (!Array.isArray(value)) return [];
-  return value.slice(0, 3).flatMap((question, index) => {
-    if (!question || typeof question !== 'object') return [];
-    const record = question as Record<string, unknown>;
-    const prompt = typeof record.prompt === 'string' ? record.prompt.trim() : '';
-    if (!prompt) return [];
-    return [{
-      key: typeof record.key === 'string' && record.key.trim() ? record.key.trim() : `question_${index + 1}`,
-      prompt,
-      required: record.required !== false,
-      options: Array.isArray(record.options)
-        ? record.options.slice(0, 4).flatMap((option, optionIndex) => {
-          if (!option || typeof option !== 'object') return [];
-          const optionRecord = option as Record<string, unknown>;
-          const label = typeof optionRecord.label === 'string' ? optionRecord.label.trim() : '';
-          return label ? [{ key: typeof optionRecord.key === 'string' ? optionRecord.key : `option_${optionIndex + 1}`, label }] : [];
-        })
-        : [],
-    }];
-  });
-}
-
-function normalizeArtifact(value: unknown, run: AgentRun): AgentPlanArtifact | null {
-  if (!value || typeof value !== 'object') return null;
-  const record = value as Record<string, unknown>;
-  const summary = typeof record.summary === 'string' ? record.summary.trim() : '';
-  if (!summary) return null;
-  return {
-    summary,
-    implementationPhases: Array.isArray(record.implementationPhases) ? record.implementationPhases as AgentPlanArtifact['implementationPhases'] : fallbackPlan(run).implementationPhases,
-    assumptions: Array.isArray(record.assumptions) ? record.assumptions.filter((item): item is string => typeof item === 'string') : [],
-    risks: Array.isArray(record.risks) ? record.risks.filter((item): item is string => typeof item === 'string') : [],
-  };
-}
-
-function parseJson(content: string) {
+function parseGeneratedJson(content: string) {
   const first = content.indexOf('{');
   const last = content.lastIndexOf('}');
-  if (first < 0 || last <= first) return null;
-  try {
-    return JSON.parse(content.slice(first, last + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  const candidate = first >= 0 && last > first ? content.slice(first, last + 1) : content;
+  return JSON.parse(candidate) as unknown;
 }
 
-export async function planWithOllama(run: AgentRun, messages: Array<{ role: string; content: string }>): Promise<AgentPlanningResult> {
-  const { baseUrl, model } = getOllamaConfig();
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      format: 'json',
-      messages: [{
-        role: 'system',
-        content: 'Return JSON only. If essential implementation details are missing, return {"questions":[{"key":"scope","prompt":"...","required":true,"options":[{"key":"default","label":"Use recommended default"}]}]}. Otherwise return {"artifact":{"summary":"...","implementationPhases":[{"title":"...","tasks":[{"title":"...","acceptanceCriteria":["..."]}]}],"assumptions":[],"risks":[]}}.',
-      }, {
-        role: 'user',
-        content: `Create a reviewable software-delivery plan for: ${run.prompt}\n\nConversation:\n${messages.map((message) => `${message.role}: ${message.content}`).join('\n')}`,
-      }],
-    }),
+function summarizeZodIssues(issues: z.ZodIssue[]) {
+  return issues.slice(0, 5).map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join('.') : 'root';
+    return `${path}: ${issue.message}`;
   });
-  if (!response.ok) throw new Error(`Ollama planning request failed with ${response.status}`);
-  const body = await response.json() as { message?: { content?: string } };
-  const parsed = parseJson(body.message?.content ?? '');
-  if (!parsed) return { artifact: fallbackPlan(run) };
-  const questions = normalizeQuestions(parsed.questions);
-  if (questions.length > 0) return { questions };
-  return { artifact: normalizeArtifact(parsed.artifact, run) ?? fallbackPlan(run) };
+}
+
+async function completeOllamaStructuredJson<T>({
+  messages,
+  schema,
+  failureMessage,
+}: {
+  messages: Array<{ role: string; content: string }>;
+  schema: z.ZodSchema<T>;
+  failureMessage: string;
+}) {
+  const { baseUrl, model } = getOllamaConfig();
+  const attempts = [...messages];
+
+  for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
+    const response = await fetch(`${baseUrl}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        format: 'json',
+        messages: attempts,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`Ollama planning request failed with ${response.status}`);
+
+    const body = await response.json() as OllamaChatResponse;
+    const content = body.message?.content?.trim() ?? '';
+
+    try {
+      const parsed = schema.safeParse(parseGeneratedJson(content));
+      if (parsed.success) return parsed.data;
+
+      if (attemptIndex === 1) {
+        throw new Error(`${failureMessage}: ${summarizeZodIssues(parsed.error.issues).join('; ')}`);
+      }
+    } catch (error) {
+      if (attemptIndex === 1) {
+        throw error instanceof Error ? error : new Error(failureMessage);
+      }
+    }
+
+    attempts.push({
+      role: 'user',
+      content: 'Your last response did not match the required JSON schema. Return only valid JSON for the requested shape.',
+    });
+  }
+
+  throw new Error(failureMessage);
+}
+
+function buildPlanningPayload(run: AgentRun, messages: AgentProviderMessage[]) {
+  return JSON.stringify({
+    run: {
+      id: run.id,
+      title: run.title,
+      prompt: run.prompt,
+      planningContext: run.planningContext,
+      readiness: run.readiness,
+      clarificationTurnCount: run.clarificationTurnCount,
+      activeQuestions: run.questions,
+    },
+    messages: messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      metadata: message.metadata ?? null,
+    })),
+  }, null, 2);
+}
+
+const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
+  'You are Axxon Planning Agent.',
+  'Return JSON only.',
+  'Analyze the current planning run and decide whether to ask structured clarification questions or complete planning.',
+  'The decision must be {"action":"ask_questions","reason":"missing_objective|scope_unbounded|missing_acceptance_criteria|blocking_unknowns|low_confidence"} or {"action":"complete_planning","reason":"requirements_satisfied"}.',
+  'Only use complete_planning when objective, scope, acceptance criteria, requirements, constraints, risks, and implementation-impacting unknowns are clear enough to generate a trustworthy implementation plan.',
+  'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
+  'Do not include none-of-the-above; Axxon adds that option server-side.',
+  'Do not generate the final plan in this stage.',
+  'Use stable lower-kebab-case questionKey values.',
+].join(' ');
+
+const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
+  'You are Axxon Planning Agent.',
+  'Return JSON only.',
+  'Generate the final structured implementation plan from the completed planning context and transcript.',
+  'Do not ask follow-up questions in this stage.',
+  'The plan must include objective, requirements, scope, assumptions, constraints, affectedAreas, technicalDecisions, implementationPhases, risks, successCriteria, openQuestions, and notes.',
+  'Each implementation phase must include id, title, summary, and implementation tasks with id, title, description, type, priority, dependencyIds, and acceptanceCriteria.',
+].join(' ');
+
+// Runs the analysis stage that extracts context and returns the deterministic planning decision.
+export async function analyzePlanningTurnWithOllama(
+  run: AgentRun,
+  messages: AgentProviderMessage[]
+): Promise<AgentPlanningTurnAnalysis> {
+  return completeOllamaStructuredJson({
+    messages: [
+      { role: 'system', content: PLANNING_ANALYSIS_SYSTEM_PROMPT },
+      { role: 'user', content: buildPlanningPayload(run, messages) },
+    ],
+    schema: agentPlanningTurnAnalysisSchema,
+    failureMessage: 'Failed to analyze the planning turn',
+  });
+}
+
+// Runs the final plan stage after deterministic readiness permits completion.
+export async function generatePlanWithOllama(
+  run: AgentRun,
+  messages: AgentProviderMessage[]
+): Promise<AgentPlanArtifact> {
+  return completeOllamaStructuredJson({
+    messages: [
+      { role: 'system', content: PLANNING_ARTIFACT_SYSTEM_PROMPT },
+      { role: 'user', content: buildPlanningPayload(run, messages) },
+    ],
+    schema: agentPlanArtifactSchema,
+    failureMessage: 'Failed to generate the planning artifact',
+  });
 }

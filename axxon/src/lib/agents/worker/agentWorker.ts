@@ -1,8 +1,15 @@
 // Runs durable agent jobs independently from Socket.IO and advances runs through the state machine.
 import db from '@/lib/db/db';
-import { applyWorkerPreparation, claimAgentRunForWork, deliverAgentDispatch, failAgentRun } from '../application/runService';
+import {
+  applyWorkerPlanningAnalysis,
+  claimAgentRunForWork,
+  completeWorkerPlanning,
+  deliverAgentDispatch,
+  failAgentRun,
+  startAgentPlanningTurn,
+} from '../application/runService';
 import { AgentRepository } from '../infrastructure/repository';
-import { planWithOllama } from '../providers/ollama';
+import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 
 const workerId = `agent-worker-${process.pid}`;
 
@@ -22,9 +29,19 @@ export async function processNextAgentJob() {
         await AgentRepository.finishJob(Number(job.id), null);
         return true;
       }
-      const messages = await AgentRepository.listMessages(claimedRun.id);
-      const result = await planWithOllama(claimedRun, messages.map((message) => ({ role: String(message.role), content: String(message.content) })));
-      await applyWorkerPreparation(run.id, result);
+      const planningRun = await startAgentPlanningTurn(claimedRun.id);
+      const messages = await AgentRepository.listMessages(planningRun.id);
+      const mappedMessages = messages.map((message) => ({
+        role: String(message.role),
+        content: String(message.content),
+        metadata: message.metadata_json,
+      }));
+      const analysis = await analyzePlanningTurnWithOllama(planningRun, mappedMessages);
+      const outcome = await applyWorkerPlanningAnalysis(run.id, analysis);
+      if (outcome?.action === 'generate_plan') {
+        const planArtifact = await generatePlanWithOllama(outcome.run, mappedMessages);
+        await completeWorkerPlanning(run.id, planArtifact, outcome.decision);
+      }
     } else if (job.kind === 'dispatch') {
       await deliverAgentDispatch(run.id);
     } else {
