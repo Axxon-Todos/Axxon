@@ -2,6 +2,7 @@
 import db from '@/lib/db/db';
 import { requireBoardInOrganization, requireOrganizationOwner } from '@/lib/utils/authorization';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/utils/apiErrors';
+import { publishBoardUpdate } from '@/lib/wsServer';
 import {
   assertAgentTransition,
   buildClarificationAnswerSummary,
@@ -28,7 +29,7 @@ import {
   type SubmitAgentInputCommand,
 } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
-import { executeAgentTool } from '../tools/registry';
+import { executeAgentTool } from '../toolCalls/registry';
 
 type RunUpdate = Partial<Pick<AgentRun, 'questions' | 'planningContext' | 'readiness' | 'clarificationTurnCount' | 'planArtifact' | 'failureMessage'>>;
 
@@ -70,7 +71,7 @@ async function transitionRun({
   payload?: Record<string, unknown> | null;
   update?: RunUpdate;
 }) {
-  return db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const run = await AgentRepository.lockRun(runId, trx);
     if (!run) throw new NotFoundError('Agent run not found');
     const nextState = assertAgentTransition(run.state, event);
@@ -78,10 +79,26 @@ async function transitionRun({
     await AgentRepository.appendEvent({ runId, type: event, fromState: run.state, toState: nextState, actorType, actorId, payload }, trx);
     return updatedRun;
   });
+
+  await publishAgentRunUpdate(updatedRun);
+  return updatedRun;
 }
 
 function assertCapability(capabilities: string[], capability: string) {
   if (!capabilities.includes(capability)) throw new ForbiddenError('You cannot perform this action for the current agent run state');
+}
+
+async function publishAgentRunUpdate(run: AgentRun | null) {
+  if (!run) return;
+
+  try {
+    await publishBoardUpdate(String(run.boardId), {
+      type: 'agent:run:updated',
+      payload: { run },
+    });
+  } catch (error) {
+    console.error('[AGENT_RUN_REALTIME_ERROR]', error);
+  }
 }
 
 function requirePlanningRun(run: AgentRun) {
@@ -167,6 +184,7 @@ export async function createAgentRun(input: { organizationId: number; boardId: n
     await AgentRepository.enqueueJob(created.id, 'prepare', trx);
     return created;
   });
+  await publishAgentRunUpdate(run);
   return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: run.id, userId: input.userId });
 }
 
@@ -177,7 +195,7 @@ export async function submitAgentInput(input: { organizationId: number; boardId:
   const parsed = submitAgentInputCommandSchema.safeParse(input.data);
   if (!parsed.success) throw new BadRequestError('Invalid agent input payload');
 
-  await db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(run.id, trx);
     if (!locked) throw new NotFoundError('Agent run not found');
     const nextState = assertAgentTransition(locked.state, 'input.submitted');
@@ -186,7 +204,9 @@ export async function submitAgentInput(input: { organizationId: number; boardId:
     const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState, questions: [] }, trx);
     await AgentRepository.appendEvent({ runId: locked.id, type: 'input.submitted', fromState: locked.state, toState: updated.state, actorType: 'user', actorId: input.userId, payload: { answers } }, trx);
     await AgentRepository.enqueueJob(locked.id, 'prepare', trx);
+    return updated;
   });
+  await publishAgentRunUpdate(updatedRun);
   return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: input.runId, userId: input.userId });
 }
 
@@ -198,7 +218,7 @@ export async function requestAgentChanges(input: { organizationId: number; board
   if (!parsed.success) throw new BadRequestError('Invalid agent change request payload');
   const feedback = parsed.data.feedback;
 
-  await db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(run.id, trx);
     if (!locked) throw new NotFoundError('Agent run not found');
     const nextState = assertAgentTransition(locked.state, 'changes.requested');
@@ -210,14 +230,16 @@ export async function requestAgentChanges(input: { organizationId: number; board
     }, trx);
     await AgentRepository.appendEvent({ runId: locked.id, type: 'changes.requested', fromState: locked.state, toState: updated.state, actorType: 'user', actorId: input.userId, payload: { feedback } }, trx);
     await AgentRepository.enqueueJob(locked.id, 'prepare', trx);
+    return updated;
   });
+  await publishAgentRunUpdate(updatedRun);
   return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: input.runId, userId: input.userId });
 }
 
 export async function approveAgentPlan(input: { organizationId: number; boardId: number; runId: number; userId: number }) {
   const run = await getRunForBoard(input.organizationId, input.boardId, input.runId, input.userId);
   assertCapability(getAgentCapabilities(run.state, await getAccess(run, input.userId)), 'approve_plan');
-  await db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(run.id, trx);
     if (!locked) throw new NotFoundError('Agent run not found');
     const nextState = assertAgentTransition(locked.state, 'plan.approved');
@@ -225,7 +247,9 @@ export async function approveAgentPlan(input: { organizationId: number; boardId:
     await AgentRepository.appendEvent({ runId: locked.id, type: 'plan.approved', fromState: locked.state, toState: updated.state, actorType: 'user', actorId: input.userId }, trx);
     await AgentRepository.createOutboxEvent(locked.id, { runId: locked.id, boardId: locked.boardId, organizationId: locked.organizationId, artifact: locked.planArtifact }, trx);
     await AgentRepository.enqueueJob(locked.id, 'dispatch', trx);
+    return updated;
   });
+  await publishAgentRunUpdate(updatedRun);
   return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: input.runId, userId: input.userId });
 }
 
@@ -251,7 +275,7 @@ export async function startAgentPlanningTurn(runId: number) {
 export async function applyWorkerPlanningAnalysis(runId: number, analysis: AgentPlanningTurnAnalysis) {
   const messages = await AgentRepository.listMessages(runId);
   const toolCalls = await AgentRepository.listToolCalls(runId);
-  return db.transaction(async (trx) => {
+  const outcome = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(runId, trx);
     if (!locked || locked.state !== 'planning') return null;
     requirePlanningRun(locked);
@@ -277,7 +301,11 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
       existingQuestions: [...historicalQuestions, ...locked.questions],
       readiness,
     };
-    const toolResult = executeAgentTool('ask_clarification_questions', toolInput);
+    const toolResult = executeAgentTool({
+      toolName: 'ask_clarification_questions',
+      state: locked.state,
+      input: toolInput,
+    });
     const nextState = assertAgentTransition(locked.state, 'input.required');
     const updatedRun = await AgentRepository.updateRun(locked.id, locked.version, {
       state: nextState,
@@ -305,6 +333,8 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
     }, trx);
     return { action: 'await_input' as const, run: updatedRun, decision: analysis.decision };
   });
+  if (outcome?.run) await publishAgentRunUpdate(outcome.run);
+  return outcome;
 }
 
 function buildQuestionIntro(questions: AgentQuestion[]) {
@@ -314,7 +344,7 @@ function buildQuestionIntro(questions: AgentQuestion[]) {
 }
 
 export async function completeWorkerPlanning(runId: number, artifact: AgentPlanArtifact, decision: AgentPlanningDecision) {
-  return db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(runId, trx);
     if (!locked || locked.state !== 'planning') return null;
     const nextState = assertAgentTransition(locked.state, 'plan.generated');
@@ -323,6 +353,8 @@ export async function completeWorkerPlanning(runId: number, artifact: AgentPlanA
     await AgentRepository.appendEvent({ runId: locked.id, type: 'plan.generated', fromState: locked.state, toState: updated.state, actorType: 'worker', payload: { decision } }, trx);
     return updated;
   });
+  await publishAgentRunUpdate(updatedRun);
+  return updatedRun;
 }
 
 export async function claimAgentRunForWork(runId: number) {
@@ -334,14 +366,16 @@ export async function claimAgentRunForWork(runId: number) {
 export async function deliverAgentDispatch(runId: number) {
   const run = await AgentRepository.getRun(runId);
   if (!run || run.state !== 'dispatching') return null;
-  await db.transaction(async (trx) => {
+  const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(runId, trx);
     if (!locked || locked.state !== 'dispatching') return;
     const nextState = assertAgentTransition(locked.state, 'dispatch.delivered');
     const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState }, trx);
     await AgentRepository.markOutboxPublished(locked.id, trx);
     await AgentRepository.appendEvent({ runId: locked.id, type: 'dispatch.delivered', fromState: locked.state, toState: updated.state, actorType: 'worker' }, trx);
+    return updated;
   });
+  await publishAgentRunUpdate(updatedRun ?? null);
   return AgentRepository.getRun(runId);
 }
 

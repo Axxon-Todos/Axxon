@@ -10,6 +10,7 @@ import {
 } from '../application/runService';
 import { AgentRepository } from '../infrastructure/repository';
 import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
+import { getAllowedAgentToolsForState } from '../toolCalls/registry';
 
 const workerId = `agent-worker-${process.pid}`;
 
@@ -30,16 +31,28 @@ export async function processNextAgentJob() {
         return true;
       }
       const planningRun = await startAgentPlanningTurn(claimedRun.id);
+      if (!planningRun) {
+        await AgentRepository.finishJob(Number(job.id), null);
+        return true;
+      }
       const messages = await AgentRepository.listMessages(planningRun.id);
       const mappedMessages = messages.map((message) => ({
         role: String(message.role),
         content: String(message.content),
         metadata: message.metadata_json,
       }));
-      const analysis = await analyzePlanningTurnWithOllama(planningRun, mappedMessages);
+      const analysis = await analyzePlanningTurnWithOllama(
+        planningRun,
+        mappedMessages,
+        getAllowedAgentToolsForState(planningRun.state)
+      );
       const outcome = await applyWorkerPlanningAnalysis(run.id, analysis);
       if (outcome?.action === 'generate_plan') {
-        const planArtifact = await generatePlanWithOllama(outcome.run, mappedMessages);
+        const planArtifact = await generatePlanWithOllama(
+          outcome.run,
+          mappedMessages,
+          getAllowedAgentToolsForState(outcome.run.state)
+        );
         await completeWorkerPlanning(run.id, planArtifact, outcome.decision);
       }
     } else if (job.kind === 'dispatch') {

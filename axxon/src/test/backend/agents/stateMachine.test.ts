@@ -1,7 +1,13 @@
 // Verifies the centralized agent lifecycle and user capability rules without database dependencies.
 import { describe, expect, it } from 'vitest';
 import { getAgentCapabilities } from '@/lib/agents/domain/capabilities';
-import { assertAgentTransition, resolveAgentTransition } from '@/lib/agents/domain/stateMachine';
+import {
+  assertAgentTransition,
+  getAllowedAgentToolNamesForState,
+  getAgentStateNode,
+  resolveAgentTransition,
+} from '@/lib/agents/domain/stateMachine';
+import { executeAgentTool, getAllowedAgentToolsForState } from '@/lib/agents/toolCalls/registry';
 
 describe('agent run state machine', () => {
   it('allows the review-gated planning and dispatch lifecycle', () => {
@@ -29,5 +35,37 @@ describe('agent run state machine', () => {
       .toEqual(['view', 'request_changes', 'approve_plan', 'cancel']);
     expect(getAgentCapabilities('failed', { isInitiator: false, isOrganizationOwner: true }))
       .toEqual(['view', 'retry', 'cancel']);
+  });
+
+  it('declares agent-callable tools on the current state node', () => {
+    expect(getAgentStateNode('planning')).toEqual({
+      state: 'planning',
+      allowedTools: ['ask_clarification_questions'],
+    });
+    expect(getAllowedAgentToolNamesForState('queued')).toEqual([]);
+    expect(getAllowedAgentToolsForState('planning').map((tool) => tool.name))
+      .toEqual(['ask_clarification_questions']);
+  });
+
+  it('rejects tool execution from states that do not allow that tool', () => {
+    expect(() => executeAgentTool({
+      toolName: 'ask_clarification_questions',
+      state: 'queued',
+      input: {
+        candidateQuestions: [],
+        existingQuestions: [],
+        readiness: {
+          objectiveClear: false,
+          scopeBounded: false,
+          hasAcceptanceCriteria: false,
+          knownRequirements: [],
+          unresolvedUnknowns: [],
+          blockingUnknowns: [],
+          confidence: 0,
+          recommendedNextAction: 'ask_questions',
+          reasonSummary: ['Need more context.'],
+        },
+      },
+    })).toThrow('not allowed');
   });
 });

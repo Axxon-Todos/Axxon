@@ -5,6 +5,7 @@ import type { Socket } from 'socket.io-client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useBoardRealtime } from '@/hooks/useBoardRealtime';
+import { useAgentRunsRealtime } from '@/hooks/useAgentRunsRealtime';
 
 type EventHandler = (...args: any[]) => void;
 
@@ -144,5 +145,108 @@ describe('useBoardRealtime', () => {
       { id: 6, name: 'Sprint 6', color: '#f59e0b', icon: 'rocket', archived_at: null },
     ]);
     expect(queryClient.getQueryData(['todos', '12', '1'])).toEqual([]);
+  });
+});
+
+describe('useAgentRunsRealtime', () => {
+  let queryClient: QueryClient;
+
+  beforeEach(() => {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+      },
+    });
+  });
+
+  function renderAgentRealtimeHook(socket = createMockSocket()) {
+    const socketRef = {
+      current: socket as unknown as Socket,
+    } as React.RefObject<Socket | null>;
+
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <React.StrictMode>
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      </React.StrictMode>
+    );
+
+    const result = renderHook(() => useAgentRunsRealtime('12', '1', socketRef), { wrapper });
+
+    return {
+      ...result,
+      socket,
+    };
+  }
+
+  it('updates agent run caches from realtime run updates', () => {
+    queryClient.setQueryData(['agent-runs', '12', '1'], [{
+      id: 3,
+      organizationId: 12,
+      boardId: 1,
+      createdBy: 7,
+      runType: 'planning',
+      title: 'Old plan',
+      prompt: 'Plan the work',
+      state: 'queued',
+      version: 1,
+      questions: [],
+      readiness: {
+        objectiveClear: false,
+        scopeBounded: false,
+        hasAcceptanceCriteria: false,
+        knownRequirements: [],
+        unresolvedUnknowns: [],
+        blockingUnknowns: [],
+        confidence: 0,
+        recommendedNextAction: 'ask_questions',
+        reasonSummary: [],
+      },
+      clarificationTurnCount: 0,
+      planArtifact: null,
+      failureMessage: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }]);
+
+    const { socket } = renderAgentRealtimeHook();
+
+    socket.emit('board:agent:run:updated', {
+      run: {
+        id: 3,
+        organizationId: 12,
+        boardId: 1,
+        createdBy: 7,
+        runType: 'planning',
+        title: 'Updated plan',
+        prompt: 'Plan the work',
+        state: 'awaiting_input',
+        version: 2,
+        questions: [],
+        readiness: {
+          objectiveClear: true,
+          scopeBounded: false,
+          hasAcceptanceCriteria: false,
+          knownRequirements: ['Build the UI'],
+          unresolvedUnknowns: [],
+          blockingUnknowns: [],
+          confidence: 0.4,
+          recommendedNextAction: 'ask_questions',
+          reasonSummary: [],
+        },
+        clarificationTurnCount: 1,
+        planArtifact: null,
+        failureMessage: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:01:00.000Z',
+      },
+    });
+
+    expect(queryClient.getQueryData(['agent-runs', '12', '1'])).toMatchObject([
+      {
+        id: 3,
+        title: 'Updated plan',
+        state: 'awaiting_input',
+      },
+    ]);
   });
 });

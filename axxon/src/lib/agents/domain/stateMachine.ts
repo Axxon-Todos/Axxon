@@ -1,10 +1,15 @@
 // Provides the authoritative, side-effect-free transition rules for every agent run.
-import type { AgentRunEventType, AgentRunState } from './contracts';
+import type { AgentRunEventType, AgentRunState, AgentToolName } from './contracts';
 
 type Transition = {
   event: AgentRunEventType;
   from: AgentRunState;
   to: AgentRunState;
+};
+
+type AgentStateNode = {
+  state: AgentRunState;
+  allowedTools: AgentToolName[];
 };
 
 const transitions: Transition[] = [
@@ -26,6 +31,29 @@ const cancellableStates = new Set<AgentRunState>([
   'queued', 'preparing', 'awaiting_input', 'planning', 'awaiting_plan_review',
   'dispatching', 'dispatched', 'executing', 'awaiting_result_review', 'failed',
 ]);
+
+const stateNodes: Record<AgentRunState, AgentStateNode> = {
+  queued: { state: 'queued', allowedTools: [] },
+  preparing: { state: 'preparing', allowedTools: [] },
+  awaiting_input: { state: 'awaiting_input', allowedTools: [] },
+  planning: { state: 'planning', allowedTools: ['ask_clarification_questions'] },
+  awaiting_plan_review: { state: 'awaiting_plan_review', allowedTools: [] },
+  dispatching: { state: 'dispatching', allowedTools: [] },
+  dispatched: { state: 'dispatched', allowedTools: [] },
+  executing: { state: 'executing', allowedTools: [] },
+  awaiting_result_review: { state: 'awaiting_result_review', allowedTools: [] },
+  completed: { state: 'completed', allowedTools: [] },
+  failed: { state: 'failed', allowedTools: [] },
+  cancelled: { state: 'cancelled', allowedTools: [] },
+};
+
+export function getAgentStateNode(state: AgentRunState): AgentStateNode {
+  return stateNodes[state];
+}
+
+export function getAllowedAgentToolNamesForState(state: AgentRunState): AgentToolName[] {
+  return [...stateNodes[state].allowedTools];
+}
 
 export function resolveAgentTransition(
   state: AgentRunState,

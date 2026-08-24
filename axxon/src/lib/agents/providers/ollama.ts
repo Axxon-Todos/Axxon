@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import type { AgentPlanArtifact, AgentPlanningTurnAnalysis, AgentRun } from '../domain';
 import { agentPlanArtifactSchema, agentPlanningTurnAnalysisSchema } from '../domain';
+import type { AgentToolDefinition } from '../toolCalls/registry';
 
 type AgentProviderMessage = { role: string; content: string; metadata?: unknown };
 
@@ -82,7 +83,7 @@ async function completeOllamaStructuredJson<T>({
   throw new Error(failureMessage);
 }
 
-function buildPlanningPayload(run: AgentRun, messages: AgentProviderMessage[]) {
+function buildPlanningPayload(run: AgentRun, messages: AgentProviderMessage[], allowedTools: AgentToolDefinition[]) {
   return JSON.stringify({
     run: {
       id: run.id,
@@ -93,6 +94,11 @@ function buildPlanningPayload(run: AgentRun, messages: AgentProviderMessage[]) {
       clarificationTurnCount: run.clarificationTurnCount,
       activeQuestions: run.questions,
     },
+    allowedTools: allowedTools.map((tool) => ({
+      name: tool.name,
+      label: tool.label,
+      description: tool.description,
+    })),
     messages: messages.map((message) => ({
       role: message.role,
       content: message.content,
@@ -109,6 +115,7 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'Only use complete_planning when objective, scope, acceptance criteria, requirements, constraints, risks, and implementation-impacting unknowns are clear enough to generate a trustworthy implementation plan.',
   'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
   'Do not include none-of-the-above; Axxon adds that option server-side.',
+  'Only request clarification when the current state exposes ask_clarification_questions in allowedTools.',
   'Do not generate the final plan in this stage.',
   'Use stable lower-kebab-case questionKey values.',
 ].join(' ');
@@ -125,12 +132,13 @@ const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
 // Runs the analysis stage that extracts context and returns the deterministic planning decision.
 export async function analyzePlanningTurnWithOllama(
   run: AgentRun,
-  messages: AgentProviderMessage[]
+  messages: AgentProviderMessage[],
+  allowedTools: AgentToolDefinition[]
 ): Promise<AgentPlanningTurnAnalysis> {
   return completeOllamaStructuredJson({
     messages: [
       { role: 'system', content: PLANNING_ANALYSIS_SYSTEM_PROMPT },
-      { role: 'user', content: buildPlanningPayload(run, messages) },
+      { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
     ],
     schema: agentPlanningTurnAnalysisSchema,
     failureMessage: 'Failed to analyze the planning turn',
@@ -140,12 +148,13 @@ export async function analyzePlanningTurnWithOllama(
 // Runs the final plan stage after deterministic readiness permits completion.
 export async function generatePlanWithOllama(
   run: AgentRun,
-  messages: AgentProviderMessage[]
+  messages: AgentProviderMessage[],
+  allowedTools: AgentToolDefinition[]
 ): Promise<AgentPlanArtifact> {
   return completeOllamaStructuredJson({
     messages: [
       { role: 'system', content: PLANNING_ARTIFACT_SYSTEM_PROMPT },
-      { role: 'user', content: buildPlanningPayload(run, messages) },
+      { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
     ],
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',

@@ -52,6 +52,8 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
 - Agent persistence, provider adapters, queue dispatch, worker orchestration, and contracts all belong in `axxon/src/lib/agents/**`.
+- Agent-callable tools must live under `axxon/src/lib/agents/toolCalls`; state-scoped tool allowances belong in the agent state-machine node metadata.
+- The org-level agent planning workspace lives at `axxon/src/app/dashboard/orgs/[organizationId]/ai`, with feature UI under `axxon/src/components/features/agents`.
 - Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
 - Sprint persistence belongs in the existing `src/lib` layers and should extend shared todo payloads through shared types instead of adding separate view-only task models.
 

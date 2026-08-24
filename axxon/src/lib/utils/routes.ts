@@ -125,3 +125,12 @@ export function buildOrganizationBoardAgentRunsApiPath(
 ) {
   return `${buildOrganizationBoardApiPath(organizationId, boardId)}/agents/runs`;
 }
+
+export function buildOrganizationBoardAgentRunApiPath(
+  organizationId: string | number,
+  boardId: string | number,
+  runId: string | number,
+  suffix = ''
+) {
+  return `${buildOrganizationBoardAgentRunsApiPath(organizationId, boardId)}/${runId}${suffix}`;
+}

@@ -1,5 +1,14 @@
 // Verifies the typed planning-agent loop, clarification tool calls, and final plan transition.
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { mockedPublishBoardUpdate } = vi.hoisted(() => ({
+  mockedPublishBoardUpdate: vi.fn(),
+}));
+
+vi.mock('@/lib/wsServer', () => ({
+  publishBoardUpdate: mockedPublishBoardUpdate,
+}));
+
 import {
   applyWorkerPlanningAnalysis,
   claimAgentRunForWork,
@@ -122,6 +131,7 @@ function createPlanArtifact(): AgentPlanArtifact {
 
 describe('agent planning run service', () => {
   beforeEach(async () => {
+    mockedPublishBoardUpdate.mockResolvedValue(undefined);
     await resetDatabase();
   });
 
@@ -177,6 +187,15 @@ describe('agent planning run service', () => {
     const completedPlanning = await AgentRepository.getRun(created.id);
     expect(completedPlanning?.state).toBe('awaiting_plan_review');
     expect(completedPlanning?.planArtifact?.summary).toContain('schema-driven planning loop');
+    expect(mockedPublishBoardUpdate).toHaveBeenCalledWith(String(board.id), {
+      type: 'agent:run:updated',
+      payload: expect.objectContaining({
+        run: expect.objectContaining({
+          id: created.id,
+          boardId: board.id,
+        }),
+      }),
+    });
   });
 
   it('rejects reserved non-planning run types in this phase', async () => {

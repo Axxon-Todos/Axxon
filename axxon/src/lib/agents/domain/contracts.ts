@@ -48,6 +48,8 @@ export type AgentCapability =
   | 'retry'
   | 'cancel';
 
+export type AgentToolName = 'ask_clarification_questions';
+
 export type AgentQuestionCategory =
   | 'scope'
   | 'technical'
