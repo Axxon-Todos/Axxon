@@ -2,6 +2,7 @@
   "name": "axxon",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.3.0",
   "scripts": {
     "dev": "concurrently -n NEXT,WS,AGENT -c \"blue.bold,green.bold,magenta.bold\" \"pnpm dev-next\" \"pnpm dev-ws\" \"pnpm agent:worker\"",
     "dev-next": "next dev",
