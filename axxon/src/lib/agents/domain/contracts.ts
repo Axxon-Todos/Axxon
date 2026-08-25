@@ -7,6 +7,7 @@ export const agentRunStates = [
   'queued',
   'preparing',
   'awaiting_input',
+  'awaiting_message',
   'planning',
   'awaiting_plan_review',
   'dispatching',
@@ -26,6 +27,9 @@ export type AgentRunEventType =
   | 'planning.started'
   | 'input.required'
   | 'input.submitted'
+  | 'message.required'
+  | 'message.submitted'
+  | 'planning.superseded'
   | 'plan.generated'
   | 'plan.approved'
   | 'changes.requested'
@@ -41,6 +45,7 @@ export type AgentActorType = 'user' | 'worker' | 'executor' | 'system';
 
 export type AgentCapability =
   | 'view'
+  | 'submit_message'
   | 'submit_input'
   | 'request_changes'
   | 'approve_plan'
@@ -131,13 +136,14 @@ export type AgentPlanningDecisionReason =
   | 'requirements_satisfied';
 
 export type AgentPlanningDecision = {
-  action: 'ask_questions' | 'complete_planning';
+  action: 'ask_questions' | 'complete_planning' | 'respond';
   reason: AgentPlanningDecisionReason;
 };
 
 export type AgentPlanningTurnAnalysis = {
   title: string | null;
   summary: string | null;
+  assistantMessage: string | null;
   contextPatch: Partial<AgentPlanningContext>;
   knownRequirements: string[];
   unresolvedUnknowns: string[];
@@ -146,6 +152,15 @@ export type AgentPlanningTurnAnalysis = {
   candidateQuestions: AgentQuestion[];
   confidence: number;
   decision: AgentPlanningDecision;
+};
+
+export type AgentRunMessage = {
+  id: number;
+  runId: number;
+  role: string;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
 };
 
 export type AgentPlanArtifact = {
@@ -229,10 +244,12 @@ export type AgentRunEvent = {
 
 export type AgentRunDetail = AgentRun & {
   events: AgentRunEvent[];
+  messages: AgentRunMessage[];
   toolCalls: AgentToolCall[];
   capabilities: AgentCapability[];
 };
 
 export type CreateAgentRunCommand = { prompt: string; runType?: AgentRunType };
 export type SubmitAgentInputCommand = { answers: AgentClarificationAnswer[] };
+export type SubmitAgentMessageCommand = { message: string };
 export type RequestAgentChangesCommand = { feedback: string };

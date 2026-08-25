@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, CheckCircle2, ClipboardList, GitBranch, Loader2, MessageSquareText, RotateCcw, Send, XCircle } from 'lucide-react';
+import { Bot, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, GitBranch, Loader2, MessageSquareText, RotateCcw, Send, XCircle } from 'lucide-react';
 
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -20,6 +20,7 @@ import {
   requestAgentRunChanges,
   retryAgentRun,
   submitAgentRunInput,
+  submitAgentRunMessage,
 } from '@/lib/api/agents/agentRuns';
 import { fetchBoards } from '@/lib/api/boards/getBoards';
 import type { AgentClarificationAnswer, AgentPlanArtifact, AgentQuestion, AgentRun, AgentRunDetail, AgentRunState } from '@/lib/types/agentTypes';
@@ -31,6 +32,7 @@ const stateLabels: Record<AgentRunState, string> = {
   queued: 'Queued',
   preparing: 'Preparing',
   awaiting_input: 'Needs input',
+  awaiting_message: 'Needs message',
   planning: 'Planning',
   awaiting_plan_review: 'Plan review',
   dispatching: 'Dispatching',
@@ -61,12 +63,21 @@ function stateBadgeVariant(state: AgentRunState) {
   return 'default' as const;
 }
 
+function getWorkingCopy(state: AgentRunState) {
+  if (state === 'queued') return ['Queued for planning', 'The agent will read the latest context shortly.'];
+  if (state === 'preparing') return ['Preparing context', 'The worker is collecting the run transcript and board context.'];
+  if (state === 'planning') return ['Analyzing requirements', 'The agent is deciding whether to ask questions or draft the plan.'];
+  if (state === 'dispatching') return ['Dispatching approved plan', 'The approved plan is being handed to the next agent stage.'];
+  return ['Agent is working', 'This panel updates when the board receives the next agent-run event.'];
+}
+
 export default function PlanningWorkspace({ organizationId }: { organizationId: string }) {
   const queryClient = useQueryClient();
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [prompt, setPrompt] = useState('');
   const [feedback, setFeedback] = useState('');
+  const [messageDraft, setMessageDraft] = useState('');
   const socketRef = useSocket(selectedBoardId);
 
   const { data: boards = [], isLoading: isBoardsLoading } = useQuery<BoardBaseData[]>({
@@ -124,6 +135,14 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
     mutationFn: (answers: AgentClarificationAnswer[]) =>
       submitAgentRunInput(organizationId, selectedBoardId!, activeRun!.id, answers),
     onSuccess: refreshAgentQueries,
+  });
+
+  const messageMutation = useMutation({
+    mutationFn: () => submitAgentRunMessage(organizationId, selectedBoardId!, activeRun!.id, messageDraft),
+    onSuccess: (run) => {
+      setMessageDraft('');
+      refreshAgentQueries(run);
+    },
   });
 
   const changesMutation = useMutation({
@@ -271,13 +290,17 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
               run={activeRun}
               feedback={feedback}
               onFeedbackChange={setFeedback}
+              messageDraft={messageDraft}
+              onMessageDraftChange={setMessageDraft}
               onSubmitAnswers={(answers) => inputMutation.mutate(answers)}
+              onSubmitMessage={() => messageMutation.mutate()}
               onRequestChanges={() => changesMutation.mutate()}
               onApprove={() => approveMutation.mutate()}
               onCancel={() => cancelMutation.mutate()}
               onRetry={() => retryMutation.mutate()}
               isSubmitting={
                 inputMutation.isPending ||
+                messageMutation.isPending ||
                 changesMutation.isPending ||
                 approveMutation.isPending ||
                 cancelMutation.isPending ||
@@ -285,6 +308,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
               }
               error={
                 inputMutation.error?.message ||
+                messageMutation.error?.message ||
                 changesMutation.error?.message ||
                 approveMutation.error?.message ||
                 cancelMutation.error?.message ||
@@ -321,7 +345,10 @@ function RunDetail({
   run,
   feedback,
   onFeedbackChange,
+  messageDraft,
+  onMessageDraftChange,
   onSubmitAnswers,
+  onSubmitMessage,
   onRequestChanges,
   onApprove,
   onCancel,
@@ -332,7 +359,10 @@ function RunDetail({
   run: AgentRunDetail;
   feedback: string;
   onFeedbackChange: (value: string) => void;
+  messageDraft: string;
+  onMessageDraftChange: (value: string) => void;
   onSubmitAnswers: (answers: AgentClarificationAnswer[]) => void;
+  onSubmitMessage: () => void;
   onRequestChanges: () => void;
   onApprove: () => void;
   onCancel: () => void;
@@ -340,6 +370,8 @@ function RunDetail({
   isSubmitting: boolean;
   error: string | null;
 }) {
+  const [workingTitle, workingDescription] = getWorkingCopy(run.state);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -362,11 +394,22 @@ function RunDetail({
           <div className="flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-[var(--app-accent)]" />
             <div>
-              <p className="font-medium">Agent is working</p>
-              <p className="text-sm app-text-muted">This panel updates when the board receives the next agent-run event.</p>
+              <p className="font-medium">{workingTitle}</p>
+              <p className="text-sm app-text-muted">{workingDescription}</p>
             </div>
           </div>
         </Surface>
+      ) : null}
+
+      {run.messages.length > 1 ? <RunMessagesPanel messages={run.messages} /> : null}
+
+      {hasCapability(run, 'submit_message') ? (
+        <MessageComposer
+          value={messageDraft}
+          onChange={onMessageDraftChange}
+          onSubmit={onSubmitMessage}
+          isSubmitting={isSubmitting}
+        />
       ) : null}
 
       {run.failureMessage ? (
@@ -422,6 +465,64 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function RunMessagesPanel({ messages }: { messages: AgentRunDetail['messages'] }) {
+  return (
+    <Surface className="rounded-2xl p-4">
+      <p className="app-kicker">Conversation</p>
+      <div className="mt-3 space-y-3">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={`rounded-2xl border border-[var(--app-border)] p-3 ${
+              message.role === 'user'
+                ? 'bg-[color-mix(in_srgb,var(--app-accent)_8%,var(--app-panel))]'
+                : 'bg-[color-mix(in_srgb,var(--app-panel)_72%,transparent)]'
+            }`}
+          >
+            <p className="text-xs font-medium uppercase app-text-muted">
+              {message.role === 'user' ? 'You' : 'Agent'}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-sm">{message.content}</p>
+          </div>
+        ))}
+      </div>
+    </Surface>
+  );
+}
+
+function MessageComposer({
+  value,
+  onChange,
+  onSubmit,
+  isSubmitting,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+}) {
+  const canSubmit = value.trim().length > 0 && !isSubmitting;
+
+  return (
+    <Surface className="rounded-2xl p-4">
+      <label className="block text-sm font-medium" htmlFor="agent-run-message">
+        Add context or correction
+      </label>
+      <textarea
+        id="agent-run-message"
+        className="app-input mt-3 min-h-24 resize-y"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Tell the agent what changed or what it should plan next."
+      />
+      <Button className="mt-3" variant="primary" onClick={onSubmit} disabled={!canSubmit}>
+        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        Send message
+      </Button>
+    </Surface>
+  );
+}
+
 function QuestionPanel({
   run,
   onSubmitAnswers,
@@ -432,52 +533,74 @@ function QuestionPanel({
   isSubmitting: boolean;
 }) {
   const [answersByQuestion, setAnswersByQuestion] = useState<Record<string, AgentClarificationAnswer>>({});
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
 
   useEffect(() => {
     setAnswersByQuestion({});
+    setActiveQuestionIndex(0);
   }, [run.id, run.version]);
 
+  const activeQuestion = run.questions[Math.min(activeQuestionIndex, Math.max(run.questions.length - 1, 0))];
   const answers = run.questions.flatMap((question) => {
     const answer = answersByQuestion[question.questionKey];
     return answer?.selectedOptionKey ? [answer] : [];
   });
   const canSubmit = answers.length === run.questions.length && run.capabilities.includes('submit_input');
+  const answeredCount = answers.length;
+  const canGoBack = activeQuestionIndex > 0;
+  const canGoForward = activeQuestionIndex < run.questions.length - 1;
 
   return (
     <Surface className="rounded-[1.6rem] p-5">
-      <div className="flex items-start gap-3">
-        <MessageSquareText className="mt-1 h-5 w-5 text-[var(--app-accent)]" />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <MessageSquareText className="mt-1 h-5 w-5 text-[var(--app-accent)]" />
+          <div>
+            <p className="app-kicker">Clarification needed</p>
+            <h3 className="mt-2 text-2xl font-semibold">Answer these decisions to continue.</h3>
+          </div>
+        </div>
         <div>
-          <p className="app-kicker">Clarification needed</p>
-          <h3 className="mt-2 text-2xl font-semibold">Answer these decisions to continue.</h3>
+          <Badge>{answeredCount}/{run.questions.length} answered</Badge>
         </div>
       </div>
 
-      <div className="mt-5 space-y-4">
-        {run.questions.map((question) => (
+      <div className="mt-5">
+        {activeQuestion ? (
           <QuestionCard
-            key={question.questionKey}
-            question={question}
-            answer={answersByQuestion[question.questionKey]}
+            question={activeQuestion}
+            answer={answersByQuestion[activeQuestion.questionKey]}
+            positionLabel={`Question ${activeQuestionIndex + 1} of ${run.questions.length}`}
             onChange={(answer) =>
               setAnswersByQuestion((current) => ({
                 ...current,
-                [question.questionKey]: answer,
+                [activeQuestion.questionKey]: answer,
               }))
             }
           />
-        ))}
+        ) : null}
       </div>
 
-      <Button
-        className="mt-5"
-        variant="primary"
-        onClick={() => onSubmitAnswers(answers)}
-        disabled={!canSubmit || isSubmitting}
-      >
-        <Send className="h-4 w-4" />
-        Submit answers
-      </Button>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-2">
+          <Button type="button" onClick={() => setActiveQuestionIndex((value) => Math.max(0, value - 1))} disabled={!canGoBack || isSubmitting}>
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <Button type="button" onClick={() => setActiveQuestionIndex((value) => Math.min(run.questions.length - 1, value + 1))} disabled={!canGoForward || isSubmitting}>
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <Button
+          variant="primary"
+          onClick={() => onSubmitAnswers(answers)}
+          disabled={!canSubmit || isSubmitting}
+        >
+          <Send className="h-4 w-4" />
+          Submit all answers
+        </Button>
+      </div>
     </Surface>
   );
 }
@@ -485,15 +608,18 @@ function QuestionPanel({
 function QuestionCard({
   question,
   answer,
+  positionLabel,
   onChange,
 }: {
   question: AgentQuestion;
   answer?: AgentClarificationAnswer;
+  positionLabel: string;
   onChange: (answer: AgentClarificationAnswer) => void;
 }) {
   return (
     <div className="rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_68%,transparent)] p-4">
       <div className="flex flex-wrap items-center gap-2">
+        <Badge>{positionLabel}</Badge>
         <Badge>{question.category.replace(/_/g, ' ')}</Badge>
         {question.blocking ? <Badge variant="danger">Blocking</Badge> : null}
       </div>

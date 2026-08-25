@@ -5,6 +5,7 @@ export type AgentRunState =
   | 'queued'
   | 'preparing'
   | 'awaiting_input'
+  | 'awaiting_message'
   | 'planning'
   | 'awaiting_plan_review'
   | 'dispatching'
@@ -17,6 +18,7 @@ export type AgentRunState =
 
 export type AgentCapability =
   | 'view'
+  | 'submit_message'
   | 'submit_input'
   | 'request_changes'
   | 'approve_plan'
@@ -111,6 +113,15 @@ export type AgentToolCall = {
   completedAt: string | null;
 };
 
+export type AgentRunMessage = {
+  id: number;
+  runId: number;
+  role: string;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
 export type AgentRun = {
   id: number;
   organizationId: number;
@@ -144,6 +155,7 @@ export type AgentRunEvent = {
 
 export type AgentRunDetail = AgentRun & {
   events: AgentRunEvent[];
+  messages: AgentRunMessage[];
   toolCalls: AgentToolCall[];
   capabilities: AgentCapability[];
 };

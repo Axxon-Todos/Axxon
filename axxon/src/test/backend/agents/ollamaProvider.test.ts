@@ -50,6 +50,7 @@ describe('Ollama planning provider', () => {
     expect(analysis).toMatchObject({
       title: null,
       summary: null,
+      assistantMessage: null,
       contextPatch: {},
       knownRequirements: [],
       unresolvedUnknowns: [],
@@ -63,5 +64,6 @@ describe('Ollama planning provider', () => {
     expect(requestBody.messages[0].content).toContain('Required JSON shape');
     expect(requestBody.messages[0].content).toContain('"contextPatch"');
     expect(requestBody.messages[0].content).toContain('"candidateQuestions"');
+    expect(requestBody.messages[0].content).toContain('"assistantMessage"');
   });
 });

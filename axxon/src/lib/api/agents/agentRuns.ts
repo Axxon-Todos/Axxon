@@ -58,6 +58,16 @@ export async function submitAgentRunInput(
   return parseAgentResponse<AgentRunDetail>(response, 'Failed to submit agent input');
 }
 
+export async function submitAgentRunMessage(organizationId: string, boardId: string, runId: number, message: string) {
+  const response = await apiFetch(buildOrganizationBoardAgentRunApiPath(organizationId, boardId, runId, '/message'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+
+  return parseAgentResponse<AgentRunDetail>(response, 'Failed to submit agent message');
+}
+
 export async function requestAgentRunChanges(organizationId: string, boardId: string, runId: number, feedback: string) {
   const response = await apiFetch(buildOrganizationBoardAgentRunApiPath(organizationId, boardId, runId, '/changes'), {
     method: 'POST',

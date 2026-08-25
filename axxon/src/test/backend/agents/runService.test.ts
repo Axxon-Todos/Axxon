@@ -17,6 +17,8 @@ import {
   getAgentRunDetail,
   startAgentPlanningTurn,
   submitAgentInput,
+  submitAgentRunMessage,
+  supersedeWorkerPlanning,
 } from '@/lib/agents/application/runService';
 import type { AgentPlanArtifact, AgentPlanningTurnAnalysis } from '@/lib/agents/domain';
 import { AgentRepository } from '@/lib/agents/infrastructure/repository';
@@ -37,6 +39,7 @@ function createAskAnalysis(): AgentPlanningTurnAnalysis {
   return {
     title: 'Planning agent loop',
     summary: 'Finalize the planning agent loop.',
+    assistantMessage: null,
     contextPatch: {
       objective: 'Finalize a reliable planning agent loop.',
       inScope: ['Planning agent state machine', 'Clarification tool calls'],
@@ -68,6 +71,7 @@ function createCompleteAnalysis(): AgentPlanningTurnAnalysis {
   return {
     title: 'Planning agent loop',
     summary: 'Finalize the planning agent loop.',
+    assistantMessage: null,
     contextPatch: {
       acceptanceCriteria: ['A planning run asks structured questions until ready, then generates a reviewable plan.'],
       outOfScope: ['Autonomous code execution'],
@@ -87,6 +91,22 @@ function createCompleteAnalysis(): AgentPlanningTurnAnalysis {
     candidateQuestions: [],
     confidence: 0.85,
     decision: { action: 'complete_planning', reason: 'requirements_satisfied' },
+  };
+}
+
+function createRespondAnalysis(): AgentPlanningTurnAnalysis {
+  return {
+    title: null,
+    summary: null,
+    assistantMessage: 'What would you like me to plan?',
+    contextPatch: {},
+    knownRequirements: [],
+    unresolvedUnknowns: ['planning objective'],
+    blockingUnknowns: ['planning objective'],
+    resolvedQuestionKeys: [],
+    candidateQuestions: [],
+    confidence: 0.2,
+    decision: { action: 'respond', reason: 'missing_objective' },
   };
 }
 
@@ -207,5 +227,89 @@ describe('agent planning run service', () => {
       userId: user.id,
       data: { prompt: 'Implement the task', runType: 'coding' },
     })).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('asks for a planning objective with a message instead of question cards for vague prompts', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: { prompt: 'hi', runType: 'planning' },
+    });
+
+    await claimAgentRunForWork(created.id);
+    await startAgentPlanningTurn(created.id);
+    const outcome = await applyWorkerPlanningAnalysis(created.id, createRespondAnalysis());
+    expect(outcome?.action).toBe('await_message');
+
+    const awaitingMessage = await getAgentRunDetail({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+    });
+    expect(awaitingMessage.state).toBe('awaiting_message');
+    expect(awaitingMessage.questions).toEqual([]);
+    expect(awaitingMessage.capabilities).toContain('submit_message');
+    expect(awaitingMessage.messages.map((message) => message.content)).toContain('What would you like me to plan?');
+  });
+
+  it('accepts free-form context while awaiting input and queues replanning', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: { prompt: 'Finalize the planning agent loop', runType: 'planning' },
+    });
+
+    await claimAgentRunForWork(created.id);
+    await startAgentPlanningTurn(created.id);
+    await applyWorkerPlanningAnalysis(created.id, createAskAnalysis());
+    const updated = await submitAgentRunMessage({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+      data: { message: 'Actually include a compact carousel for question batches.' },
+    });
+
+    expect(updated.state).toBe('queued');
+    expect(updated.questions).toEqual([]);
+    expect(updated.readiness.reasonSummary).toEqual(['Waiting for the first planning analysis.']);
+    expect(updated.messages.at(-1)?.content).toBe('Actually include a compact carousel for question batches.');
+  });
+
+  it('supersedes active planning after a newer user message arrives', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: { prompt: 'Finalize the planning agent loop', runType: 'planning' },
+    });
+
+    await claimAgentRunForWork(created.id);
+    await startAgentPlanningTurn(created.id);
+    const messaged = await submitAgentRunMessage({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+      data: { message: 'Include message submission during planning.' },
+    });
+    expect(messaged.state).toBe('planning');
+
+    const superseded = await supersedeWorkerPlanning(created.id);
+    expect(superseded?.state).toBe('queued');
+    const detail = await getAgentRunDetail({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+    });
+    expect(detail.events.map((event) => event.type)).toContain('planning.superseded');
+    expect(detail.messages.at(-1)?.content).toBe('Include message submission during planning.');
   });
 });

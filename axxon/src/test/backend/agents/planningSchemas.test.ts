@@ -11,6 +11,7 @@ describe('agent planning turn analysis schema', () => {
     expect(parsed).toEqual({
       title: null,
       summary: null,
+      assistantMessage: null,
       contextPatch: {},
       knownRequirements: [],
       unresolvedUnknowns: [],
@@ -20,6 +21,27 @@ describe('agent planning turn analysis schema', () => {
       confidence: 0,
       decision: { action: 'ask_questions', reason: 'low_confidence' },
     });
+  });
+
+  it('accepts assistant responses for vague planning prompts', () => {
+    const parsed = agentPlanningTurnAnalysisSchema.parse({
+      assistantMessage: 'What would you like me to plan?',
+      decision: { action: 'respond', reason: 'missing_objective' },
+    });
+
+    expect(parsed.assistantMessage).toBe('What would you like me to plan?');
+    expect(parsed.decision.action).toBe('respond');
+  });
+
+  it('requires an assistant message when the model chooses respond', () => {
+    const parsed = agentPlanningTurnAnalysisSchema.safeParse({
+      decision: { action: 'respond', reason: 'missing_objective' },
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.map((issue) => issue.path.join('.'))).toContain('assistantMessage');
+    }
   });
 
   it('still requires the model planning decision', () => {

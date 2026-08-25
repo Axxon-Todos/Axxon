@@ -17,6 +17,10 @@ const transitions: Transition[] = [
   { event: 'planning.started', from: 'preparing', to: 'planning' },
   { event: 'input.required', from: 'planning', to: 'awaiting_input' },
   { event: 'input.submitted', from: 'awaiting_input', to: 'queued' },
+  { event: 'message.required', from: 'planning', to: 'awaiting_message' },
+  { event: 'message.submitted', from: 'awaiting_input', to: 'queued' },
+  { event: 'message.submitted', from: 'awaiting_message', to: 'queued' },
+  { event: 'planning.superseded', from: 'planning', to: 'queued' },
   { event: 'plan.generated', from: 'planning', to: 'awaiting_plan_review' },
   { event: 'plan.approved', from: 'awaiting_plan_review', to: 'dispatching' },
   { event: 'changes.requested', from: 'awaiting_plan_review', to: 'queued' },
@@ -36,6 +40,7 @@ const stateNodes: Record<AgentRunState, AgentStateNode> = {
   queued: { state: 'queued', allowedTools: [] },
   preparing: { state: 'preparing', allowedTools: [] },
   awaiting_input: { state: 'awaiting_input', allowedTools: [] },
+  awaiting_message: { state: 'awaiting_message', allowedTools: [] },
   planning: { state: 'planning', allowedTools: ['ask_clarification_questions'] },
   awaiting_plan_review: { state: 'awaiting_plan_review', allowedTools: [] },
   dispatching: { state: 'dispatching', allowedTools: [] },
@@ -65,6 +70,10 @@ export function resolveAgentTransition(
 
   if (event === 'run.failed') {
     return state === 'completed' || state === 'cancelled' ? null : 'failed';
+  }
+
+  if (event === 'message.submitted' && ['queued', 'preparing', 'planning'].includes(state)) {
+    return state;
   }
 
   return transitions.find((transition) => transition.from === state && transition.event === event)?.to ?? null;

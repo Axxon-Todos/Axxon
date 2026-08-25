@@ -21,6 +21,8 @@ Axxon is an agent-work orchestration platform for software teams.
 - Agent backend code belongs exclusively under `axxon/src/lib/agents/**`; Next route handlers remain thin adapters under `src/app/api/organizations/**/agents/**`.
 - Board agent runs are shared with board members and transition only through the centralized state machine and append-only event log.
 - Agent run APIs live under `src/app/api/organizations/[organizationId]/boards/[boardId]/agents/runs/**`.
+- Planning agent runs may request either structured clarification answers or a free-form planning message. Use `awaiting_input` for structured question batches and `awaiting_message` for conversational prompts such as vague greetings.
+- Free-form planning context is submitted through the org-scoped run message API and must be persisted in `agent_run_messages`; workers should discard stale planning output when newer user messages arrive mid-turn.
 - Agent jobs are persisted in `agent_jobs` and processed by the standalone `pnpm agent:worker` runtime; do not run agent workers inside the Socket.IO process.
 - Agent plan approval emits a durable `agent.dispatch.requested` outbox event. This phase does not permit GitHub writes or autonomous code execution.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
@@ -44,6 +46,7 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
 - Agent UI must call the org-scoped agent-run API and keep lifecycle interpretation in the backend state-machine response.
+- Agent UI should render structured clarification batches as a compact single-card carousel with bulk answer submission, while free-form planning prompts use the run message composer.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
 - Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, and sprint pages must live under `axxon/src/app/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`.
@@ -119,7 +122,7 @@ Vitest is available for backend and frontend suites. Tests are part of the expec
   - organization creation and membership rules
   - org-scoped board creation and access
   - organization AI assistant thread creation, creator-only access, and append-only message ordering
-  - planning session creation, planning run creation, structured clarification card persistence, batch answer submission, async run retries, readiness evaluation, and structured plan generation
+  - planning session creation, planning run creation, structured clarification card persistence, batch answer submission, free-form planning message submission, async run retries, readiness evaluation, and structured plan generation
   - auth and authorization helpers
   - analytics and board workspace behavior
   - sprint CRUD, sprint assignment rules, and sprint-filtered board views

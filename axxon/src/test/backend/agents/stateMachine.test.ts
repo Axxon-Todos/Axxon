@@ -15,6 +15,9 @@ describe('agent run state machine', () => {
     expect(assertAgentTransition('preparing', 'planning.started')).toBe('planning');
     expect(assertAgentTransition('planning', 'input.required')).toBe('awaiting_input');
     expect(assertAgentTransition('awaiting_input', 'input.submitted')).toBe('queued');
+    expect(assertAgentTransition('planning', 'message.required')).toBe('awaiting_message');
+    expect(assertAgentTransition('awaiting_message', 'message.submitted')).toBe('queued');
+    expect(assertAgentTransition('planning', 'planning.superseded')).toBe('queued');
     expect(assertAgentTransition('queued', 'worker.claimed')).toBe('preparing');
     expect(assertAgentTransition('preparing', 'planning.started')).toBe('planning');
     expect(assertAgentTransition('planning', 'plan.generated')).toBe('awaiting_plan_review');
@@ -33,6 +36,10 @@ describe('agent run state machine', () => {
       .toEqual(['view']);
     expect(getAgentCapabilities('awaiting_plan_review', { isInitiator: true, isOrganizationOwner: false }))
       .toEqual(['view', 'request_changes', 'approve_plan', 'cancel']);
+    expect(getAgentCapabilities('planning', { isInitiator: true, isOrganizationOwner: false }))
+      .toEqual(['view', 'submit_message', 'cancel']);
+    expect(getAgentCapabilities('awaiting_message', { isInitiator: false, isOrganizationOwner: true }))
+      .toEqual(['view', 'submit_message', 'cancel']);
     expect(getAgentCapabilities('failed', { isInitiator: false, isOrganizationOwner: true }))
       .toEqual(['view', 'retry', 'cancel']);
   });

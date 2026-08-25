@@ -13,6 +13,7 @@ const {
   mockedRequestAgentRunChanges,
   mockedRetryAgentRun,
   mockedSubmitAgentRunInput,
+  mockedSubmitAgentRunMessage,
   mockedUseAgentRunsRealtime,
   mockedUseSocket,
 } = vi.hoisted(() => ({
@@ -25,6 +26,7 @@ const {
   mockedRequestAgentRunChanges: vi.fn(),
   mockedRetryAgentRun: vi.fn(),
   mockedSubmitAgentRunInput: vi.fn(),
+  mockedSubmitAgentRunMessage: vi.fn(),
   mockedUseAgentRunsRealtime: vi.fn(),
   mockedUseSocket: vi.fn(),
 }));
@@ -38,6 +40,7 @@ vi.mock('@/lib/api/agents/agentRuns', () => ({
   requestAgentRunChanges: mockedRequestAgentRunChanges,
   retryAgentRun: mockedRetryAgentRun,
   submitAgentRunInput: mockedSubmitAgentRunInput,
+  submitAgentRunMessage: mockedSubmitAgentRunMessage,
 }));
 
 vi.mock('@/lib/api/boards/getBoards', () => ({
@@ -108,8 +111,16 @@ function createRun(overrides: Partial<AgentRunDetail> = {}): AgentRunDetail {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:01:00.000Z',
     events: [],
+    messages: [{
+      id: 1,
+      runId: 44,
+      role: 'user',
+      content: 'Build a planning UI',
+      metadata: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    }],
     toolCalls: [],
-    capabilities: ['view', 'submit_input', 'cancel'],
+    capabilities: ['view', 'submit_message', 'submit_input', 'cancel'],
     ...overrides,
   };
 }
@@ -144,15 +155,16 @@ describe('PlanningWorkspace', () => {
     expect(await screen.findByText('Created plan')).toBeInTheDocument();
   });
 
-  it('renders clarification cards and submits all answers', async () => {
+  it('renders clarification questions as a carousel and submits all answers', async () => {
     mockedFetchAgentRuns.mockResolvedValue([createRun()]);
     mockedSubmitAgentRunInput.mockResolvedValue(createRun({ state: 'queued', questions: [] }));
 
     renderWithProviders(<PlanningWorkspace organizationId="12" />);
 
     expect(await screen.findByText('What should count as success?')).toBeInTheDocument();
+    expect(screen.getByText('Question 1 of 1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /End-to-end demo/i }));
-    fireEvent.click(screen.getByRole('button', { name: /submit answers/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit all answers/i }));
 
     await waitFor(() => {
       expect(mockedSubmitAgentRunInput).toHaveBeenCalledWith('12', '5', 44, [{
@@ -160,6 +172,47 @@ describe('PlanningWorkspace', () => {
         selectedOptionKey: 'demo',
         note: null,
       }]);
+    });
+  });
+
+  it('submits free-form run messages when the agent asks for an objective', async () => {
+    const awaitingMessage = createRun({
+      state: 'awaiting_message',
+      questions: [],
+      capabilities: ['view', 'submit_message', 'cancel'],
+      messages: [
+        {
+          id: 1,
+          runId: 44,
+          role: 'user',
+          content: 'hi',
+          metadata: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        },
+        {
+          id: 2,
+          runId: 44,
+          role: 'assistant',
+          content: 'What would you like me to plan?',
+          metadata: { kind: 'planning_prompt' },
+          createdAt: '2026-01-01T00:01:00.000Z',
+        },
+      ],
+    });
+    mockedFetchAgentRuns.mockResolvedValue([awaitingMessage]);
+    mockedFetchAgentRunDetail.mockResolvedValue(awaitingMessage);
+    mockedSubmitAgentRunMessage.mockResolvedValue(createRun({ state: 'queued', questions: [] }));
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    expect(await screen.findByText('What would you like me to plan?')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Add context or correction'), {
+      target: { value: 'Plan the multi-question carousel.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /send message/i }));
+
+    await waitFor(() => {
+      expect(mockedSubmitAgentRunMessage).toHaveBeenCalledWith('12', '5', 44, 'Plan the multi-question carousel.');
     });
   });
 });

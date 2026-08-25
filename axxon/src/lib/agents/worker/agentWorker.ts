@@ -7,12 +7,25 @@ import {
   deliverAgentDispatch,
   failAgentRun,
   startAgentPlanningTurn,
+  supersedeWorkerPlanning,
 } from '../application/runService';
 import { AgentRepository } from '../infrastructure/repository';
 import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 import { getAllowedAgentToolsForState } from '../toolCalls/registry';
 
 const workerId = `agent-worker-${process.pid}`;
+
+function mapProviderMessages(messages: Awaited<ReturnType<typeof AgentRepository.listMessages>>) {
+  return messages.map((message) => ({
+    role: String(message.role),
+    content: String(message.content),
+    metadata: message.metadata,
+  }));
+}
+
+async function hasNewerUserMessage(runId: number, latestMessageId: number) {
+  return await AgentRepository.getLatestMessageId(runId) !== latestMessageId;
+}
 
 export async function processNextAgentJob() {
   const job = await db.transaction(async (trx) => {
@@ -36,23 +49,32 @@ export async function processNextAgentJob() {
         return true;
       }
       const messages = await AgentRepository.listMessages(planningRun.id);
-      const mappedMessages = messages.map((message) => ({
-        role: String(message.role),
-        content: String(message.content),
-        metadata: message.metadata_json,
-      }));
+      const latestMessageId = await AgentRepository.getLatestMessageId(planningRun.id);
+      const mappedMessages = mapProviderMessages(messages);
       const analysis = await analyzePlanningTurnWithOllama(
         planningRun,
         mappedMessages,
         getAllowedAgentToolsForState(planningRun.state)
       );
+      if (await hasNewerUserMessage(planningRun.id, latestMessageId)) {
+        await supersedeWorkerPlanning(planningRun.id);
+        await AgentRepository.finishJob(Number(job.id), null);
+        return true;
+      }
       const outcome = await applyWorkerPlanningAnalysis(run.id, analysis);
       if (outcome?.action === 'generate_plan') {
+        const planMessages = await AgentRepository.listMessages(outcome.run.id);
+        const latestPlanMessageId = await AgentRepository.getLatestMessageId(outcome.run.id);
         const planArtifact = await generatePlanWithOllama(
           outcome.run,
-          mappedMessages,
+          mapProviderMessages(planMessages),
           getAllowedAgentToolsForState(outcome.run.state)
         );
+        if (await hasNewerUserMessage(outcome.run.id, latestPlanMessageId)) {
+          await supersedeWorkerPlanning(outcome.run.id);
+          await AgentRepository.finishJob(Number(job.id), null);
+          return true;
+        }
         await completeWorkerPlanning(run.id, planArtifact, outcome.decision);
       }
     } else if (job.kind === 'dispatch') {

@@ -15,6 +15,7 @@ import {
   normalizeAgentQuestionKey,
   requestAgentChangesCommandSchema,
   submitAgentInputCommandSchema,
+  submitAgentMessageCommandSchema,
   type AgentActorType,
   type AgentClarificationAnswer,
   type AgentPlanArtifact,
@@ -27,6 +28,7 @@ import {
   type CreateAgentRunCommand,
   type RequestAgentChangesCommand,
   type SubmitAgentInputCommand,
+  type SubmitAgentMessageCommand,
 } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
 import { executeAgentTool } from '../toolCalls/registry';
@@ -107,9 +109,9 @@ function requirePlanningRun(run: AgentRun) {
   }
 }
 
-function countAnsweredQuestions(messages: Array<{ metadata_json?: unknown }>) {
+function countAnsweredQuestions(messages: Array<{ metadata?: unknown }>) {
   return messages.reduce((count, message) => {
-    const metadata = message.metadata_json;
+    const metadata = message.metadata;
     if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return count;
     const answers = (metadata as Record<string, unknown>).answers;
     return Array.isArray(answers) ? count + answers.length : count;
@@ -153,9 +155,50 @@ export async function getAgentRunDetail(input: { organizationId: number; boardId
   return {
     ...run,
     events: await AgentRepository.listEvents(run.id),
+    messages: await AgentRepository.listMessages(run.id),
     toolCalls: await AgentRepository.listToolCalls(run.id),
     capabilities: getAgentCapabilities(run.state, access),
   };
+}
+
+export async function submitAgentRunMessage(input: { organizationId: number; boardId: number; runId: number; userId: number; data: SubmitAgentMessageCommand }) {
+  const run = await getRunForBoard(input.organizationId, input.boardId, input.runId, input.userId);
+  requirePlanningRun(run);
+  assertCapability(getAgentCapabilities(run.state, await getAccess(run, input.userId)), 'submit_message');
+  const parsed = submitAgentMessageCommandSchema.safeParse(input.data);
+  if (!parsed.success) throw new BadRequestError('Invalid agent message payload');
+
+  const outcome = await db.transaction(async (trx) => {
+    const locked = await AgentRepository.lockRun(run.id, trx);
+    if (!locked) throw new NotFoundError('Agent run not found');
+    const nextState = assertAgentTransition(locked.state, 'message.submitted');
+    await AgentRepository.addMessage(locked.id, 'user', parsed.data.message, { kind: 'user_context' }, trx);
+    const shouldResetPlanning = locked.state === 'awaiting_input' || locked.state === 'awaiting_message';
+    const updated = await AgentRepository.updateRun(locked.id, locked.version, {
+      state: nextState,
+      ...(shouldResetPlanning ? {
+        questions: [],
+        readiness: createInitialPlanningReadiness(),
+        planArtifact: null,
+      } : {}),
+    }, trx);
+    await AgentRepository.appendEvent({
+      runId: locked.id,
+      type: 'message.submitted',
+      fromState: locked.state,
+      toState: updated.state,
+      actorType: 'user',
+      actorId: input.userId,
+      payload: { messageLength: parsed.data.message.length },
+    }, trx);
+    if (shouldResetPlanning) {
+      await AgentRepository.enqueueJob(locked.id, 'prepare', trx);
+    }
+    return updated;
+  });
+
+  await publishAgentRunUpdate(outcome);
+  return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: input.runId, userId: input.userId });
 }
 
 export async function listAgentRuns(input: { organizationId: number; boardId: number; userId: number }) {
@@ -287,6 +330,26 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
       answeredQuestionCount: countAnsweredQuestions(messages),
     });
 
+    if (analysis.decision.action === 'respond') {
+      const nextState = assertAgentTransition(locked.state, 'message.required');
+      await AgentRepository.addMessage(locked.id, 'assistant', analysis.assistantMessage || 'What would you like me to plan?', { kind: 'planning_prompt' }, trx);
+      const updatedRun = await AgentRepository.updateRun(locked.id, locked.version, {
+        state: nextState,
+        questions: [],
+        planningContext,
+        readiness,
+      }, trx);
+      await AgentRepository.appendEvent({
+        runId: locked.id,
+        type: 'message.required',
+        fromState: locked.state,
+        toState: updatedRun.state,
+        actorType: 'worker',
+        payload: { decision: analysis.decision },
+      }, trx);
+      return { action: 'await_message' as const, run: updatedRun, decision: analysis.decision };
+    }
+
     if (readiness.recommendedNextAction === 'complete_planning') {
       return {
         action: 'generate_plan' as const,
@@ -335,6 +398,31 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
   });
   if (outcome?.run) await publishAgentRunUpdate(outcome.run);
   return outcome;
+}
+
+export async function supersedeWorkerPlanning(runId: number) {
+  const updatedRun = await db.transaction(async (trx) => {
+    const locked = await AgentRepository.lockRun(runId, trx);
+    if (!locked || locked.state !== 'planning') return null;
+    const nextState = assertAgentTransition(locked.state, 'planning.superseded');
+    const updated = await AgentRepository.updateRun(locked.id, locked.version, {
+      state: nextState,
+      questions: [],
+      readiness: createInitialPlanningReadiness(),
+    }, trx);
+    await AgentRepository.appendEvent({
+      runId: locked.id,
+      type: 'planning.superseded',
+      fromState: locked.state,
+      toState: updated.state,
+      actorType: 'worker',
+      payload: { reason: 'new_user_message' },
+    }, trx);
+    await AgentRepository.enqueueJob(locked.id, 'prepare', trx);
+    return updated;
+  });
+  await publishAgentRunUpdate(updatedRun);
+  return updatedRun;
 }
 
 function buildQuestionIntro(questions: AgentQuestion[]) {

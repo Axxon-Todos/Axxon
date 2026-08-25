@@ -10,6 +10,7 @@ import type {
   AgentRun,
   AgentRunEvent,
   AgentRunEventType,
+  AgentRunMessage,
   AgentRunState,
   AgentRunType,
   AgentToolCall,
@@ -50,6 +51,15 @@ type AgentToolCallRow = {
   error_message: string | null;
   created_at: string;
   completed_at: string | null;
+};
+
+type AgentRunMessageRow = {
+  id: number;
+  run_id: number;
+  role: string;
+  content: string;
+  metadata_json: Record<string, unknown> | string | null;
+  created_at: string;
 };
 
 function parseJson<T>(value: T | string | null, fallback: T): T {
@@ -109,6 +119,17 @@ function mapEvent(row: Record<string, unknown>): AgentRunEvent {
     actorId: row.actor_id == null ? null : Number(row.actor_id),
     payload: parseJson(row.payload_json as string | Record<string, unknown> | null, null),
     createdAt: String(row.created_at),
+  };
+}
+
+function mapMessage(row: AgentRunMessageRow): AgentRunMessage {
+  return {
+    id: row.id,
+    runId: row.run_id,
+    role: row.role,
+    content: row.content,
+    metadata: parseJson(row.metadata_json, null),
+    createdAt: row.created_at,
   };
 }
 
@@ -225,11 +246,18 @@ export class AgentRepository {
   }
 
   static async addMessage(runId: number, role: string, content: string, metadata: Record<string, unknown> | null, trx: DbExecutor = db) {
-    await trx('agent_run_messages').insert({ run_id: runId, role, content, metadata_json: metadata, created_at: db.fn.now() });
+    const [row] = await trx('agent_run_messages').insert({ run_id: runId, role, content, metadata_json: metadata, created_at: db.fn.now() }).returning('*');
+    return mapMessage(row as AgentRunMessageRow);
   }
 
   static async listMessages(runId: number, trx: DbExecutor = db) {
-    return trx('agent_run_messages').where({ run_id: runId }).orderBy('id', 'asc');
+    const rows = await trx('agent_run_messages').where({ run_id: runId }).orderBy('id', 'asc');
+    return rows.map((row) => mapMessage(row as AgentRunMessageRow));
+  }
+
+  static async getLatestMessageId(runId: number, trx: DbExecutor = db) {
+    const row = await trx('agent_run_messages').where({ run_id: runId }).max<{ latest_id: string | number | null }[]>({ latest_id: 'id' }).first();
+    return row?.latest_id == null ? 0 : Number(row.latest_id);
   }
 
   static async enqueueJob(runId: number, kind: 'prepare' | 'dispatch', trx: DbExecutor = db) {

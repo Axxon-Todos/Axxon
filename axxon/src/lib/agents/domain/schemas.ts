@@ -50,6 +50,10 @@ export const submitAgentInputCommandSchema = z.object({
     .max(3),
 });
 
+export const submitAgentMessageCommandSchema = z.object({
+  message: z.string().trim().min(1).max(12_000),
+});
+
 export const requestAgentChangesCommandSchema = z.object({
   feedback: z.string().trim().min(1).max(12_000),
 });
@@ -94,7 +98,7 @@ export const agentPlanningReadinessSchema = z.object({
 });
 
 export const agentPlanningDecisionSchema = z.object({
-  action: z.enum(['ask_questions', 'complete_planning']),
+  action: z.enum(['ask_questions', 'complete_planning', 'respond']),
   reason: z.enum([
     'missing_objective',
     'scope_unbounded',
@@ -108,6 +112,7 @@ export const agentPlanningDecisionSchema = z.object({
 export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysis, z.ZodTypeDef, unknown> = z.object({
   title: z.string().trim().min(1).max(120).nullable().default(null),
   summary: z.string().trim().min(1).max(220).nullable().default(null),
+  assistantMessage: z.string().trim().min(1).max(1200).nullable().default(null),
   contextPatch: agentPlanningContextSchema.partial().default({}),
   knownRequirements: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
   unresolvedUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
@@ -118,6 +123,14 @@ export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysi
   })).max(3).default([]),
   confidence: z.number().min(0).max(1).default(0),
   decision: agentPlanningDecisionSchema,
+}).superRefine((analysis, context) => {
+  if (analysis.decision.action === 'respond' && !analysis.assistantMessage?.trim()) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'assistantMessage is required when decision.action is respond',
+      path: ['assistantMessage'],
+    });
+  }
 });
 
 export const agentPlanArtifactSchema = z.object({
