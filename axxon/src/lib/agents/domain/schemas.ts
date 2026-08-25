@@ -1,24 +1,23 @@
 // Provides Zod schemas for agent commands, planning state, tool calls, and provider artifacts.
 import { z } from 'zod';
-import type { AgentPlanningTurnAnalysis } from './contracts';
+import {
+  agentPlanningComplexities,
+  agentPlanningDecisionActions,
+  agentPlanningDecisionReasons,
+  agentQuestionCategories,
+  agentRunTypes,
+  agentTechnicalDecisionSources,
+  type AgentPlanningTurnAnalysis,
+} from './contracts';
 
-export const agentRunTypeSchema = z.enum(['planning', 'coding', 'planning_execution']);
+export const agentRunTypeSchema = z.enum(agentRunTypes);
 
 export const createAgentRunCommandSchema = z.object({
   prompt: z.string().trim().min(1).max(12_000),
   runType: agentRunTypeSchema.default('planning'),
 });
 
-export const agentQuestionCategorySchema = z.enum([
-  'scope',
-  'technical',
-  'constraints',
-  'dependencies',
-  'acceptance_criteria',
-  'priority',
-  'ux',
-  'rollout',
-]);
+export const agentQuestionCategorySchema = z.enum(agentQuestionCategories);
 
 export const agentQuestionOptionSchema = z.object({
   optionKey: z.string().trim().min(1).max(80),
@@ -62,7 +61,7 @@ export const agentTechnicalDecisionSchema = z.object({
   area: z.string().trim().min(1).max(120),
   choice: z.string().trim().min(1).max(240),
   rationale: z.string().trim().min(1).max(320),
-  source: z.enum(['explicit', 'clarified', 'assumed']),
+  source: z.enum(agentTechnicalDecisionSources),
 });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -128,7 +127,7 @@ export const agentPlanningContextSchema = z.object({
   risks: z.array(z.string().trim().min(1).max(240)).max(25),
   dependencies: z.array(z.string().trim().min(1).max(240)).max(25),
   technicalDecisions: z.array(agentTechnicalDecisionSchema).max(15),
-  estimatedComplexity: z.enum(['low', 'medium', 'high', 'very_high']).nullable(),
+  estimatedComplexity: z.enum(agentPlanningComplexities).nullable(),
   planningConfidence: z.number().min(0).max(1),
 });
 
@@ -152,15 +151,8 @@ export const agentPlanningReadinessSchema = z.object({
 });
 
 export const agentPlanningDecisionSchema = z.object({
-  action: z.enum(['ask_questions', 'complete_planning', 'respond']),
-  reason: z.enum([
-    'missing_objective',
-    'scope_unbounded',
-    'missing_acceptance_criteria',
-    'blocking_unknowns',
-    'low_confidence',
-    'requirements_satisfied',
-  ]),
+  action: z.enum(agentPlanningDecisionActions),
+  reason: z.enum(agentPlanningDecisionReasons),
 });
 
 export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysis, z.ZodTypeDef, unknown> = z.object({

@@ -1,5 +1,5 @@
 // Verifies the local Ollama provider prompts for and parses structured planner JSON.
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { analyzePlanningTurnWithOllama } from '@/lib/agents/providers/ollama';
 import type { AgentRun } from '@/lib/agents/domain';
 import { createEmptyPlanningContext, createInitialPlanningReadiness } from '@/lib/agents/domain';
@@ -28,6 +28,11 @@ function createPlanningRun(): AgentRun {
 }
 
 describe('Ollama planning provider', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('parses minimal analysis JSON into the full planner structure', async () => {
     const mockedFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -65,5 +70,77 @@ describe('Ollama planning provider', () => {
     expect(requestBody.messages[0].content).toContain('"contextPatch"');
     expect(requestBody.messages[0].content).toContain('"candidateQuestions"');
     expect(requestBody.messages[0].content).toContain('"assistantMessage"');
+    expect(requestBody.messages[0].content).not.toContain('|');
+  });
+
+  it('normalizes copied enum unions before validating planning analysis', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const mockedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        message: {
+          content: JSON.stringify({
+            contextPatch: {
+              objective: null,
+            },
+            decision: {
+              action: 'ask_questions',
+              reason: 'missing_objective|scope_unbounded|blocking_unknowns|low_confidence',
+            },
+          }),
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    const analysis = await analyzePlanningTurnWithOllama(createPlanningRun(), [], []);
+
+    expect(analysis.decision).toEqual({
+      action: 'ask_questions',
+      reason: 'missing_objective',
+    });
+    expect(warnSpy).toHaveBeenCalledWith('[AGENT_PROVIDER_NORMALIZED_OUTPUT]', {
+      diagnostics: [
+        'Normalized copied decision.reason enum union "missing_objective|scope_unbounded|blocking_unknowns|low_confidence" to "missing_objective".',
+      ],
+    });
+  });
+
+  it('retries invalid analysis responses with a concrete JSON shape', async () => {
+    const mockedFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          message: {
+            content: JSON.stringify({
+              decision: { action: 'respond', reason: 'missing_objective' },
+            }),
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          message: {
+            content: JSON.stringify({
+              assistantMessage: 'What would you like me to plan?',
+              decision: { action: 'respond', reason: 'missing_objective' },
+            }),
+          },
+        }),
+      });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    const analysis = await analyzePlanningTurnWithOllama(createPlanningRun(), [], []);
+    const retryRequestBody = JSON.parse(String(mockedFetch.mock.calls[1][1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const retryPrompt = retryRequestBody.messages.at(-1)?.content ?? '';
+
+    expect(analysis.assistantMessage).toBe('What would you like me to plan?');
+    expect(mockedFetch).toHaveBeenCalledTimes(2);
+    expect(retryPrompt).toContain('assistantMessage');
+    expect(retryPrompt).not.toContain('|');
   });
 });

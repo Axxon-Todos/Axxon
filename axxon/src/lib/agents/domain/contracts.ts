@@ -55,15 +55,18 @@ export type AgentCapability =
 
 export type AgentToolName = 'ask_clarification_questions';
 
-export type AgentQuestionCategory =
-  | 'scope'
-  | 'technical'
-  | 'constraints'
-  | 'dependencies'
-  | 'acceptance_criteria'
-  | 'priority'
-  | 'ux'
-  | 'rollout';
+export const agentQuestionCategories = [
+  'scope',
+  'technical',
+  'constraints',
+  'dependencies',
+  'acceptance_criteria',
+  'priority',
+  'ux',
+  'rollout',
+] as const;
+
+export type AgentQuestionCategory = (typeof agentQuestionCategories)[number];
 
 export type AgentQuestionOption = {
   optionKey: string;
@@ -92,8 +95,16 @@ export type AgentTechnicalDecision = {
   area: string;
   choice: string;
   rationale: string;
-  source: 'explicit' | 'clarified' | 'assumed';
+  source: AgentTechnicalDecisionSource;
 };
+
+export const agentTechnicalDecisionSources = ['explicit', 'clarified', 'assumed'] as const;
+
+export type AgentTechnicalDecisionSource = (typeof agentTechnicalDecisionSources)[number];
+
+export const agentPlanningComplexities = ['low', 'medium', 'high', 'very_high'] as const;
+
+export type AgentPlanningComplexity = (typeof agentPlanningComplexities)[number];
 
 export type AgentPlanningContext = {
   objective: string | null;
@@ -111,7 +122,7 @@ export type AgentPlanningContext = {
   risks: string[];
   dependencies: string[];
   technicalDecisions: AgentTechnicalDecision[];
-  estimatedComplexity: 'low' | 'medium' | 'high' | 'very_high' | null;
+  estimatedComplexity: AgentPlanningComplexity | null;
   planningConfidence: number;
 };
 
@@ -127,16 +138,23 @@ export type AgentPlanningReadiness = {
   reasonSummary: string[];
 };
 
-export type AgentPlanningDecisionReason =
-  | 'missing_objective'
-  | 'scope_unbounded'
-  | 'missing_acceptance_criteria'
-  | 'blocking_unknowns'
-  | 'low_confidence'
-  | 'requirements_satisfied';
+export const agentPlanningDecisionReasons = [
+  'missing_objective',
+  'scope_unbounded',
+  'missing_acceptance_criteria',
+  'blocking_unknowns',
+  'low_confidence',
+  'requirements_satisfied',
+] as const;
+
+export type AgentPlanningDecisionReason = (typeof agentPlanningDecisionReasons)[number];
+
+export const agentPlanningDecisionActions = ['ask_questions', 'complete_planning', 'respond'] as const;
+
+export type AgentPlanningDecisionAction = (typeof agentPlanningDecisionActions)[number];
 
 export type AgentPlanningDecision = {
-  action: 'ask_questions' | 'complete_planning' | 'respond';
+  action: AgentPlanningDecisionAction;
   reason: AgentPlanningDecisionReason;
 };
 
