@@ -65,6 +65,28 @@ export const agentTechnicalDecisionSchema = z.object({
   source: z.enum(['explicit', 'clarified', 'assumed']),
 });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function removeEmptyTechnicalDecisionPlaceholders(value: unknown) {
+  if (!Array.isArray(value)) return value;
+
+  return value.filter((entry) => {
+    if (!isRecord(entry)) return true;
+    return !['area', 'choice', 'rationale', 'source'].every((key) => entry[key] == null);
+  });
+}
+
+function removeCategoryUnionPlaceholderQuestions(value: unknown) {
+  if (!Array.isArray(value)) return value;
+
+  return value.filter((entry) => {
+    if (!isRecord(entry)) return true;
+    return entry.category !== 'scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout';
+  });
+}
+
 export const agentPlanningContextSchema = z.object({
   objective: z.string().trim().min(1).max(500).nullable(),
   summary: z.string().trim().min(1).max(1000).nullable(),
@@ -84,6 +106,13 @@ export const agentPlanningContextSchema = z.object({
   estimatedComplexity: z.enum(['low', 'medium', 'high', 'very_high']).nullable(),
   planningConfidence: z.number().min(0).max(1),
 });
+
+const agentPlanningAnalysisContextPatchSchema = agentPlanningContextSchema.extend({
+  technicalDecisions: z.preprocess(
+    removeEmptyTechnicalDecisionPlaceholders,
+    z.array(agentTechnicalDecisionSchema).max(15)
+  ),
+}).partial();
 
 export const agentPlanningReadinessSchema = z.object({
   objectiveClear: z.boolean(),
@@ -113,14 +142,17 @@ export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysi
   title: z.string().trim().min(1).max(120).nullable().default(null),
   summary: z.string().trim().min(1).max(220).nullable().default(null),
   assistantMessage: z.string().trim().min(1).max(1200).nullable().default(null),
-  contextPatch: agentPlanningContextSchema.partial().default({}),
+  contextPatch: agentPlanningAnalysisContextPatchSchema.default({}),
   knownRequirements: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
   unresolvedUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
   blockingUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
   resolvedQuestionKeys: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
-  candidateQuestions: z.array(agentQuestionSchema.extend({
-    options: z.array(agentQuestionOptionSchema).length(3),
-  })).max(3).default([]),
+  candidateQuestions: z.preprocess(
+    removeCategoryUnionPlaceholderQuestions,
+    z.array(agentQuestionSchema.extend({
+      options: z.array(agentQuestionOptionSchema).length(3),
+    })).max(3).default([])
+  ),
   confidence: z.number().min(0).max(1).default(0),
   decision: agentPlanningDecisionSchema,
 }).superRefine((analysis, context) => {

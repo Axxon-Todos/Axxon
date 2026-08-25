@@ -121,6 +121,7 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'If the latest user message is only a greeting, small talk, or lacks a concrete planning objective, respond with {"action":"respond"} and a concise assistantMessage asking what the user wants planned.',
   'Every response must include the top-level keys shown in the required JSON shape.',
   'Use null for unknown title or summary, {} for an empty contextPatch, and [] for empty arrays.',
+  'Do not copy pipe-separated allowed-value lists into JSON values; choose one allowed enum value such as "scope" or "technical".',
   'contextPatch may include any known planning context fields: objective, summary, targetOutcome, inScope, outOfScope, assumptions, constraints, acceptanceCriteria, knownRequirements, unresolvedUnknowns, blockingUnknowns, affectedAreas, risks, dependencies, technicalDecisions, estimatedComplexity, and planningConfidence.',
   'Question categories must be one of scope, technical, constraints, dependencies, acceptance_criteria, priority, ux, or rollout.',
   'The decision must be {"action":"respond","reason":"missing_objective|low_confidence"}, {"action":"ask_questions","reason":"missing_objective|scope_unbounded|missing_acceptance_criteria|blocking_unknowns|low_confidence"} or {"action":"complete_planning","reason":"requirements_satisfied"}.',
@@ -152,14 +153,7 @@ const PLANNING_ANALYSIS_JSON_SHAPE = `{
     "affectedAreas": [],
     "risks": [],
     "dependencies": [],
-    "technicalDecisions": [
-      {
-        "area": "string",
-        "choice": "string",
-        "rationale": "string",
-        "source": "explicit|clarified|assumed"
-      }
-    ],
+    "technicalDecisions": [],
     "estimatedComplexity": null,
     "planningConfidence": 0
   },
@@ -167,36 +161,7 @@ const PLANNING_ANALYSIS_JSON_SHAPE = `{
   "unresolvedUnknowns": [],
   "blockingUnknowns": [],
   "resolvedQuestionKeys": [],
-  "candidateQuestions": [
-    {
-      "questionKey": "lower-kebab-case",
-      "category": "scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout",
-      "prompt": "string",
-      "whyThisMatters": "string",
-      "required": true,
-      "blocking": true,
-      "options": [
-        {
-          "optionKey": "lower-kebab-case",
-          "label": "string",
-          "description": "string",
-          "isRecommended": true
-        },
-        {
-          "optionKey": "lower-kebab-case",
-          "label": "string",
-          "description": "string",
-          "isRecommended": false
-        },
-        {
-          "optionKey": "lower-kebab-case",
-          "label": "string",
-          "description": "string",
-          "isRecommended": false
-        }
-      ]
-    }
-  ],
+  "candidateQuestions": [],
   "confidence": 0,
   "decision": {
     "action": "respond|ask_questions|complete_planning",

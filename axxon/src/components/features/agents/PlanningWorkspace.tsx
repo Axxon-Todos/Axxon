@@ -282,7 +282,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
           </Surface>
         </section>
 
-        <Surface variant="strong" className="flex min-h-[42rem] max-h-[calc(100vh-2rem)] overflow-hidden rounded-[2rem] p-6 sm:p-8 xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)] xl:min-h-0">
+        <Surface variant="strong" className="flex min-h-[30rem] max-h-[calc(100svh-9rem)] overflow-hidden rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-6 xl:h-[calc(100svh-9rem)] xl:min-h-0">
           {isRunLoading ? (
             <RunStatusCard label="Loading selected run..." />
           ) : activeRun ? (

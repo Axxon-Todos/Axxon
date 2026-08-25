@@ -44,6 +44,36 @@ describe('agent planning turn analysis schema', () => {
     }
   });
 
+  it('drops copied prompt placeholders that local models sometimes return', () => {
+    const parsed = agentPlanningTurnAnalysisSchema.parse({
+      contextPatch: {
+        technicalDecisions: [{
+          area: null,
+          choice: null,
+          rationale: null,
+          source: null,
+        }],
+      },
+      candidateQuestions: [{
+        questionKey: 'scope-choice',
+        category: 'scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout',
+        prompt: 'Which scope should this cover?',
+        whyThisMatters: 'The plan needs a bounded scope.',
+        required: true,
+        blocking: true,
+        options: [
+          { optionKey: 'small', label: 'Small', description: 'Keep the change focused.', isRecommended: true },
+          { optionKey: 'medium', label: 'Medium', description: 'Include adjacent workflow updates.' },
+          { optionKey: 'large', label: 'Large', description: 'Update the whole feature area.' },
+        ],
+      }],
+      decision: { action: 'ask_questions', reason: 'scope_unbounded' },
+    });
+
+    expect(parsed.contextPatch.technicalDecisions).toEqual([]);
+    expect(parsed.candidateQuestions).toEqual([]);
+  });
+
   it('still requires the model planning decision', () => {
     const parsed = agentPlanningTurnAnalysisSchema.safeParse({
       title: 'Missing decision',
