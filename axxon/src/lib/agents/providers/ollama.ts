@@ -36,10 +36,12 @@ async function completeOllamaStructuredJson<T>({
   messages,
   schema,
   failureMessage,
+  schemaHint,
 }: {
   messages: Array<{ role: string; content: string }>;
-  schema: z.ZodSchema<T>;
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   failureMessage: string;
+  schemaHint?: string;
 }) {
   const { baseUrl, model } = getOllamaConfig();
   const attempts = [...messages];
@@ -60,23 +62,28 @@ async function completeOllamaStructuredJson<T>({
 
     const body = await response.json() as OllamaChatResponse;
     const content = body.message?.content?.trim() ?? '';
+    let validationSummary = 'Response did not match the required JSON schema.';
 
     try {
       const parsed = schema.safeParse(parseGeneratedJson(content));
       if (parsed.success) return parsed.data;
 
-      if (attemptIndex === 1) {
-        throw new Error(`${failureMessage}: ${summarizeZodIssues(parsed.error.issues).join('; ')}`);
-      }
+      validationSummary = summarizeZodIssues(parsed.error.issues).join('; ');
     } catch (error) {
-      if (attemptIndex === 1) {
-        throw error instanceof Error ? error : new Error(failureMessage);
-      }
+      validationSummary = error instanceof Error ? error.message : validationSummary;
+    }
+
+    if (attemptIndex === 1) {
+      throw new Error(`${failureMessage}: ${validationSummary}`);
     }
 
     attempts.push({
       role: 'user',
-      content: 'Your last response did not match the required JSON schema. Return only valid JSON for the requested shape.',
+      content: [
+        `Your last response did not match the required JSON schema: ${validationSummary}`,
+        'Return only valid JSON for the exact requested shape.',
+        schemaHint ? `Required JSON shape:\n${schemaHint}` : '',
+      ].filter(Boolean).join('\n\n'),
     });
   }
 
@@ -111,6 +118,10 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'You are Axxon Planning Agent.',
   'Return JSON only.',
   'Analyze the current planning run and decide whether to ask structured clarification questions or complete planning.',
+  'Every response must include the top-level keys shown in the required JSON shape.',
+  'Use null for unknown title or summary, {} for an empty contextPatch, and [] for empty arrays.',
+  'contextPatch may include any known planning context fields: objective, summary, targetOutcome, inScope, outOfScope, assumptions, constraints, acceptanceCriteria, knownRequirements, unresolvedUnknowns, blockingUnknowns, affectedAreas, risks, dependencies, technicalDecisions, estimatedComplexity, and planningConfidence.',
+  'Question categories must be one of scope, technical, constraints, dependencies, acceptance_criteria, priority, ux, or rollout.',
   'The decision must be {"action":"ask_questions","reason":"missing_objective|scope_unbounded|missing_acceptance_criteria|blocking_unknowns|low_confidence"} or {"action":"complete_planning","reason":"requirements_satisfied"}.',
   'Only use complete_planning when objective, scope, acceptance criteria, requirements, constraints, risks, and implementation-impacting unknowns are clear enough to generate a trustworthy implementation plan.',
   'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
@@ -120,6 +131,76 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'Use stable lower-kebab-case questionKey values.',
 ].join(' ');
 
+const PLANNING_ANALYSIS_JSON_SHAPE = `{
+  "title": null,
+  "summary": null,
+  "contextPatch": {
+    "objective": null,
+    "summary": null,
+    "targetOutcome": null,
+    "inScope": [],
+    "outOfScope": [],
+    "assumptions": [],
+    "constraints": [],
+    "acceptanceCriteria": [],
+    "knownRequirements": [],
+    "unresolvedUnknowns": [],
+    "blockingUnknowns": [],
+    "affectedAreas": [],
+    "risks": [],
+    "dependencies": [],
+    "technicalDecisions": [
+      {
+        "area": "string",
+        "choice": "string",
+        "rationale": "string",
+        "source": "explicit|clarified|assumed"
+      }
+    ],
+    "estimatedComplexity": null,
+    "planningConfidence": 0
+  },
+  "knownRequirements": [],
+  "unresolvedUnknowns": [],
+  "blockingUnknowns": [],
+  "resolvedQuestionKeys": [],
+  "candidateQuestions": [
+    {
+      "questionKey": "lower-kebab-case",
+      "category": "scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout",
+      "prompt": "string",
+      "whyThisMatters": "string",
+      "required": true,
+      "blocking": true,
+      "options": [
+        {
+          "optionKey": "lower-kebab-case",
+          "label": "string",
+          "description": "string",
+          "isRecommended": true
+        },
+        {
+          "optionKey": "lower-kebab-case",
+          "label": "string",
+          "description": "string",
+          "isRecommended": false
+        },
+        {
+          "optionKey": "lower-kebab-case",
+          "label": "string",
+          "description": "string",
+          "isRecommended": false
+        }
+      ]
+    }
+  ],
+  "confidence": 0,
+  "decision": {
+    "action": "ask_questions|complete_planning",
+    "reason": "missing_objective|scope_unbounded|missing_acceptance_criteria|blocking_unknowns|low_confidence|requirements_satisfied"
+  }
+}`;
+
 const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
   'You are Axxon Planning Agent.',
   'Return JSON only.',
@@ -127,7 +208,51 @@ const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
   'Do not ask follow-up questions in this stage.',
   'The plan must include objective, requirements, scope, assumptions, constraints, affectedAreas, technicalDecisions, implementationPhases, risks, successCriteria, openQuestions, and notes.',
   'Each implementation phase must include id, title, summary, and implementation tasks with id, title, description, type, priority, dependencyIds, and acceptanceCriteria.',
+  'Every response must include the top-level keys shown in the required JSON shape.',
 ].join(' ');
+
+const PLANNING_ARTIFACT_JSON_SHAPE = `{
+  "summary": "string",
+  "objective": "string",
+  "scope": {
+    "inScope": [],
+    "outOfScope": []
+  },
+  "requirements": [],
+  "assumptions": [],
+  "constraints": [],
+  "affectedAreas": [],
+  "technicalDecisions": [
+    {
+      "area": "string",
+      "choice": "string",
+      "rationale": "string",
+      "source": "explicit|clarified|assumed"
+    }
+  ],
+  "implementationPhases": [
+    {
+      "id": "lower-kebab-case",
+      "title": "string",
+      "summary": "string",
+      "tasks": [
+        {
+          "id": "lower-kebab-case",
+          "title": "string",
+          "description": "string",
+          "type": "string",
+          "priority": "low|medium|high",
+          "dependencyIds": [],
+          "acceptanceCriteria": []
+        }
+      ]
+    }
+  ],
+  "risks": [],
+  "successCriteria": [],
+  "openQuestions": [],
+  "notes": []
+}`;
 
 // Runs the analysis stage that extracts context and returns the deterministic planning decision.
 export async function analyzePlanningTurnWithOllama(
@@ -135,13 +260,14 @@ export async function analyzePlanningTurnWithOllama(
   messages: AgentProviderMessage[],
   allowedTools: AgentToolDefinition[]
 ): Promise<AgentPlanningTurnAnalysis> {
-  return completeOllamaStructuredJson({
+  return completeOllamaStructuredJson<AgentPlanningTurnAnalysis>({
     messages: [
-      { role: 'system', content: PLANNING_ANALYSIS_SYSTEM_PROMPT },
+      { role: 'system', content: `${PLANNING_ANALYSIS_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ANALYSIS_JSON_SHAPE}` },
       { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
     ],
     schema: agentPlanningTurnAnalysisSchema,
     failureMessage: 'Failed to analyze the planning turn',
+    schemaHint: PLANNING_ANALYSIS_JSON_SHAPE,
   });
 }
 
@@ -151,12 +277,13 @@ export async function generatePlanWithOllama(
   messages: AgentProviderMessage[],
   allowedTools: AgentToolDefinition[]
 ): Promise<AgentPlanArtifact> {
-  return completeOllamaStructuredJson({
+  return completeOllamaStructuredJson<AgentPlanArtifact>({
     messages: [
-      { role: 'system', content: PLANNING_ARTIFACT_SYSTEM_PROMPT },
+      { role: 'system', content: `${PLANNING_ARTIFACT_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ARTIFACT_JSON_SHAPE}` },
       { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
     ],
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',
+    schemaHint: PLANNING_ARTIFACT_JSON_SHAPE,
   });
 }

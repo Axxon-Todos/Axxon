@@ -1,5 +1,6 @@
 // Provides Zod schemas for agent commands, planning state, tool calls, and provider artifacts.
 import { z } from 'zod';
+import type { AgentPlanningTurnAnalysis } from './contracts';
 
 export const agentRunTypeSchema = z.enum(['planning', 'coding', 'planning_execution']);
 
@@ -104,18 +105,18 @@ export const agentPlanningDecisionSchema = z.object({
   ]),
 });
 
-export const agentPlanningTurnAnalysisSchema = z.object({
-  title: z.string().trim().min(1).max(120).nullable(),
-  summary: z.string().trim().min(1).max(220).nullable(),
-  contextPatch: agentPlanningContextSchema.partial(),
-  knownRequirements: z.array(z.string().trim().min(1).max(240)).max(30),
-  unresolvedUnknowns: z.array(z.string().trim().min(1).max(240)).max(30),
-  blockingUnknowns: z.array(z.string().trim().min(1).max(240)).max(30),
-  resolvedQuestionKeys: z.array(z.string().trim().min(1).max(80)).max(30),
+export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysis, z.ZodTypeDef, unknown> = z.object({
+  title: z.string().trim().min(1).max(120).nullable().default(null),
+  summary: z.string().trim().min(1).max(220).nullable().default(null),
+  contextPatch: agentPlanningContextSchema.partial().default({}),
+  knownRequirements: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
+  unresolvedUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
+  blockingUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
+  resolvedQuestionKeys: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
   candidateQuestions: z.array(agentQuestionSchema.extend({
     options: z.array(agentQuestionOptionSchema).length(3),
-  })).max(3),
-  confidence: z.number().min(0).max(1),
+  })).max(3).default([]),
+  confidence: z.number().min(0).max(1).default(0),
   decision: agentPlanningDecisionSchema,
 });
 
