@@ -197,6 +197,13 @@ describe('agent planning run service', () => {
         }],
       },
     });
+    const answeredRun = await AgentRepository.getRun(created.id);
+    expect(answeredRun?.planningContext.acceptanceCriteria).toContain(
+      'What should count as success for the first release?: End-to-end demo. Prove the flow works from prompt to plan. Note: Use API smoke testing as the local success bar.'
+    );
+    expect(answeredRun?.planningContext.knownRequirements).toContain(
+      'What should count as success for the first release?: End-to-end demo. Prove the flow works from prompt to plan. Note: Use API smoke testing as the local success bar.'
+    );
 
     await claimAgentRunForWork(created.id);
     await startAgentPlanningTurn(created.id);

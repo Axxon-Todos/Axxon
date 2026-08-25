@@ -349,6 +349,86 @@ function buildQuestion(
   };
 }
 
+// Converts a submitted clarification answer into a durable context sentence.
+function buildClarifiedAnswerStatement(
+  question: AgentQuestion,
+  answer: AgentClarificationAnswer,
+  selectedOption: AgentQuestionOption
+) {
+  const note = answer.note?.trim();
+  return [
+    `${question.prompt}: ${selectedOption.label}.`,
+    selectedOption.description,
+    note ? `Note: ${note}` : null,
+  ].filter(Boolean).join(' ');
+}
+
+// Applies one clarification answer to the relevant structured planning-context fields.
+function mergeClarifiedAnswerIntoContext(
+  context: AgentPlanningContext,
+  question: AgentQuestion,
+  answer: AgentClarificationAnswer
+): AgentPlanningContext {
+  const selectedOption = question.options.find((option) => option.optionKey === answer.selectedOptionKey);
+  if (!selectedOption) return context;
+
+  const statement = buildClarifiedAnswerStatement(question, answer, selectedOption);
+  const nextContext: AgentPlanningContext = {
+    ...context,
+    inScope: [...context.inScope],
+    outOfScope: [...context.outOfScope],
+    assumptions: [...context.assumptions],
+    constraints: [...context.constraints],
+    acceptanceCriteria: [...context.acceptanceCriteria],
+    knownRequirements: mergeStrings(context.knownRequirements, [statement]),
+    unresolvedUnknowns: [...context.unresolvedUnknowns],
+    blockingUnknowns: [...context.blockingUnknowns],
+    affectedAreas: [...context.affectedAreas],
+    risks: [...context.risks],
+    dependencies: [...context.dependencies],
+    technicalDecisions: [...context.technicalDecisions],
+  };
+
+  if (question.category === 'scope') {
+    nextContext.inScope = mergeStrings(nextContext.inScope, [statement]);
+  } else if (question.category === 'acceptance_criteria') {
+    nextContext.acceptanceCriteria = mergeStrings(nextContext.acceptanceCriteria, [statement]);
+  } else if (question.category === 'constraints' || question.category === 'rollout') {
+    nextContext.constraints = mergeStrings(nextContext.constraints, [statement]);
+  } else if (question.category === 'dependencies') {
+    nextContext.dependencies = mergeStrings(nextContext.dependencies, [statement]);
+  } else if (question.category === 'technical') {
+    nextContext.technicalDecisions = mergeTechnicalDecisions(nextContext.technicalDecisions, [{
+      area: question.prompt,
+      choice: selectedOption.label,
+      rationale: [selectedOption.description, answer.note?.trim()].filter(Boolean).join(' '),
+      source: 'clarified',
+    }]);
+  } else if (question.category === 'priority' && !nextContext.targetOutcome) {
+    nextContext.targetOutcome = statement;
+  }
+
+  return nextContext;
+}
+
+// Merges submitted clarification answers into structured memory before the next provider turn.
+export function applyClarificationAnswersToContext({
+  context,
+  questions,
+  answers,
+}: {
+  context: AgentPlanningContext;
+  questions: AgentQuestion[];
+  answers: AgentClarificationAnswer[];
+}) {
+  const questionsByKey = new Map(questions.map((question) => [normalizeAgentQuestionKey(question.questionKey), question]));
+
+  return answers.reduce((nextContext, answer) => {
+    const question = questionsByKey.get(normalizeAgentQuestionKey(answer.questionKey));
+    return question ? mergeClarifiedAnswerIntoContext(nextContext, question, answer) : nextContext;
+  }, context);
+}
+
 // Builds deterministic fallback cards when provider candidates cannot be used.
 export function buildFallbackClarificationQuestions(readiness: AgentPlanningReadiness): AgentQuestion[] {
   const questions: AgentQuestion[] = [];

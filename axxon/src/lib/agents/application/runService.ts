@@ -4,6 +4,7 @@ import { requireBoardInOrganization, requireOrganizationOwner } from '@/lib/util
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/utils/apiErrors';
 import { publishBoardUpdate } from '@/lib/wsServer';
 import {
+  applyClarificationAnswersToContext,
   assertAgentTransition,
   buildClarificationAnswerSummary,
   createEmptyPlanningContext,
@@ -243,8 +244,13 @@ export async function submitAgentInput(input: { organizationId: number; boardId:
     if (!locked) throw new NotFoundError('Agent run not found');
     const nextState = assertAgentTransition(locked.state, 'input.submitted');
     const answers = validateClarificationAnswers(locked.questions, parsed.data.answers);
+    const planningContext = applyClarificationAnswersToContext({
+      context: locked.planningContext || createEmptyPlanningContext(),
+      questions: locked.questions,
+      answers,
+    });
     await AgentRepository.addMessage(locked.id, 'user', buildClarificationAnswerSummary(locked.questions, answers), { answers }, trx);
-    const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState, questions: [] }, trx);
+    const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState, questions: [], planningContext }, trx);
     await AgentRepository.appendEvent({ runId: locked.id, type: 'input.submitted', fromState: locked.state, toState: updated.state, actorType: 'user', actorId: input.userId, payload: { answers } }, trx);
     await AgentRepository.enqueueJob(locked.id, 'prepare', trx);
     return updated;
@@ -369,6 +375,38 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
       state: locked.state,
       input: toolInput,
     });
+
+    if (toolResult.questions.length === 0) {
+      const nextState = assertAgentTransition(locked.state, 'message.required');
+      const updatedRun = await AgentRepository.updateRun(locked.id, locked.version, {
+        state: nextState,
+        questions: [],
+        planningContext,
+        readiness,
+      }, trx);
+      await AgentRepository.createToolCall({
+        runId: locked.id,
+        toolName: 'ask_clarification_questions',
+        status: 'completed',
+        reasonCode: analysis.decision.reason === 'requirements_satisfied' ? 'low_confidence' : analysis.decision.reason,
+        toolInput: toolInput as unknown as Record<string, unknown>,
+        result: toolResult as unknown as Record<string, unknown>,
+      }, trx);
+      await AgentRepository.addMessage(locked.id, 'assistant', buildNoUniqueQuestionMessage(), {
+        kind: 'planning_prompt',
+        toolName: 'ask_clarification_questions',
+      }, trx);
+      await AgentRepository.appendEvent({
+        runId: locked.id,
+        type: 'message.required',
+        fromState: locked.state,
+        toState: updatedRun.state,
+        actorType: 'worker',
+        payload: { decision: analysis.decision, readiness, reason: 'no_unique_clarification_questions' },
+      }, trx);
+      return { action: 'await_message' as const, run: updatedRun, decision: analysis.decision };
+    }
+
     const nextState = assertAgentTransition(locked.state, 'input.required');
     const updatedRun = await AgentRepository.updateRun(locked.id, locked.version, {
       state: nextState,
@@ -429,6 +467,11 @@ function buildQuestionIntro(questions: AgentQuestion[]) {
   return questions.length === 1
     ? 'I need one quick decision before I can generate the implementation plan.'
     : `I need ${questions.length} quick decisions before I can generate the implementation plan.`;
+}
+
+// Builds the assistant prompt used when all generated clarification cards would be duplicates.
+function buildNoUniqueQuestionMessage() {
+  return 'I have your previous answers. Add any remaining constraints, edge cases, or delivery expectations in a message so I can finish the implementation plan.';
 }
 
 export async function completeWorkerPlanning(runId: number, artifact: AgentPlanArtifact, decision: AgentPlanningDecision) {

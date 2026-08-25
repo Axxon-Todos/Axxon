@@ -16,7 +16,7 @@ export const askClarificationQuestionsResultSchema = z.object({
     prompt: z.string(),
     reason: z.string(),
   })),
-  questions: z.array(agentQuestionSchema).min(1).max(3),
+  questions: z.array(agentQuestionSchema).max(3),
 });
 
 export type AskClarificationQuestionsInput = {
@@ -44,8 +44,6 @@ export function askClarificationQuestions(input: AskClarificationQuestionsInput)
       ...selection.discardedQuestions,
       ...(selection.selectedQuestions.length > 0 ? [] : fallbackSelection.discardedQuestions),
     ],
-    questions: fallbackSelection.selectedQuestions.length > 0
-      ? fallbackSelection.selectedQuestions
-      : buildFallbackClarificationQuestions(parsedInput.readiness),
+    questions: fallbackSelection.selectedQuestions,
   });
 }
