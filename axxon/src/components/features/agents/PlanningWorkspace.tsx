@@ -282,7 +282,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
           </Surface>
         </section>
 
-        <Surface variant="strong" className="min-h-[42rem] rounded-[2rem] p-6 sm:p-8">
+        <Surface variant="strong" className="flex min-h-[42rem] max-h-[calc(100vh-2rem)] overflow-hidden rounded-[2rem] p-6 sm:p-8 xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)] xl:min-h-0">
           {isRunLoading ? (
             <RunStatusCard label="Loading selected run..." />
           ) : activeRun ? (
@@ -373,8 +373,8 @@ function RunDetail({
   const [workingTitle, workingDescription] = getWorkingCopy(run.state);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="flex min-h-0 w-full flex-col gap-6">
+      <div className="shrink-0 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="app-kicker">Active run</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight">{run.title}</h2>
@@ -383,60 +383,62 @@ function RunDetail({
         <Badge variant={stateBadgeVariant(run.state)}>{stateLabels[run.state]}</Badge>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="shrink-0 grid gap-3 sm:grid-cols-3">
         <MetricCard label="Confidence" value={`${Math.round((run.readiness?.confidence ?? 0) * 100)}%`} />
         <MetricCard label="Clarification turns" value={String(run.clarificationTurnCount)} />
         <MetricCard label="Updated" value={formatDate(run.updatedAt)} />
       </div>
 
-      {activeStates.has(run.state) ? (
-        <Surface className="rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-[var(--app-accent)]" />
-            <div>
-              <p className="font-medium">{workingTitle}</p>
-              <p className="text-sm app-text-muted">{workingDescription}</p>
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+        {activeStates.has(run.state) ? (
+          <Surface className="rounded-2xl p-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 animate-spin text-[var(--app-accent)]" />
+              <div>
+                <p className="font-medium">{workingTitle}</p>
+                <p className="text-sm app-text-muted">{workingDescription}</p>
+              </div>
             </div>
-          </div>
-        </Surface>
-      ) : null}
+          </Surface>
+        ) : null}
 
-      {run.messages.length > 1 ? <RunMessagesPanel messages={run.messages} /> : null}
+        {run.messages.length > 1 ? <RunMessagesPanel messages={run.messages} /> : null}
 
-      {hasCapability(run, 'submit_message') ? (
-        <MessageComposer
-          value={messageDraft}
-          onChange={onMessageDraftChange}
-          onSubmit={onSubmitMessage}
-          isSubmitting={isSubmitting}
-        />
-      ) : null}
+        {hasCapability(run, 'submit_message') ? (
+          <MessageComposer
+            value={messageDraft}
+            onChange={onMessageDraftChange}
+            onSubmit={onSubmitMessage}
+            isSubmitting={isSubmitting}
+          />
+        ) : null}
 
-      {run.failureMessage ? (
-        <Surface className="rounded-2xl border-[color-mix(in_srgb,var(--app-danger)_36%,var(--app-border))] p-4">
-          <p className="font-medium text-[var(--app-danger)]">Run failed</p>
-          <p className="mt-1 text-sm app-text-muted">{run.failureMessage}</p>
-        </Surface>
-      ) : null}
+        {run.failureMessage ? (
+          <Surface className="rounded-2xl border-[color-mix(in_srgb,var(--app-danger)_36%,var(--app-border))] p-4">
+            <p className="font-medium text-[var(--app-danger)]">Run failed</p>
+            <p className="mt-1 text-sm app-text-muted">{run.failureMessage}</p>
+          </Surface>
+        ) : null}
 
-      {run.state === 'awaiting_input' ? (
-        <QuestionPanel run={run} onSubmitAnswers={onSubmitAnswers} isSubmitting={isSubmitting} />
-      ) : null}
+        {run.state === 'awaiting_input' ? (
+          <QuestionPanel run={run} onSubmitAnswers={onSubmitAnswers} isSubmitting={isSubmitting} />
+        ) : null}
 
-      {run.planArtifact ? (
-        <PlanArtifactPanel
-          artifact={run.planArtifact}
-          feedback={feedback}
-          onFeedbackChange={onFeedbackChange}
-          onRequestChanges={onRequestChanges}
-          onApprove={onApprove}
-          canRequestChanges={hasCapability(run, 'request_changes')}
-          canApprove={hasCapability(run, 'approve_plan')}
-          isSubmitting={isSubmitting}
-        />
-      ) : null}
+        {run.planArtifact ? (
+          <PlanArtifactPanel
+            artifact={run.planArtifact}
+            feedback={feedback}
+            onFeedbackChange={onFeedbackChange}
+            onRequestChanges={onRequestChanges}
+            onApprove={onApprove}
+            canRequestChanges={hasCapability(run, 'request_changes')}
+            canApprove={hasCapability(run, 'approve_plan')}
+            isSubmitting={isSubmitting}
+          />
+        ) : null}
+      </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="shrink-0 flex flex-wrap gap-3 border-t border-[var(--app-border)] pt-4">
         {hasCapability(run, 'retry') ? (
           <Button onClick={onRetry} disabled={isSubmitting}>
             <RotateCcw className="h-4 w-4" />
@@ -468,8 +470,11 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 function RunMessagesPanel({ messages }: { messages: AgentRunDetail['messages'] }) {
   return (
     <Surface className="rounded-2xl p-4">
-      <p className="app-kicker">Conversation</p>
-      <div className="mt-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="app-kicker">Conversation</p>
+        <Badge>{messages.length} messages</Badge>
+      </div>
+      <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
         {messages.map((message) => (
           <div
             key={message.id}
