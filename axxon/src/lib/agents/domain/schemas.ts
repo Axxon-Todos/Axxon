@@ -78,12 +78,37 @@ function removeEmptyTechnicalDecisionPlaceholders(value: unknown) {
   });
 }
 
-function removeCategoryUnionPlaceholderQuestions(value: unknown) {
+function isNonEmptyString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasUsableCandidateQuestionShape(entry: Record<string, unknown>) {
+  if (
+    !isNonEmptyString(entry.questionKey) ||
+    !isNonEmptyString(entry.category) ||
+    !isNonEmptyString(entry.prompt) ||
+    !isNonEmptyString(entry.whyThisMatters)
+  ) {
+    return false;
+  }
+
+  if (!Array.isArray(entry.options) || entry.options.length !== 3) return false;
+
+  return entry.options.every((option) =>
+    isRecord(option) &&
+    isNonEmptyString(option.optionKey) &&
+    isNonEmptyString(option.label) &&
+    isNonEmptyString(option.description)
+  );
+}
+
+function removeUnusableCandidateQuestions(value: unknown) {
   if (!Array.isArray(value)) return value;
 
   return value.filter((entry) => {
     if (!isRecord(entry)) return true;
-    return entry.category !== 'scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout';
+    if (entry.category === 'scope|technical|constraints|dependencies|acceptance_criteria|priority|ux|rollout') return false;
+    return hasUsableCandidateQuestionShape(entry);
   });
 }
 
@@ -148,7 +173,7 @@ export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysi
   blockingUnknowns: z.array(z.string().trim().min(1).max(240)).max(30).default([]),
   resolvedQuestionKeys: z.array(z.string().trim().min(1).max(80)).max(30).default([]),
   candidateQuestions: z.preprocess(
-    removeCategoryUnionPlaceholderQuestions,
+    removeUnusableCandidateQuestions,
     z.array(agentQuestionSchema.extend({
       options: z.array(agentQuestionOptionSchema).length(3),
     })).max(3).default([])

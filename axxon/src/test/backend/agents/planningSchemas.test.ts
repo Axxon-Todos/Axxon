@@ -44,7 +44,7 @@ describe('agent planning turn analysis schema', () => {
     }
   });
 
-  it('drops copied prompt placeholders that local models sometimes return', () => {
+  it('drops copied prompt placeholders and incomplete candidate cards that local models sometimes return', () => {
     const parsed = agentPlanningTurnAnalysisSchema.parse({
       contextPatch: {
         technicalDecisions: [{
@@ -66,6 +66,14 @@ describe('agent planning turn analysis schema', () => {
           { optionKey: 'medium', label: 'Medium', description: 'Include adjacent workflow updates.' },
           { optionKey: 'large', label: 'Large', description: 'Update the whole feature area.' },
         ],
+      }, {
+        questionKey: 'missing-fields',
+        category: 'scope',
+        options: [
+          {},
+          {},
+          {},
+        ],
       }],
       decision: { action: 'ask_questions', reason: 'scope_unbounded' },
     });
@@ -85,8 +93,8 @@ describe('agent planning turn analysis schema', () => {
     }
   });
 
-  it('still rejects malformed candidate questions supplied by the model', () => {
-    const parsed = agentPlanningTurnAnalysisSchema.safeParse({
+  it('drops malformed candidate questions and relies on deterministic fallback cards', () => {
+    const parsed = agentPlanningTurnAnalysisSchema.parse({
       decision: { action: 'ask_questions', reason: 'missing_acceptance_criteria' },
       candidateQuestions: [{
         questionKey: 'success-bar',
@@ -102,9 +110,6 @@ describe('agent planning turn analysis schema', () => {
       }],
     });
 
-    expect(parsed.success).toBe(false);
-    if (!parsed.success) {
-      expect(parsed.error.issues.map((issue) => issue.path.join('.'))).toContain('candidateQuestions.0.options');
-    }
+    expect(parsed.candidateQuestions).toEqual([]);
   });
 });
