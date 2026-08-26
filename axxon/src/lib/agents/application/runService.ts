@@ -6,6 +6,7 @@ import { publishBoardUpdate } from '@/lib/wsServer';
 import {
   applyClarificationAnswersToContext,
   assertAgentTransition,
+  attachPlanArtifactQuality,
   buildClarificationAnswerSummary,
   createEmptyPlanningContext,
   createInitialPlanningReadiness,
@@ -21,6 +22,7 @@ import {
   type AgentClarificationAnswer,
   type AgentPlanArtifact,
   type AgentPlanningDecision,
+  type AgentPlanningQuality,
   type AgentPlanningTurnAnalysis,
   type AgentQuestion,
   type AgentRun,
@@ -368,6 +370,8 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
     const toolInput = {
       candidateQuestions: analysis.candidateQuestions,
       existingQuestions: [...historicalQuestions, ...locked.questions],
+      planningContext,
+      prompt: locked.prompt,
       readiness,
     };
     const toolResult = executeAgentTool({
@@ -474,14 +478,64 @@ function buildNoUniqueQuestionMessage() {
   return 'I have your previous answers. Add any remaining constraints, edge cases, or delivery expectations in a message so I can finish the implementation plan.';
 }
 
+// Builds the assistant prompt used when generated plans fail deterministic quality review.
+function buildPlanQualityFailureMessage(quality: AgentPlanningQuality) {
+  const issueSummary = quality.issues
+    .slice(0, 3)
+    .map((issue) => issue.message)
+    .join(' ');
+
+  return [
+    'The generated plan was too generic to send for review.',
+    issueSummary || 'Add the most important workflow details, constraints, or success criteria so I can generate a focused plan.',
+  ].join(' ');
+}
+
+// Moves a planning run back to user-message input when generated plans remain too generic.
+export async function requestWorkerPlanQualityInput(runId: number, quality: AgentPlanningQuality) {
+  const updatedRun = await db.transaction(async (trx) => {
+    const locked = await AgentRepository.lockRun(runId, trx);
+    if (!locked || locked.state !== 'planning') return null;
+    const nextState = assertAgentTransition(locked.state, 'message.required');
+    const updated = await AgentRepository.updateRun(locked.id, locked.version, {
+      state: nextState,
+      questions: [],
+      planArtifact: null,
+    }, trx);
+    await AgentRepository.addMessage(locked.id, 'assistant', buildPlanQualityFailureMessage(quality), {
+      kind: 'planning_prompt',
+      reason: 'plan_quality_failed',
+      quality,
+    }, trx);
+    await AgentRepository.appendEvent({
+      runId: locked.id,
+      type: 'message.required',
+      fromState: locked.state,
+      toState: updated.state,
+      actorType: 'worker',
+      payload: { reason: 'plan_quality_failed', quality },
+    }, trx);
+    return updated;
+  });
+  await publishAgentRunUpdate(updatedRun);
+  return updatedRun;
+}
+
 export async function completeWorkerPlanning(runId: number, artifact: AgentPlanArtifact, decision: AgentPlanningDecision) {
   const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(runId, trx);
     if (!locked || locked.state !== 'planning') return null;
+    const artifactWithQuality = artifact.quality
+      ? artifact
+      : attachPlanArtifactQuality({
+          artifact,
+          context: locked.planningContext,
+          prompt: locked.prompt,
+        });
     const nextState = assertAgentTransition(locked.state, 'plan.generated');
-    const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState, planArtifact: artifact, questions: [] }, trx);
-    await AgentRepository.addMessage(locked.id, 'assistant', `Plan generated.\n\n${artifact.summary}`, { kind: 'plan_summary' }, trx);
-    await AgentRepository.appendEvent({ runId: locked.id, type: 'plan.generated', fromState: locked.state, toState: updated.state, actorType: 'worker', payload: { decision } }, trx);
+    const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: nextState, planArtifact: artifactWithQuality, questions: [] }, trx);
+    await AgentRepository.addMessage(locked.id, 'assistant', `Plan generated.\n\n${artifactWithQuality.summary}`, { kind: 'plan_summary', quality: artifactWithQuality.quality }, trx);
+    await AgentRepository.appendEvent({ runId: locked.id, type: 'plan.generated', fromState: locked.state, toState: updated.state, actorType: 'worker', payload: { decision, quality: artifactWithQuality.quality } }, trx);
     return updated;
   });
   await publishAgentRunUpdate(updatedRun);

@@ -1,7 +1,8 @@
 // Implements structured local Ollama calls for planning analysis and final plan generation.
 import { z } from 'zod';
-import type { AgentPlanArtifact, AgentPlanningTurnAnalysis, AgentRun } from '../domain';
+import type { AgentPlanArtifact, AgentPlanningQuality, AgentPlanningTurnAnalysis, AgentRun } from '../domain';
 import {
+  buildPlanQualityFeedback,
   agentPlanArtifactSchema,
   agentPlanningDecisionActions,
   agentPlanningDecisionReasons,
@@ -154,7 +155,9 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'contextPatch may include any known planning context fields: objective, summary, targetOutcome, inScope, outOfScope, assumptions, constraints, acceptanceCriteria, knownRequirements, unresolvedUnknowns, blockingUnknowns, affectedAreas, risks, dependencies, technicalDecisions, estimatedComplexity, and planningConfidence.',
   'Use {"action":"respond","reason":"missing_objective"} for vague conversational input, {"action":"ask_questions","reason":"low_confidence"} when clarification is needed, or {"action":"complete_planning","reason":"requirements_satisfied"} only when planning is ready.',
   'Only use complete_planning when objective, scope, acceptance criteria, requirements, constraints, risks, and implementation-impacting unknowns are clear enough to generate a trustworthy implementation plan.',
-  'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
+  'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must resolve a prompt-specific unknown and reference concrete terms from the user prompt or planning context.',
+  'Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
+  'Do not ask generic scope, timeline, resource allocation, stakeholder approval, or success-bar questions when the prompt contains specific product/domain terms; ask about the actual workflow, data, actors, constraints, or outputs instead.',
   'Do not include none-of-the-above; Axxon adds that option server-side.',
   'Only request clarification when the current state exposes ask_clarification_questions in allowedTools.',
   'Do not generate the final plan in this stage.',
@@ -203,6 +206,9 @@ const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
   'Generate the final structured implementation plan from the completed planning context and transcript.',
   'Do not ask follow-up questions in this stage.',
   'The plan must include objective, requirements, scope, assumptions, constraints, affectedAreas, technicalDecisions, implementationPhases, risks, successCriteria, openQuestions, and notes.',
+  'Every requirement, phase, task, and acceptance criterion must be anchored to concrete terms from the prompt or clarified context.',
+  'Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates unless the user explicitly requested those process phases.',
+  'Do not invent stack choices such as React, Node, Express, or PostgreSQL as facts unless they are explicit or already established by context; use assumptions or openQuestions for uncertain choices.',
   'Each implementation phase must include id, title, summary, and implementation tasks with id, title, description, type, priority, dependencyIds, and acceptanceCriteria.',
   `Technical decision source must be exactly one of: ${TECHNICAL_DECISION_SOURCE_VALUES}.`,
   'Task priority must be exactly one of: low, medium, high.',
@@ -275,12 +281,14 @@ export async function analyzePlanningTurnWithOllama(
 export async function generatePlanWithOllama(
   run: AgentRun,
   messages: AgentProviderMessage[],
-  allowedTools: AgentToolDefinition[]
+  allowedTools: AgentToolDefinition[],
+  qualityFeedback?: AgentPlanningQuality
 ): Promise<AgentPlanArtifact> {
   return completeOllamaStructuredJson<AgentPlanArtifact>({
     messages: [
       { role: 'system', content: `${PLANNING_ARTIFACT_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ARTIFACT_JSON_SHAPE}` },
       { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
+      ...(qualityFeedback ? [{ role: 'user', content: buildPlanQualityFeedback(qualityFeedback) }] : []),
     ],
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',

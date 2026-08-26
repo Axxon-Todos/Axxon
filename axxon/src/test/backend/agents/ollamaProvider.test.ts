@@ -1,6 +1,6 @@
 // Verifies the local Ollama provider prompts for and parses structured planner JSON.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { analyzePlanningTurnWithOllama } from '@/lib/agents/providers/ollama';
+import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '@/lib/agents/providers/ollama';
 import type { AgentRun } from '@/lib/agents/domain';
 import { createEmptyPlanningContext, createInitialPlanningReadiness } from '@/lib/agents/domain';
 
@@ -142,5 +142,63 @@ describe('Ollama planning provider', () => {
     expect(mockedFetch).toHaveBeenCalledTimes(2);
     expect(retryPrompt).toContain('assistantMessage');
     expect(retryPrompt).not.toContain('|');
+  });
+
+  it('sends plan quality feedback when regenerating weak artifacts', async () => {
+    const mockedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        message: {
+          content: JSON.stringify({
+            summary: 'Create a prompt-specific plan.',
+            objective: 'Finalize a reliable planning agent loop.',
+            scope: { inScope: ['Planning agent state machine'], outOfScope: [] },
+            requirements: ['Persist focused plan quality diagnostics.'],
+            assumptions: [],
+            constraints: ['Keep backend code under src/lib/agents.'],
+            affectedAreas: ['agent backend'],
+            technicalDecisions: [],
+            implementationPhases: [{
+              id: 'quality-gate',
+              title: 'Planning quality gate',
+              summary: 'Reject generic generated plans.',
+              tasks: [{
+                id: 'evaluate-plan-quality',
+                title: 'Evaluate plan quality',
+                description: 'Score generated plans before they enter review.',
+                type: 'implementation',
+                priority: 'high',
+                dependencyIds: [],
+                acceptanceCriteria: ['Generic phase-template plans do not reach review.'],
+              }],
+            }],
+            risks: [],
+            successCriteria: ['Weak plans are regenerated or routed back for context.'],
+            openQuestions: [],
+            notes: [],
+          }),
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    await generatePlanWithOllama(createPlanningRun(), [], [], {
+      score: 45,
+      passed: false,
+      issues: [{
+        code: 'generic_project_template',
+        severity: 'error',
+        message: 'The implementation plan resembles a generic project-management template.',
+        evidence: ['Planning Phase'],
+      }],
+    });
+    const requestBody = JSON.parse(String(mockedFetch.mock.calls[0][1]?.body)) as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const qualityPrompt = requestBody.messages.at(-1)?.content ?? '';
+
+    expect(requestBody.messages[0].content).toContain('Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates');
+    expect(qualityPrompt).toContain('previous plan failed quality review');
+    expect(qualityPrompt).toContain('generic_project_template');
   });
 });

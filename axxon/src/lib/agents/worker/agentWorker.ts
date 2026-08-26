@@ -6,9 +6,11 @@ import {
   completeWorkerPlanning,
   deliverAgentDispatch,
   failAgentRun,
+  requestWorkerPlanQualityInput,
   startAgentPlanningTurn,
   supersedeWorkerPlanning,
 } from '../application/runService';
+import { attachPlanArtifactQuality } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
 import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 import { getAllowedAgentToolsForState } from '../toolCalls/registry';
@@ -65,13 +67,38 @@ export async function processNextAgentJob() {
       if (outcome?.action === 'generate_plan') {
         const planMessages = await AgentRepository.listMessages(outcome.run.id);
         const latestPlanMessageId = await AgentRepository.getLatestMessageId(outcome.run.id);
-        const planArtifact = await generatePlanWithOllama(
+        let planArtifact = await generatePlanWithOllama(
           outcome.run,
           mapProviderMessages(planMessages),
           getAllowedAgentToolsForState(outcome.run.state)
         );
+        planArtifact = attachPlanArtifactQuality({
+          artifact: planArtifact,
+          context: outcome.run.planningContext,
+          prompt: outcome.run.prompt,
+        });
+        if (!planArtifact.quality?.passed) {
+          planArtifact = await generatePlanWithOllama(
+            outcome.run,
+            mapProviderMessages(planMessages),
+            getAllowedAgentToolsForState(outcome.run.state),
+            planArtifact.quality
+          );
+          planArtifact = attachPlanArtifactQuality({
+            artifact: planArtifact,
+            context: outcome.run.planningContext,
+            prompt: outcome.run.prompt,
+          });
+        }
         if (await hasNewerUserMessage(outcome.run.id, latestPlanMessageId)) {
           await supersedeWorkerPlanning(outcome.run.id);
+          await AgentRepository.finishJob(Number(job.id), null);
+          return true;
+        }
+        const rejectedQuality = planArtifact.quality;
+        if (!rejectedQuality?.passed) {
+          if (!rejectedQuality) throw new Error('Plan quality evaluation did not produce a result');
+          await requestWorkerPlanQualityInput(run.id, rejectedQuality);
           await AgentRepository.finishJob(Number(job.id), null);
           return true;
         }

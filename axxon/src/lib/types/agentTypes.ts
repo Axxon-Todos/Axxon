@@ -68,6 +68,19 @@ export type AgentTechnicalDecision = {
   source: 'explicit' | 'clarified' | 'assumed';
 };
 
+export type AgentPlanningQualityIssue = {
+  code: string;
+  severity: 'warning' | 'error';
+  message: string;
+  evidence: string[];
+};
+
+export type AgentPlanningQuality = {
+  score: number;
+  passed: boolean;
+  issues: AgentPlanningQualityIssue[];
+};
+
 export type AgentPlanArtifact = {
   summary: string;
   objective: string;
@@ -98,6 +111,7 @@ export type AgentPlanArtifact = {
   successCriteria: string[];
   openQuestions: string[];
   notes: string[];
+  quality?: AgentPlanningQuality;
 };
 
 export type AgentToolCall = {

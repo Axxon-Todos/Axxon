@@ -15,6 +15,7 @@ import {
   completeWorkerPlanning,
   createAgentRun,
   getAgentRunDetail,
+  requestWorkerPlanQualityInput,
   startAgentPlanningTurn,
   submitAgentInput,
   submitAgentRunMessage,
@@ -260,6 +261,40 @@ describe('agent planning run service', () => {
     expect(awaitingMessage.questions).toEqual([]);
     expect(awaitingMessage.capabilities).toContain('submit_message');
     expect(awaitingMessage.messages.map((message) => message.content)).toContain('What would you like me to plan?');
+  });
+
+  it('returns to message input when generated plans fail quality review', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: { prompt: 'Create a fintech dashboard that tracks payments reconciliation and ledgers', runType: 'planning' },
+    });
+
+    await claimAgentRunForWork(created.id);
+    await startAgentPlanningTurn(created.id);
+    const updated = await requestWorkerPlanQualityInput(created.id, {
+      score: 42,
+      passed: false,
+      issues: [{
+        code: 'generic_project_template',
+        severity: 'error',
+        message: 'The implementation plan resembles a generic project-management template.',
+        evidence: ['Planning Phase'],
+      }],
+    });
+
+    expect(updated?.state).toBe('awaiting_message');
+    const detail = await getAgentRunDetail({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+    });
+    expect(detail.planArtifact).toBeNull();
+    expect(detail.messages.at(-1)?.content).toContain('too generic');
+    expect(detail.events.at(-1)?.payload).toMatchObject({ reason: 'plan_quality_failed' });
   });
 
   it('accepts free-form context while awaiting input and queues replanning', async () => {

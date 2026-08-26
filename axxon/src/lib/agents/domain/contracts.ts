@@ -106,6 +106,19 @@ export const agentPlanningComplexities = ['low', 'medium', 'high', 'very_high'] 
 
 export type AgentPlanningComplexity = (typeof agentPlanningComplexities)[number];
 
+export type AgentPlanningQualityIssue = {
+  code: string;
+  severity: 'warning' | 'error';
+  message: string;
+  evidence: string[];
+};
+
+export type AgentPlanningQuality = {
+  score: number;
+  passed: boolean;
+  issues: AgentPlanningQualityIssue[];
+};
+
 export type AgentPlanningContext = {
   objective: string | null;
   summary: string | null;
@@ -211,6 +224,7 @@ export type AgentPlanArtifact = {
   successCriteria: string[];
   openQuestions: string[];
   notes: string[];
+  quality?: AgentPlanningQuality;
 };
 
 export type AgentToolCallStatus = 'completed' | 'failed';

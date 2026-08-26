@@ -215,4 +215,61 @@ describe('PlanningWorkspace', () => {
       expect(mockedSubmitAgentRunMessage).toHaveBeenCalledWith('12', '5', 44, 'Plan the multi-question carousel.');
     });
   });
+
+  it('renders plan quality diagnostics for generated plans', async () => {
+    const generatedPlan = createRun({
+      state: 'awaiting_plan_review',
+      questions: [],
+      capabilities: ['view', 'request_changes', 'approve_plan', 'cancel'],
+      planArtifact: {
+        summary: 'Improve the planning UI with focused quality diagnostics.',
+        objective: 'Plan the agent UI',
+        scope: {
+          inScope: ['Planning UI review'],
+          outOfScope: [],
+        },
+        requirements: ['Show quality diagnostics on generated plans.'],
+        assumptions: [],
+        constraints: [],
+        affectedAreas: ['agent planning workspace'],
+        technicalDecisions: [],
+        implementationPhases: [{
+          id: 'quality-diagnostics',
+          title: 'Quality diagnostics',
+          summary: 'Surface quality review output in the plan panel.',
+          tasks: [{
+            id: 'render-quality-warning',
+            title: 'Render quality warning',
+            description: 'Display quality issue messages near the generated plan header.',
+            type: 'frontend',
+            priority: 'high',
+            dependencyIds: [],
+            acceptanceCriteria: ['Plan quality review is visible when issues exist.'],
+          }],
+        }],
+        risks: [],
+        successCriteria: ['Users can see why a generated plan needs changes.'],
+        openQuestions: [],
+        notes: [],
+        quality: {
+          score: 62,
+          passed: false,
+          issues: [{
+            code: 'generic_project_template',
+            severity: 'error',
+            message: 'The implementation plan resembles a generic project-management template.',
+            evidence: ['Planning Phase'],
+          }],
+        },
+      },
+    });
+    mockedFetchAgentRuns.mockResolvedValue([generatedPlan]);
+    mockedFetchAgentRunDetail.mockResolvedValue(generatedPlan);
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    expect(await screen.findByText('Plan quality review')).toBeInTheDocument();
+    expect(screen.getByText('62/100')).toBeInTheDocument();
+    expect(screen.getByText(/generic project-management template/i)).toBeInTheDocument();
+  });
 });

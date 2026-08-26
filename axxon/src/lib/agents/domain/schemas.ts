@@ -64,6 +64,19 @@ export const agentTechnicalDecisionSchema = z.object({
   source: z.enum(agentTechnicalDecisionSources),
 });
 
+export const agentPlanningQualityIssueSchema = z.object({
+  code: z.string().trim().min(1).max(80),
+  severity: z.enum(['warning', 'error']),
+  message: z.string().trim().min(1).max(240),
+  evidence: z.array(z.string().trim().min(1).max(240)).max(8),
+});
+
+export const agentPlanningQualitySchema = z.object({
+  score: z.number().min(0).max(100),
+  passed: z.boolean(),
+  issues: z.array(agentPlanningQualityIssueSchema).max(12),
+});
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
@@ -222,4 +235,5 @@ export const agentPlanArtifactSchema = z.object({
   successCriteria: z.array(z.string().trim().min(1).max(240)).max(25),
   openQuestions: z.array(z.string().trim().min(1).max(240)).max(20),
   notes: z.array(z.string().trim().min(1).max(240)).max(20),
+  quality: agentPlanningQualitySchema.optional(),
 });

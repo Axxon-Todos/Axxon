@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, GitBranch, Loader2, MessageSquareText, RotateCcw, Send, XCircle } from 'lucide-react';
+import { AlertTriangle, Bot, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, GitBranch, Loader2, MessageSquareText, RotateCcw, Send, XCircle } from 'lucide-react';
 
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
@@ -701,6 +701,8 @@ function PlanArtifactPanel({
         </div>
       </div>
 
+      <PlanQualityPanel artifact={artifact} />
+
       <PlanList title="Requirements" items={artifact.requirements} />
       <PlanList title="Success criteria" items={artifact.successCriteria} />
 
@@ -754,6 +756,28 @@ function PlanArtifactPanel({
         </div>
       ) : null}
     </Surface>
+  );
+}
+
+function PlanQualityPanel({ artifact }: { artifact: AgentPlanArtifact }) {
+  const quality = artifact.quality;
+  if (!quality || quality.issues.length === 0) return null;
+
+  return (
+    <div className="mt-5 rounded-xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_72%,transparent)] p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-[var(--app-warning)]" />
+        <p className="text-sm font-semibold">Plan quality review</p>
+        <Badge>{quality.score}/100</Badge>
+      </div>
+      <ul className="mt-3 space-y-2 text-sm app-text-muted">
+        {quality.issues.map((issue) => (
+          <li key={issue.code}>
+            <span className="font-medium text-[var(--app-text)]">{issue.severity === 'error' ? 'Issue' : 'Warning'}:</span> {issue.message}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

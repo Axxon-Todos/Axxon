@@ -10,6 +10,7 @@ import type {
   AgentQuestionOption,
   AgentTechnicalDecision,
 } from './contracts';
+import { extractPlanningAnchors, isPromptSpecificClarificationQuestion } from './quality';
 
 export const AGENT_PLANNING_CONFIDENCE_THRESHOLD = 0.7;
 export const MAX_AGENT_QUESTIONS_PER_TURN = 3;
@@ -280,10 +281,15 @@ function normalizeQuestionOptions(options: AgentQuestionOption[]) {
 export function selectClarificationQuestions({
   candidateQuestions,
   existingQuestions,
+  planningContext,
+  prompt,
 }: {
   candidateQuestions: AgentQuestion[];
   existingQuestions: AgentQuestion[];
+  planningContext?: AgentPlanningContext | null;
+  prompt?: string;
 }) {
+  const anchors = extractPlanningAnchors({ prompt: prompt ?? '', context: planningContext });
   const seenExistingKeys = new Set(existingQuestions.map((question) => normalizeAgentQuestionKey(question.questionKey)));
   const seenExistingTexts = new Set(existingQuestions.map((question) => normalizeQuestionText(question.prompt)));
   const seenCandidateKeys = new Set<string>();
@@ -309,6 +315,11 @@ export function selectClarificationQuestions({
 
     if (seenExistingTexts.has(normalizedText) || seenCandidateTexts.has(normalizedText)) {
       discardedQuestions.push({ questionKey, prompt, reason: 'Question text already exists.' });
+      continue;
+    }
+
+    if (!isPromptSpecificClarificationQuestion({ question: candidateQuestion, anchors })) {
+      discardedQuestions.push({ questionKey, prompt, reason: 'Question does not reference the current planning prompt.' });
       continue;
     }
 
@@ -347,6 +358,76 @@ function buildQuestion(
     blocking: true,
     options,
   };
+}
+
+// Shortens a prompt or context value for use inside fallback question text.
+function summarizeFallbackSubject(value: string) {
+  return value.replace(/\s+/g, ' ').trim().slice(0, 90);
+}
+
+// Builds a human-readable anchor phrase for contextual fallback cards.
+function formatAnchorLabel(anchors: string[]) {
+  const singleTermAnchors = anchors.filter((anchor) => !anchor.includes(' '));
+  const selectedAnchors = singleTermAnchors.length >= 2 ? singleTermAnchors : anchors;
+  return selectedAnchors.slice(0, 3).join(', ');
+}
+
+// Builds prompt-anchored fallback cards when the provider cannot supply usable questions.
+function buildContextualFallbackClarificationQuestions(
+  readiness: AgentPlanningReadiness,
+  context: AgentPlanningContext | null | undefined,
+  prompt: string | undefined
+) {
+  const anchors = extractPlanningAnchors({ prompt: prompt ?? '', context });
+  if (anchors.length < 2) return [];
+
+  const anchorLabel = formatAnchorLabel(anchors);
+  const subject = summarizeFallbackSubject(context?.objective ?? prompt ?? `the ${anchorLabel} workflow`);
+  const questions: AgentQuestion[] = [];
+
+  if (!readiness.scopeBounded) {
+    questions.push(buildQuestion(
+      'prompt-specific-release-boundary',
+      'scope',
+      `Which ${anchorLabel} workflow should define the first release?`,
+      `The plan needs one concrete boundary for ${subject} before it can produce specific implementation tasks.`,
+      [
+        { optionKey: 'core-data-flow', label: 'Core data flow', description: `Plan the smallest usable flow around ${anchorLabel}.`, isRecommended: true },
+        { optionKey: 'operator-review', label: 'Operator review', description: `Prioritize screens and actions for reviewing ${anchorLabel}.` },
+        { optionKey: 'data-foundation', label: 'Data foundation', description: `Prioritize durable models, imports, and validation for ${anchorLabel}.` },
+      ]
+    ));
+  }
+
+  if (!readiness.hasAcceptanceCriteria) {
+    questions.push(buildQuestion(
+      'prompt-specific-success-bar',
+      'acceptance_criteria',
+      `What should prove the ${anchorLabel} plan is successful?`,
+      `The plan needs a verifiable success bar tied to ${subject}, not a generic demo milestone.`,
+      [
+        { optionKey: 'sample-records-pass', label: 'Sample records pass', description: `Use representative ${anchorLabel} records to prove the workflow works.`, isRecommended: true },
+        { optionKey: 'exceptions-visible', label: 'Exceptions visible', description: `Users can identify and act on important ${anchorLabel} exceptions.` },
+        { optionKey: 'auditable-output', label: 'Auditable output', description: `The workflow produces traceable ${anchorLabel} outputs for review.` },
+      ]
+    ));
+  }
+
+  if (questions.length === 0 && readiness.blockingUnknowns.length > 0) {
+    questions.push(buildQuestion(
+      'prompt-specific-blocker',
+      'constraints',
+      `Which missing ${anchorLabel} detail should the plan assume?`,
+      `The current blocker is ${readiness.blockingUnknowns[0]}, and the plan needs a concrete default to proceed.`,
+      [
+        { optionKey: 'use-current-system-defaults', label: 'Use current defaults', description: `Assume existing product patterns for ${anchorLabel}.`, isRecommended: true },
+        { optionKey: 'keep-open-question', label: 'Keep open question', description: `Keep the ${anchorLabel} detail explicit as an open question.` },
+        { optionKey: 'defer-to-first-task', label: 'Defer to discovery', description: `Make discovery of this ${anchorLabel} detail the first implementation task.` },
+      ]
+    ));
+  }
+
+  return questions.slice(0, MAX_AGENT_QUESTIONS_PER_TURN);
 }
 
 // Converts a submitted clarification answer into a durable context sentence.
@@ -430,7 +511,14 @@ export function applyClarificationAnswersToContext({
 }
 
 // Builds deterministic fallback cards when provider candidates cannot be used.
-export function buildFallbackClarificationQuestions(readiness: AgentPlanningReadiness): AgentQuestion[] {
+export function buildFallbackClarificationQuestions(
+  readiness: AgentPlanningReadiness,
+  context?: AgentPlanningContext | null,
+  prompt?: string
+): AgentQuestion[] {
+  const contextualQuestions = buildContextualFallbackClarificationQuestions(readiness, context, prompt);
+  if (contextualQuestions.length > 0) return contextualQuestions;
+
   const questions: AgentQuestion[] = [];
 
   if (!readiness.objectiveClear) {
