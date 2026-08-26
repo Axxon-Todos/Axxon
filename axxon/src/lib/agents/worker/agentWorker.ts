@@ -10,7 +10,7 @@ import {
   startAgentPlanningTurn,
   supersedeWorkerPlanning,
 } from '../application/runService';
-import { attachPlanArtifactQuality } from '../domain';
+import { attachPlanArtifactQuality, buildFallbackPlanArtifact } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
 import { AgentProviderValidationError, analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 import { getAllowedAgentToolsForState } from '../toolCalls/registry';
@@ -127,6 +127,22 @@ export async function processNextAgentJob() {
         }
         const rejectedQuality = planArtifact.quality;
         if (!rejectedQuality?.passed) {
+          const fallbackArtifact = buildFallbackPlanArtifact({
+            prompt: outcome.run.prompt,
+            context: outcome.run.planningContext,
+          });
+          if (fallbackArtifact) {
+            const qualifiedFallbackArtifact = attachPlanArtifactQuality({
+              artifact: fallbackArtifact,
+              context: outcome.run.planningContext,
+              prompt: outcome.run.prompt,
+            });
+            if (qualifiedFallbackArtifact.quality?.passed) {
+              await completeWorkerPlanning(run.id, qualifiedFallbackArtifact, outcome.decision);
+              await AgentRepository.finishJob(Number(job.id), null);
+              return true;
+            }
+          }
           if (!rejectedQuality) throw new Error('Plan quality evaluation did not produce a result');
           await requestWorkerPlanQualityInput(run.id, rejectedQuality);
           await AgentRepository.finishJob(Number(job.id), null);

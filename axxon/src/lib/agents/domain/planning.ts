@@ -1,5 +1,6 @@
 // Contains deterministic planning-readiness rules and clarification-question normalization helpers.
 import type {
+  AgentPlanArtifact,
   AgentClarificationAnswer,
   AgentPlanningContext,
   AgentPlanningDecisionReason,
@@ -365,17 +366,208 @@ function summarizeFallbackSubject(value: string) {
   return value.replace(/\s+/g, ' ').trim().slice(0, 90);
 }
 
+// Converts a short phrase into title case for generated plan section labels.
+function titleCase(value: string) {
+  return value.replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+// Converts arbitrary prompt terms into stable lower-kebab-case identifiers.
+function slugifyPlanId(value: string) {
+  const slug = normalizeAgentQuestionKey(value).slice(0, 52);
+  return slug || 'planning-workflow';
+}
+
+// Trims generated artifact text to the public schema limits without leaving dangling whitespace.
+function limitPlanText(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > maxLength ? normalized.slice(0, maxLength).trim() : normalized;
+}
+
+// Normalizes context strings before copying them into a generated artifact field.
+function limitPlanStrings(values: string[], maxLength: number, maxItems: number) {
+  const seen = new Set<string>();
+  const limitedValues: string[] = [];
+
+  for (const value of values) {
+    const limitedValue = limitPlanText(value, maxLength);
+    if (!limitedValue) continue;
+
+    const key = limitedValue.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    limitedValues.push(limitedValue);
+    if (limitedValues.length >= maxItems) break;
+  }
+
+  return limitedValues;
+}
+
+// Picks domain terms that read naturally in generated questions and fallback plans.
+function selectDomainAnchors(anchors: string[]) {
+  const phraseAnchors = anchors.filter((anchor) => anchor.includes(' '));
+  const singleAnchors = anchors
+    .filter((anchor) => !anchor.includes(' '))
+    .sort((left, right) => getDomainAnchorPriority(right) - getDomainAnchorPriority(left));
+  const selected: string[] = [];
+  const addAnchor = (anchor: string) => {
+    if (selected.some((existing) => existing.includes(anchor) || anchor.includes(existing))) return;
+    selected.push(anchor);
+  };
+
+  const preferredPhrase =
+    phraseAnchors.find((anchor) => /ledger|reconciliation|transaction|account|invoice|order|repo|board|agent/.test(anchor)) ??
+    phraseAnchors.find((anchor) => /payment/.test(anchor)) ??
+    phraseAnchors[0];
+  if (preferredPhrase) addAnchor(preferredPhrase);
+
+  for (const anchor of singleAnchors) {
+    addAnchor(anchor);
+    if (selected.length >= (preferredPhrase ? 2 : 3)) break;
+  }
+
+  if (selected.length < 2) {
+    for (const anchor of phraseAnchors) {
+      addAnchor(anchor);
+      if (selected.length >= 2) break;
+    }
+  }
+
+  return selected.slice(0, 3);
+}
+
+// Scores common workflow nouns above broad industry descriptors for fallback labels.
+function getDomainAnchorPriority(anchor: string) {
+  if (/ledger|reconciliation|payment|transaction|invoice|account/.test(anchor)) return 2;
+  if (/fintech|dashboard|platform|workflow/.test(anchor)) return 1;
+  return 0;
+}
+
 // Builds a human-readable anchor phrase for contextual fallback cards.
 function formatAnchorLabel(anchors: string[]) {
-  const singleTermAnchors = anchors.filter((anchor) => !anchor.includes(' '));
-  const selectedAnchors = singleTermAnchors.length >= 2 ? singleTermAnchors : anchors;
-  return selectedAnchors.slice(0, 3).join(', ');
+  const selectedAnchors = selectDomainAnchors(anchors);
+  if (selectedAnchors.length <= 1) return selectedAnchors[0] ?? 'requested';
+  return `${selectedAnchors.slice(0, -1).join(', ')} and ${selectedAnchors.at(-1)}`;
 }
 
 // Prefers user-prompt domain terms over provider-generated unknown labels for fallback wording.
 function extractFallbackPlanningAnchors(prompt: string | undefined, context: AgentPlanningContext | null | undefined) {
   const promptAnchors = extractPlanningAnchors({ prompt: prompt ?? '', context: null });
   return promptAnchors.length >= 2 ? promptAnchors : extractPlanningAnchors({ prompt: prompt ?? '', context });
+}
+
+// Collects concrete context statements for use in deterministic fallback plans.
+function collectFallbackRequirements(context: AgentPlanningContext) {
+  return [
+    ...context.knownRequirements,
+    ...context.acceptanceCriteria,
+    ...context.constraints,
+  ];
+}
+
+// Builds a deterministic, prompt-anchored plan when provider attempts remain generic.
+export function buildFallbackPlanArtifact({
+  prompt,
+  context,
+}: {
+  prompt: string;
+  context: AgentPlanningContext;
+}): AgentPlanArtifact | null {
+  const anchors = extractFallbackPlanningAnchors(prompt, context);
+  if (anchors.length < 2) return null;
+
+  const subject = formatAnchorLabel(anchors);
+  const titleSubject = titleCase(subject);
+  const slug = slugifyPlanId(subject);
+  const objective = context.objective?.trim() || prompt.trim();
+  const requirements = limitPlanStrings(collectFallbackRequirements(context), 240, 30);
+
+  return {
+    summary: `Implement ${subject} as a focused first-release workflow using the clarified planning context.`,
+    objective: limitPlanText(objective, 1200),
+    scope: {
+      inScope: context.inScope.length > 0 ? limitPlanStrings(context.inScope, 240, 25) : [`${titleSubject} first-release workflow`],
+      outOfScope: limitPlanStrings(context.outOfScope, 240, 25),
+    },
+    requirements: requirements.length > 0
+      ? requirements.slice(0, 30)
+      : [`Support ${subject} records, review states, and exception handling from the user request.`],
+    assumptions: limitPlanStrings(context.assumptions, 240, 25).length > 0
+      ? limitPlanStrings(context.assumptions, 240, 25)
+      : [`Unspecified ${subject} data fields will be confirmed before implementation maps sample records.`],
+    constraints: limitPlanStrings(context.constraints, 240, 25),
+    affectedAreas: limitPlanStrings(context.affectedAreas, 120, 25).length > 0 ? limitPlanStrings(context.affectedAreas, 120, 25) : [limitPlanText(subject, 120)],
+    technicalDecisions: context.technicalDecisions.length > 0
+      ? context.technicalDecisions.slice(0, 15).map((decision) => ({
+          area: limitPlanText(decision.area, 120),
+          choice: limitPlanText(decision.choice, 240),
+          rationale: limitPlanText(decision.rationale, 320),
+          source: decision.source,
+        }))
+      : [{
+          area: `${titleSubject} workflow boundary`,
+          choice: 'Use the clarified first-release boundary as the plan source of truth.',
+          rationale: `The generated plan must stay anchored to ${subject} rather than a generic delivery template.`,
+          source: 'assumed',
+        }],
+    implementationPhases: [{
+      id: `${slug}-data-foundation`,
+      title: `${titleSubject} data foundation`,
+      summary: `Define the ${subject} records, statuses, and validation rules needed for the first release.`,
+      tasks: [{
+        id: `${slug}-record-model`,
+        title: `${titleSubject} record model`,
+        description: `Define the minimum ${subject} record shape, matching status, exception status, and audit fields needed by the first workflow.`,
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: [
+          `Representative ${subject} sample records can be classified as matched, unmatched, or exception cases.`,
+          `Each ${subject} record preserves enough source detail for review and troubleshooting.`,
+        ],
+      }],
+    }, {
+      id: `${slug}-operator-review`,
+      title: `${titleSubject} operator review`,
+      summary: `Build the user-facing review path for inspecting ${subject} exceptions and outcomes.`,
+      tasks: [{
+        id: `${slug}-review-surface`,
+        title: `${titleSubject} review surface`,
+        description: `Show ${subject} totals, mismatch rows, exception reasons, and resolution status in the first-release dashboard flow.`,
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [`${slug}-record-model`],
+        acceptanceCriteria: [
+          `Operators can identify unresolved ${subject} exceptions from sample records.`,
+          `Operators can see the status and source details for each ${subject} mismatch.`,
+        ],
+      }],
+    }, {
+      id: `${slug}-sample-verification`,
+      title: `${titleSubject} sample-record verification`,
+      summary: `Prove the first release with representative ${subject} data before expanding scope.`,
+      tasks: [{
+        id: `${slug}-sample-scenarios`,
+        title: `${titleSubject} sample scenarios`,
+        description: `Create sample ${subject} scenarios for matched records, missing records, variance records, and reviewed exceptions.`,
+        type: 'verification',
+        priority: 'medium',
+        dependencyIds: [`${slug}-review-surface`],
+        acceptanceCriteria: [
+          `Sample ${subject} records demonstrate the success criteria captured during clarification.`,
+          `The plan leaves unresolved ${subject} production-field questions explicit instead of inventing them.`,
+        ],
+      }],
+    }],
+    risks: limitPlanStrings(context.risks, 240, 25).length > 0
+      ? limitPlanStrings(context.risks, 240, 25)
+      : [`Real ${subject} source data may contain fields or edge cases not represented in first-release samples.`],
+    successCriteria: limitPlanStrings(context.acceptanceCriteria, 240, 25).length > 0
+      ? limitPlanStrings(context.acceptanceCriteria, 240, 25)
+      : [`A user can review representative ${subject} records and explain each exception outcome.`],
+    openQuestions: limitPlanStrings([...context.blockingUnknowns, ...context.unresolvedUnknowns], 240, 20),
+    notes: ['This fallback plan was generated from persisted planning context after provider outputs remained too generic.'],
+  };
 }
 
 // Builds prompt-anchored fallback cards when the provider cannot supply usable questions.

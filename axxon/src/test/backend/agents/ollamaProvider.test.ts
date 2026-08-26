@@ -199,6 +199,7 @@ describe('Ollama planning provider', () => {
 
     expect(requestBody.messages[0].content).toContain('Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates');
     expect(qualityPrompt).toContain('previous plan failed quality review');
+    expect(qualityPrompt).toContain('Required prompt anchors');
     expect(qualityPrompt).toContain('generic_project_template');
   });
 

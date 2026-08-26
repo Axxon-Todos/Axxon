@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyPlanningContext,
   createInitialPlanningReadiness,
+  buildFallbackPlanArtifact,
   evaluatePlanArtifactQuality,
   extractPlanningAnchors,
   type AgentPlanArtifact,
@@ -181,6 +182,35 @@ describe('planning quality evaluation', () => {
     expect(result.questions.map((question) => question.prompt).join(' ')).toMatch(/payment|reconciliation|ledger/);
   });
 
+  it('does not use generic model unknowns in fintech fallback question labels', () => {
+    const readiness = {
+      ...createInitialPlanningReadiness(),
+      objectiveClear: true,
+      scopeBounded: false,
+      hasAcceptanceCriteria: false,
+      blockingUnknowns: ['functionality'],
+      unresolvedUnknowns: ['functionality'],
+      reasonSummary: ['Scope is still materially unbounded.', 'Acceptance criteria are missing.'],
+    };
+    const context = {
+      ...createFintechPlanningContext(),
+      blockingUnknowns: ['functionality'],
+      unresolvedUnknowns: ['functionality'],
+    };
+
+    const result = askClarificationQuestions({
+      candidateQuestions: [],
+      existingQuestions: [],
+      planningContext: context,
+      prompt: 'can we make a fintech dashboard that tracks all payments reconciliation and ledgers',
+      readiness,
+    });
+    const fallbackText = result.questions.map((question) => question.prompt).join(' ');
+
+    expect(fallbackText).not.toContain('functionality');
+    expect(fallbackText).toMatch(/payment reconciliation|ledger|fintech/);
+  });
+
   it('fails generic phase-template plans before review', () => {
     const quality = evaluatePlanArtifactQuality({
       artifact: createGenericFintechPlan(),
@@ -206,5 +236,31 @@ describe('planning quality evaluation', () => {
     expect(quality.passed).toBe(true);
     expect(quality.score).toBeGreaterThanOrEqual(70);
     expect(quality.issues).toEqual([]);
+  });
+
+  it('builds a quality-passing fallback plan after generic provider artifacts', () => {
+    const prompt = 'can we make a fintech dashboard that tracks all payments reconciliation and ledgers';
+    const context = {
+      ...createFintechPlanningContext(),
+      objective: prompt,
+      inScope: ['Operator review for payment reconciliation and ledgers.'],
+      outOfScope: ['Live bank integrations'],
+      acceptanceCriteria: [
+        'Sample payment reconciliation and ledger records prove the dashboard is successful.',
+      ],
+      knownRequirements: [
+        'Track payments reconciliation, ledger entries, and exception status for operator review.',
+      ],
+      blockingUnknowns: [],
+      unresolvedUnknowns: [],
+    };
+    const artifact = buildFallbackPlanArtifact({ prompt, context });
+
+    expect(artifact).not.toBeNull();
+    expect(artifact?.implementationPhases.map((phase) => phase.title).join(' ')).toMatch(/Payment|Ledger|Reconciliation/);
+    expect(evaluatePlanArtifactQuality({ artifact: artifact!, context, prompt })).toMatchObject({
+      passed: true,
+      issues: [],
+    });
   });
 });

@@ -103,6 +103,62 @@ function createRecoverablePlanArtifactPayload() {
   };
 }
 
+// Builds a schema-valid but generic artifact that the quality gate must reject.
+function createGenericPlanArtifactPayload() {
+  return {
+    summary: 'Develop a comprehensive dashboard for tracking payments.',
+    objective: 'Build a payment reconciliation ledger dashboard.',
+    scope: {
+      inScope: ['Focused MVP'],
+      outOfScope: [],
+    },
+    requirements: ['Create project plan and implement dashboard features.'],
+    assumptions: [],
+    constraints: [],
+    affectedAreas: ['frontend', 'backend'],
+    technicalDecisions: [],
+    implementationPhases: [{
+      id: 'planning-phase',
+      title: 'Planning Phase',
+      summary: 'Define project scope, timeline, and resources.',
+      tasks: [{
+        id: 'define-objectives',
+        title: 'Define Objectives and Goals',
+        description: 'Finalize objectives and goals based on requirements and constraints.',
+        type: 'planning',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Project objectives and goals are clearly defined.'],
+      }, {
+        id: 'create-project-plan',
+        title: 'Create Project Plan',
+        description: 'Develop a detailed project plan including timelines, milestones, and resource allocation.',
+        type: 'planning',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Project plan is reviewed and approved by stakeholders.'],
+      }],
+    }, {
+      id: 'development-phase',
+      title: 'Development Phase',
+      summary: 'Implement dashboard features.',
+      tasks: [{
+        id: 'develop-dashboard',
+        title: 'Develop dashboard',
+        description: 'Implement frontend and backend features for the dashboard.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Dashboard features are developed and tested.'],
+      }],
+    }],
+    risks: ['Stakeholders may request changes.'],
+    successCriteria: ['Dashboard passes end-to-end tests.'],
+    openQuestions: [],
+    notes: [],
+  };
+}
+
 describe('agent worker provider recovery', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
@@ -140,6 +196,34 @@ describe('agent worker provider recovery', () => {
     ]);
     expect(updatedRun?.planArtifact?.quality?.passed).toBe(true);
     expect(messages.some((message) => message.content === 'I have enough context and am generating the implementation plan.')).toBe(true);
+  });
+
+  it('uses a deterministic fallback plan after repeated generic provider artifacts', async () => {
+    const { run } = await createWorkerFixture();
+    const genericArtifact = createGenericPlanArtifactPayload();
+    const mockedFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ message: { content: JSON.stringify(createCompleteAnalysisPayload()) } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ message: { content: JSON.stringify(genericArtifact) } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: vi.fn().mockResolvedValue({ message: { content: JSON.stringify(genericArtifact) } }),
+      });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    await processNextAgentJob();
+    const updatedRun = await AgentRepository.getRun(run.id);
+
+    expect(updatedRun?.state).toBe('awaiting_plan_review');
+    expect(updatedRun?.planArtifact?.notes).toContain('This fallback plan was generated from persisted planning context after provider outputs remained too generic.');
+    expect(updatedRun?.planArtifact?.implementationPhases.map((phase) => phase.title).join(' ')).toMatch(/Payment|Ledger|Reconciliation/);
+    expect(updatedRun?.planArtifact?.quality?.passed).toBe(true);
   });
 
   it('stores structured diagnostics for unrecoverable provider format failures', async () => {

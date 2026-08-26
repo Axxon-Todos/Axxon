@@ -336,7 +336,7 @@ export async function generatePlanWithOllama(
     messages: [
       { role: 'system', content: `${PLANNING_ARTIFACT_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ARTIFACT_JSON_SHAPE}` },
       { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
-      ...(qualityFeedback ? [{ role: 'user', content: buildPlanQualityFeedback(qualityFeedback) }] : []),
+      ...(qualityFeedback ? [{ role: 'user', content: buildPlanQualityFeedback(qualityFeedback, { prompt: run.prompt, context: run.planningContext }) }] : []),
     ],
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',
