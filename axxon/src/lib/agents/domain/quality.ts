@@ -39,6 +39,7 @@ const STOP_WORDS = new Set([
   'flow',
   'for',
   'from',
+  'functionality',
   'given',
   'have',
   'implementation',

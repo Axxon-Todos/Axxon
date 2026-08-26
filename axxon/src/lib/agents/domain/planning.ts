@@ -372,13 +372,19 @@ function formatAnchorLabel(anchors: string[]) {
   return selectedAnchors.slice(0, 3).join(', ');
 }
 
+// Prefers user-prompt domain terms over provider-generated unknown labels for fallback wording.
+function extractFallbackPlanningAnchors(prompt: string | undefined, context: AgentPlanningContext | null | undefined) {
+  const promptAnchors = extractPlanningAnchors({ prompt: prompt ?? '', context: null });
+  return promptAnchors.length >= 2 ? promptAnchors : extractPlanningAnchors({ prompt: prompt ?? '', context });
+}
+
 // Builds prompt-anchored fallback cards when the provider cannot supply usable questions.
 function buildContextualFallbackClarificationQuestions(
   readiness: AgentPlanningReadiness,
   context: AgentPlanningContext | null | undefined,
   prompt: string | undefined
 ) {
-  const anchors = extractPlanningAnchors({ prompt: prompt ?? '', context });
+  const anchors = extractFallbackPlanningAnchors(prompt, context);
   if (anchors.length < 2) return [];
 
   const anchorLabel = formatAnchorLabel(anchors);

@@ -216,6 +216,32 @@ describe('PlanningWorkspace', () => {
     });
   });
 
+  it('distinguishes final plan generation from requirements analysis', async () => {
+    const generatingRun = createRun({
+      state: 'planning',
+      questions: [],
+      capabilities: ['view', 'cancel'],
+      readiness: {
+        objectiveClear: true,
+        scopeBounded: true,
+        hasAcceptanceCriteria: true,
+        knownRequirements: ['Build a planning UI'],
+        unresolvedUnknowns: [],
+        blockingUnknowns: [],
+        confidence: 0.88,
+        recommendedNextAction: 'complete_planning',
+        reasonSummary: ['Deterministic readiness checks passed.'],
+      },
+    });
+    mockedFetchAgentRuns.mockResolvedValue([generatingRun]);
+    mockedFetchAgentRunDetail.mockResolvedValue(generatingRun);
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    expect(await screen.findByText('Generating implementation plan')).toBeInTheDocument();
+    expect(screen.getByText('The agent has enough context and is drafting the reviewable plan.')).toBeInTheDocument();
+  });
+
   it('renders plan quality diagnostics for generated plans', async () => {
     const generatedPlan = createRun({
       state: 'awaiting_plan_review',

@@ -11,9 +11,14 @@ import {
   agentTechnicalDecisionSources,
 } from '../domain';
 import type { AgentToolDefinition } from '../toolCalls/registry';
-import { normalizeProviderPlanningTurnAnalysis, type ProviderOutputNormalizationResult } from './planningOutputNormalizer';
+import {
+  normalizeProviderPlanArtifact,
+  normalizeProviderPlanningTurnAnalysis,
+  type ProviderOutputNormalizationResult,
+} from './planningOutputNormalizer';
 
 type AgentProviderMessage = { role: string; content: string; metadata?: unknown };
+export type AgentProviderValidationPhase = 'planning_analysis' | 'plan_artifact';
 
 type OllamaChatResponse = {
   message?: {
@@ -22,6 +27,23 @@ type OllamaChatResponse = {
 };
 
 type StructuredJsonNormalizer = (value: unknown) => ProviderOutputNormalizationResult;
+
+export type AgentProviderValidationDetails = {
+  phase: AgentProviderValidationPhase;
+  issuePaths: string[];
+  retryCount: number;
+  diagnostics: string[];
+};
+
+export class AgentProviderValidationError extends Error {
+  details: AgentProviderValidationDetails;
+
+  constructor(message: string, details: AgentProviderValidationDetails) {
+    super(message);
+    this.name = 'AgentProviderValidationError';
+    this.details = details;
+  }
+}
 
 function getOllamaConfig() {
   const baseUrl = (process.env.AI_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
@@ -43,18 +65,31 @@ function summarizeZodIssues(issues: z.ZodIssue[]) {
   });
 }
 
+// Extracts compact issue paths for persisted provider-format diagnostics.
+function summarizeIssuePaths(issues: z.ZodIssue[]) {
+  return issues.slice(0, 10).map((issue) => issue.path.length > 0 ? issue.path.join('.') : 'root');
+}
+
+// Keeps provider diagnostics useful without persisting full model output.
+function truncateDiagnostic(value: string) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > 300 ? `${normalized.slice(0, 297)}...` : normalized;
+}
+
 async function completeOllamaStructuredJson<T>({
   messages,
   schema,
   failureMessage,
   schemaHint,
   normalizer,
+  phase,
 }: {
   messages: Array<{ role: string; content: string }>;
   schema: z.ZodType<T, z.ZodTypeDef, unknown>;
   failureMessage: string;
   schemaHint?: string;
   normalizer?: StructuredJsonNormalizer;
+  phase: AgentProviderValidationPhase;
 }) {
   const { baseUrl, model } = getOllamaConfig();
   const attempts = [...messages];
@@ -76,10 +111,13 @@ async function completeOllamaStructuredJson<T>({
     const body = await response.json() as OllamaChatResponse;
     const content = body.message?.content?.trim() ?? '';
     let validationSummary = 'Response did not match the required JSON schema.';
+    let issuePaths: string[] = ['root'];
+    let normalizationDiagnostics: string[] = [];
 
     try {
       const generatedJson = parseGeneratedJson(content);
       const normalized = normalizer ? normalizer(generatedJson) : { value: generatedJson, diagnostics: [] };
+      normalizationDiagnostics = normalized.diagnostics;
 
       if (normalized.diagnostics.length > 0) {
         console.warn('[AGENT_PROVIDER_NORMALIZED_OUTPUT]', {
@@ -91,12 +129,21 @@ async function completeOllamaStructuredJson<T>({
       if (parsed.success) return parsed.data;
 
       validationSummary = summarizeZodIssues(parsed.error.issues).join('; ');
+      issuePaths = summarizeIssuePaths(parsed.error.issues);
     } catch (error) {
       validationSummary = error instanceof Error ? error.message : validationSummary;
     }
 
     if (attemptIndex === 1) {
-      throw new Error(`${failureMessage}: ${validationSummary}`);
+      throw new AgentProviderValidationError(failureMessage, {
+        phase,
+        issuePaths,
+        retryCount: attemptIndex,
+        diagnostics: [
+          validationSummary,
+          ...normalizationDiagnostics,
+        ].filter(Boolean).map(truncateDiagnostic).slice(0, 8),
+      });
     }
 
     attempts.push({
@@ -274,6 +321,7 @@ export async function analyzePlanningTurnWithOllama(
     failureMessage: 'Failed to analyze the planning turn',
     schemaHint: PLANNING_ANALYSIS_JSON_SHAPE,
     normalizer: normalizeProviderPlanningTurnAnalysis,
+    phase: 'planning_analysis',
   });
 }
 
@@ -293,5 +341,7 @@ export async function generatePlanWithOllama(
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',
     schemaHint: PLANNING_ARTIFACT_JSON_SHAPE,
+    normalizer: normalizeProviderPlanArtifact,
+    phase: 'plan_artifact',
   });
 }

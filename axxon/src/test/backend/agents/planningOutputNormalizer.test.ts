@@ -1,11 +1,55 @@
 // Verifies recoverable local-model planning JSON mistakes are normalized before strict validation.
 import { describe, expect, it } from 'vitest';
-import { agentPlanningTurnAnalysisSchema } from '@/lib/agents/domain';
-import { normalizeProviderPlanningTurnAnalysis } from '@/lib/agents/providers/planningOutputNormalizer';
+import { agentPlanArtifactSchema, agentPlanningTurnAnalysisSchema } from '@/lib/agents/domain';
+import {
+  normalizeProviderPlanArtifact,
+  normalizeProviderPlanningTurnAnalysis,
+} from '@/lib/agents/providers/planningOutputNormalizer';
 
 // Runs provider normalization through the strict planning-analysis schema.
 function parseNormalizedAnalysis(value: unknown) {
   return agentPlanningTurnAnalysisSchema.parse(normalizeProviderPlanningTurnAnalysis(value).value);
+}
+
+// Runs provider normalization through the strict final-plan artifact schema.
+function parseNormalizedArtifact(value: unknown) {
+  return agentPlanArtifactSchema.parse(normalizeProviderPlanArtifact(value).value);
+}
+
+// Creates a complete artifact fixture so individual malformed fields can be tested in isolation.
+function createArtifact(overrides: Record<string, unknown> = {}) {
+  return {
+    summary: 'Plan payment reconciliation ledger exception handling.',
+    objective: 'Build the payment reconciliation ledger exception workflow.',
+    scope: {
+      inScope: ['Payment reconciliation exceptions'],
+      outOfScope: [],
+    },
+    requirements: ['Operators can review ledger mismatches.'],
+    assumptions: ['Existing ledger data is available.'],
+    constraints: ['Keep org-scoped agent APIs.'],
+    affectedAreas: ['agent backend'],
+    technicalDecisions: [],
+    implementationPhases: [{
+      id: 'ledger-exceptions',
+      title: 'Ledger exceptions',
+      summary: 'Implement payment reconciliation exception review.',
+      tasks: [{
+        id: 'exception-review',
+        title: 'Exception review',
+        description: 'Add tasks for operator review of ledger mismatches.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Operators can identify ledger mismatches.'],
+      }],
+    }],
+    risks: [],
+    successCriteria: ['Ledger exception review is traceable.'],
+    openQuestions: [],
+    notes: [],
+    ...overrides,
+  };
 }
 
 describe('planning output normalizer', () => {
@@ -103,5 +147,90 @@ describe('planning output normalizer', () => {
       rationale: 'Local models may copy prompt placeholders.',
       source: 'assumed',
     }]);
+  });
+
+  it('normalizes object assumptions into strings for final artifacts', () => {
+    const parsed = parseNormalizedArtifact(createArtifact({
+      assumptions: [
+        { text: 'Existing payment ledger records are available.' },
+        { description: 'Operators already have permission to review exceptions.' },
+      ],
+    }));
+
+    expect(parsed.assumptions).toEqual([
+      'Existing payment ledger records are available.',
+      'Operators already have permission to review exceptions.',
+    ]);
+  });
+
+  it('normalizes object acceptance criteria into strings for final artifact tasks', () => {
+    const parsed = parseNormalizedArtifact(createArtifact({
+      implementationPhases: [{
+        id: 'ledger-exceptions',
+        title: 'Ledger exceptions',
+        summary: 'Implement payment reconciliation exception review.',
+        tasks: [{
+          id: 'exception-review',
+          title: 'Exception review',
+          description: 'Add tasks for operator review of ledger mismatches.',
+          type: 'implementation',
+          priority: 'high',
+          dependencyIds: [],
+          acceptanceCriteria: [
+            { criterion: 'Operators can filter payment reconciliation exceptions.' },
+            { title: 'Ledger mismatches show traceable status.' },
+          ],
+        }],
+      }],
+    }));
+
+    expect(parsed.implementationPhases[0]?.tasks[0]?.acceptanceCriteria).toEqual([
+      'Operators can filter payment reconciliation exceptions.',
+      'Ledger mismatches show traceable status.',
+    ]);
+  });
+
+  it('drops empty copied final-artifact placeholders', () => {
+    const normalized = normalizeProviderPlanArtifact(createArtifact({
+      assumptions: [
+        { text: null, description: null },
+        { text: 'Existing ledger imports remain available.' },
+      ],
+      implementationPhases: [{
+        id: 'ledger-exceptions',
+        title: 'Ledger exceptions',
+        summary: 'Implement payment reconciliation exception review.',
+        tasks: [{
+          id: 'exception-review',
+          title: 'Exception review',
+          description: 'Add tasks for operator review of ledger mismatches.',
+          type: 'implementation',
+          priority: 'high',
+          dependencyIds: [],
+          acceptanceCriteria: [
+            { criterion: '' },
+            { criterion: 'Exception review has a visible ledger audit trail.' },
+          ],
+        }],
+      }],
+    }));
+    const parsed = agentPlanArtifactSchema.parse(normalized.value);
+
+    expect(parsed.assumptions).toEqual(['Existing ledger imports remain available.']);
+    expect(parsed.implementationPhases[0]?.tasks[0]?.acceptanceCriteria).toEqual([
+      'Exception review has a visible ledger audit trail.',
+    ]);
+    expect(normalized.diagnostics).toEqual(expect.arrayContaining([
+      'Dropped empty assumptions[0] placeholder.',
+      'Dropped empty implementationPhases[0].tasks[0].acceptanceCriteria[0] placeholder.',
+    ]));
+  });
+
+  it('leaves unrecoverable nested objects invalid after final-artifact normalization', () => {
+    const normalized = normalizeProviderPlanArtifact(createArtifact({
+      assumptions: [{ nested: { text: 'This should not be flattened.' } }],
+    }));
+
+    expect(() => agentPlanArtifactSchema.parse(normalized.value)).toThrow();
   });
 });

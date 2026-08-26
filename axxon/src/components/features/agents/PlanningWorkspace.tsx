@@ -63,9 +63,13 @@ function stateBadgeVariant(state: AgentRunState) {
   return 'default' as const;
 }
 
-function getWorkingCopy(state: AgentRunState) {
+function getWorkingCopy(run: AgentRunDetail) {
+  const state = run.state;
   if (state === 'queued') return ['Queued for planning', 'The agent will read the latest context shortly.'];
   if (state === 'preparing') return ['Preparing context', 'The worker is collecting the run transcript and board context.'];
+  if (state === 'planning' && run.readiness?.recommendedNextAction === 'complete_planning') {
+    return ['Generating implementation plan', 'The agent has enough context and is drafting the reviewable plan.'];
+  }
   if (state === 'planning') return ['Analyzing requirements', 'The agent is deciding whether to ask questions or draft the plan.'];
   if (state === 'dispatching') return ['Dispatching approved plan', 'The approved plan is being handed to the next agent stage.'];
   return ['Agent is working', 'This panel updates when the board receives the next agent-run event.'];
@@ -370,7 +374,7 @@ function RunDetail({
   isSubmitting: boolean;
   error: string | null;
 }) {
-  const [workingTitle, workingDescription] = getWorkingCopy(run.state);
+  const [workingTitle, workingDescription] = getWorkingCopy(run);
 
   return (
     <div className="flex min-h-0 w-full flex-col gap-6">

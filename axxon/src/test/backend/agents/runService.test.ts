@@ -210,6 +210,12 @@ describe('agent planning run service', () => {
     await startAgentPlanningTurn(created.id);
     const secondOutcome = await applyWorkerPlanningAnalysis(created.id, createCompleteAnalysis());
     expect(secondOutcome?.action).toBe('generate_plan');
+    const generatingMessages = await AgentRepository.listMessages(created.id);
+    expect(generatingMessages.at(-1)?.content).toBe('I have enough context and am generating the implementation plan.');
+    expect(generatingMessages.at(-1)?.metadata).toMatchObject({
+      kind: 'planning_progress',
+      stage: 'generating_plan',
+    });
 
     await completeWorkerPlanning(created.id, createPlanArtifact(), secondOutcome!.decision);
     const completedPlanning = await AgentRepository.getRun(created.id);

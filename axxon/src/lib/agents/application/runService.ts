@@ -359,6 +359,10 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
     }
 
     if (readiness.recommendedNextAction === 'complete_planning') {
+      await AgentRepository.addMessage(locked.id, 'assistant', 'I have enough context and am generating the implementation plan.', {
+        kind: 'planning_progress',
+        stage: 'generating_plan',
+      }, trx);
       return {
         action: 'generate_plan' as const,
         run: await AgentRepository.updateRun(locked.id, locked.version, { planningContext, readiness }, trx),
@@ -564,8 +568,8 @@ export async function deliverAgentDispatch(runId: number) {
   return AgentRepository.getRun(runId);
 }
 
-export async function failAgentRun(runId: number, message: string) {
+export async function failAgentRun(runId: number, message: string, payload?: Record<string, unknown> | null) {
   const run = await AgentRepository.getRun(runId);
   if (!run || ['completed', 'cancelled'].includes(run.state)) return null;
-  return transitionRun({ runId, event: 'run.failed', actorType: 'worker', update: { failureMessage: message } });
+  return transitionRun({ runId, event: 'run.failed', actorType: 'worker', update: { failureMessage: message }, payload: payload ?? null });
 }

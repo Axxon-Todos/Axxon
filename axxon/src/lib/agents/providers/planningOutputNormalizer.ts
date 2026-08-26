@@ -13,6 +13,19 @@ export type ProviderOutputNormalizationResult = {
   diagnostics: string[];
 };
 
+const STRING_ARRAY_FIELDS = [
+  'requirements',
+  'assumptions',
+  'constraints',
+  'affectedAreas',
+  'risks',
+  'successCriteria',
+  'openQuestions',
+  'notes',
+] as const;
+
+const PREFERRED_STRING_KEYS = ['text', 'description', 'title', 'label', 'criterion'] as const;
+
 const ASK_QUESTION_REASON_ORDER: AgentPlanningDecisionReason[] = [
   'missing_objective',
   'scope_unbounded',
@@ -27,8 +40,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // Detects strings that can satisfy required provider fields.
-function isNonEmptyString(value: unknown) {
+function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+// Produces stable text for diagnostics and recovered artifact fields.
+function truncateDiagnostic(value: string) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > 240 ? `${normalized.slice(0, 237)}...` : normalized;
 }
 
 // Extracts valid enum members from a copied placeholder such as "a|b|c".
@@ -155,6 +174,82 @@ function normalizeTechnicalDecisions(value: unknown, diagnostics: string[]) {
   return normalized;
 }
 
+// Checks whether a copied object placeholder has no usable provider content.
+function isEmptyPlaceholderObject(value: Record<string, unknown>) {
+  return Object.values(value).every((entry) => {
+    if (entry == null) return true;
+    if (typeof entry === 'string') return entry.trim().length === 0 || ['string', 'null', 'n/a', 'none'].includes(entry.trim().toLowerCase());
+    if (Array.isArray(entry)) return entry.length === 0;
+    return false;
+  });
+}
+
+// Turns common object-array entries into the public string-array contract when the conversion is unambiguous.
+function normalizeStringArrayEntry(entry: unknown): string | unknown | null {
+  if (entry == null) return null;
+  if (typeof entry === 'string') return entry.trim() || null;
+  if (typeof entry === 'number' || typeof entry === 'boolean') return String(entry);
+  if (!isRecord(entry)) return entry;
+  if (isEmptyPlaceholderObject(entry)) return null;
+
+  for (const key of PREFERRED_STRING_KEYS) {
+    const value = entry[key];
+    if (isNonEmptyString(value)) return value.trim();
+  }
+
+  const primitiveValues = Object.values(entry).flatMap((value) => {
+    if (isNonEmptyString(value)) return [value.trim()];
+    if (typeof value === 'number' || typeof value === 'boolean') return [String(value)];
+    return [];
+  });
+
+  return primitiveValues.length > 0 ? primitiveValues.join(' ') : entry;
+}
+
+// Normalizes recoverable string-array entries while preserving unrecoverable objects for strict validation failure.
+function normalizeStringArray(value: unknown, fieldPath: string, diagnostics: string[]) {
+  if (!Array.isArray(value)) return value;
+
+  const normalized = value.flatMap((entry, index) => {
+    const nextEntry = normalizeStringArrayEntry(entry);
+    if (nextEntry == null) {
+      diagnostics.push(`Dropped empty ${fieldPath}[${index}] placeholder.`);
+      return [];
+    }
+    if (nextEntry !== entry) {
+      diagnostics.push(`Normalized ${fieldPath}[${index}] to "${truncateDiagnostic(String(nextEntry))}".`);
+    }
+    return [nextEntry];
+  });
+
+  return normalized;
+}
+
+// Applies string-array recovery to implementation task acceptance criteria.
+function normalizeImplementationPhases(value: unknown, diagnostics: string[]) {
+  if (!Array.isArray(value)) return value;
+
+  return value.map((phase, phaseIndex) => {
+    if (!isRecord(phase) || !Array.isArray(phase.tasks)) return phase;
+
+    return {
+      ...phase,
+      tasks: phase.tasks.map((task, taskIndex) => {
+        if (!isRecord(task)) return task;
+
+        return {
+          ...task,
+          acceptanceCriteria: normalizeStringArray(
+            task.acceptanceCriteria,
+            `implementationPhases[${phaseIndex}].tasks[${taskIndex}].acceptanceCriteria`,
+            diagnostics
+          ),
+        };
+      }),
+    };
+  });
+}
+
 // Validates the provider question object enough to decide whether strict schema parsing can handle it.
 function hasUsableCandidateQuestionShape(entry: Record<string, unknown>) {
   if (
@@ -227,6 +322,31 @@ export function normalizeProviderPlanningTurnAnalysis(value: unknown): ProviderO
     });
     normalized.decision = decision;
   }
+
+  return { value: normalized, diagnostics };
+}
+
+// Repairs known final-plan artifact shape mistakes before the strict public artifact schema is applied.
+export function normalizeProviderPlanArtifact(value: unknown): ProviderOutputNormalizationResult {
+  const diagnostics: string[] = [];
+  if (!isRecord(value)) return { value, diagnostics };
+
+  const normalized = { ...value };
+
+  for (const field of STRING_ARRAY_FIELDS) {
+    normalized[field] = normalizeStringArray(normalized[field], field, diagnostics);
+  }
+
+  if (isRecord(normalized.scope)) {
+    normalized.scope = {
+      ...normalized.scope,
+      inScope: normalizeStringArray(normalized.scope.inScope, 'scope.inScope', diagnostics),
+      outOfScope: normalizeStringArray(normalized.scope.outOfScope, 'scope.outOfScope', diagnostics),
+    };
+  }
+
+  normalized.technicalDecisions = normalizeTechnicalDecisions(normalized.technicalDecisions, diagnostics);
+  normalized.implementationPhases = normalizeImplementationPhases(normalized.implementationPhases, diagnostics);
 
   return { value: normalized, diagnostics };
 }

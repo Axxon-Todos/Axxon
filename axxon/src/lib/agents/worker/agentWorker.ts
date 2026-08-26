@@ -12,7 +12,7 @@ import {
 } from '../application/runService';
 import { attachPlanArtifactQuality } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
-import { analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
+import { AgentProviderValidationError, analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 import { getAllowedAgentToolsForState } from '../toolCalls/registry';
 
 const workerId = `agent-worker-${process.pid}`;
@@ -27,6 +27,36 @@ function mapProviderMessages(messages: Awaited<ReturnType<typeof AgentRepository
 
 async function hasNewerUserMessage(runId: number, latestMessageId: number) {
   return await AgentRepository.getLatestMessageId(runId) !== latestMessageId;
+}
+
+// Converts provider-format failures into concise user copy and compact persisted diagnostics.
+function serializeWorkerError(error: unknown) {
+  if (error instanceof AgentProviderValidationError) {
+    const providerValidation = {
+      ...error.details,
+      retryable: true,
+    };
+
+    return {
+      userMessage: 'The planning provider returned an invalid response format. Retry this run to generate the plan again.',
+      eventPayload: {
+        category: 'provider_validation',
+        providerValidation,
+      },
+      jobError: JSON.stringify({
+        message: error.message,
+        category: 'provider_validation',
+        providerValidation,
+      }),
+    };
+  }
+
+  const message = error instanceof Error ? error.message : 'Agent worker failed';
+  return {
+    userMessage: message,
+    eventPayload: null,
+    jobError: message,
+  };
 }
 
 export async function processNextAgentJob() {
@@ -111,9 +141,9 @@ export async function processNextAgentJob() {
     }
     await AgentRepository.finishJob(Number(job.id), null);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Agent worker failed';
-    await failAgentRun(Number(job.run_id), message);
-    await AgentRepository.finishJob(Number(job.id), message);
+    const serialized = serializeWorkerError(error);
+    await failAgentRun(Number(job.run_id), serialized.userMessage, serialized.eventPayload);
+    await AgentRepository.finishJob(Number(job.id), serialized.jobError);
   }
 
   return true;

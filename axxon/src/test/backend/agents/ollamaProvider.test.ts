@@ -201,4 +201,57 @@ describe('Ollama planning provider', () => {
     expect(qualityPrompt).toContain('previous plan failed quality review');
     expect(qualityPrompt).toContain('generic_project_template');
   });
+
+  it('normalizes recoverable final artifact string arrays before validation', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const mockedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        message: {
+          content: JSON.stringify({
+            summary: 'Create a payment reconciliation ledger exception plan.',
+            objective: 'Build the payment reconciliation ledger exception workflow.',
+            scope: { inScope: ['Payment reconciliation exceptions'], outOfScope: [] },
+            requirements: ['Operators can review ledger mismatches.'],
+            assumptions: [{ text: 'Existing payment ledger records are available.' }],
+            constraints: ['Keep backend code under src/lib/agents.'],
+            affectedAreas: ['agent backend'],
+            technicalDecisions: [],
+            implementationPhases: [{
+              id: 'ledger-exceptions',
+              title: 'Ledger exceptions',
+              summary: 'Implement payment reconciliation exception review.',
+              tasks: [{
+                id: 'exception-review',
+                title: 'Exception review',
+                description: 'Add tasks for operator review of ledger mismatches.',
+                type: 'implementation',
+                priority: 'high',
+                dependencyIds: [],
+                acceptanceCriteria: [{ criterion: 'Operators can filter payment reconciliation exceptions.' }],
+              }],
+            }],
+            risks: [],
+            successCriteria: ['Ledger exception review is traceable.'],
+            openQuestions: [],
+            notes: [],
+          }),
+        },
+      }),
+    });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    const artifact = await generatePlanWithOllama(createPlanningRun(), [], []);
+
+    expect(artifact.assumptions).toEqual(['Existing payment ledger records are available.']);
+    expect(artifact.implementationPhases[0]?.tasks[0]?.acceptanceCriteria).toEqual([
+      'Operators can filter payment reconciliation exceptions.',
+    ]);
+    expect(warnSpy).toHaveBeenCalledWith('[AGENT_PROVIDER_NORMALIZED_OUTPUT]', {
+      diagnostics: expect.arrayContaining([
+        'Normalized assumptions[0] to "Existing payment ledger records are available."',
+        'Normalized implementationPhases[0].tasks[0].acceptanceCriteria[0] to "Operators can filter payment reconciliation exceptions."',
+      ]),
+    });
+  });
 });
