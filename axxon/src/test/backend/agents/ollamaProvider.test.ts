@@ -13,7 +13,7 @@ function createPlanningRun(): AgentRun {
     createdBy: 5,
     runType: 'planning',
     title: 'Planner test',
-    prompt: 'Plan the first release.',
+    prompt: 'Plan the payment reconciliation ledger release.',
     state: 'planning',
     version: 1,
     questions: [],
@@ -67,6 +67,8 @@ describe('Ollama planning provider', () => {
     });
     expect(requestBody.format).toBe('json');
     expect(requestBody.messages[0].content).toContain('Required JSON shape');
+    expect(requestBody.messages[0].content).toContain('Assume routine MVP defaults');
+    expect(requestBody.messages[0].content).toContain('Never ask cards shaped like');
     expect(requestBody.messages[0].content).toContain('"contextPatch"');
     expect(requestBody.messages[0].content).toContain('"candidateQuestions"');
     expect(requestBody.messages[0].content).toContain('"assistantMessage"');
@@ -250,8 +252,8 @@ describe('Ollama planning provider', () => {
     ]);
     expect(warnSpy).toHaveBeenCalledWith('[AGENT_PROVIDER_NORMALIZED_OUTPUT]', {
       diagnostics: expect.arrayContaining([
-        'Normalized assumptions[0] to "Existing payment ledger records are available."',
-        'Normalized implementationPhases[0].tasks[0].acceptanceCriteria[0] to "Operators can filter payment reconciliation exceptions."',
+        'Normalized assumptions[0] to "Existing payment ledger records are available.".',
+        'Normalized implementationPhases[0].tasks[0].acceptanceCriteria[0] to "Operators can filter payment reconciliation exceptions.".',
       ]),
     });
   });

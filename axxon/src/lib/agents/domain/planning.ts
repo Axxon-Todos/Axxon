@@ -15,6 +15,12 @@ import { extractPlanningAnchors, isPromptSpecificClarificationQuestion } from '.
 
 export const AGENT_PLANNING_CONFIDENCE_THRESHOLD = 0.7;
 export const MAX_AGENT_QUESTIONS_PER_TURN = 3;
+const RESOLVABLE_GENERIC_REASONS: AgentPlanningDecisionReason[] = [
+  'scope_unbounded',
+  'missing_acceptance_criteria',
+  'low_confidence',
+];
+
 export const NONE_OF_THE_ABOVE_OPTION: AgentQuestionOption = {
   optionKey: 'none-of-the-above',
   label: 'None of the above',
@@ -170,6 +176,105 @@ function hasConcreteDetails(values: string[]) {
   return values.some((value) => value.trim().length >= 16 || value.trim().split(/\s+/).length >= 3);
 }
 
+// Determines whether the prompt has enough domain detail to safely apply MVP defaults.
+function hasConcretePromptSignals(prompt: string | undefined, context: AgentPlanningContext) {
+  const promptText = prompt?.trim() ?? '';
+  const anchors = extractFallbackPlanningAnchors(prompt, context);
+  return Boolean(context.objective?.trim()) && (anchors.length >= 2 || promptText.split(/\s+/).length >= 5);
+}
+
+// Builds an immediate, compact planning-run title before any provider response exists.
+export function buildPlanningRunTitle(prompt: string) {
+  const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
+  const cleanedPrompt = normalizedPrompt
+    .replace(/^(please\s+)?(can|could|would)\s+(we|you)\s+/i, '')
+    .replace(/^(please\s+)?(i\s+want\s+to|i\s+need\s+to|we\s+need\s+to|let'?s)\s+/i, '')
+    .replace(/^(please\s+)?(build|create|make|implement|add|design|draft|plan|finalize|improve|update)\s+/i, '');
+  const fillerWords = new Set([
+    'a',
+    'all',
+    'an',
+    'and',
+    'for',
+    'my',
+    'of',
+    'our',
+    'the',
+    'that',
+    'to',
+    'with',
+  ]);
+  const words = cleanedPrompt
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, ''))
+    .filter(Boolean);
+  const meaningfulWords = words.filter((word) => !fillerWords.has(word.toLowerCase()));
+  const selectedWords = (meaningfulWords.length >= 2 ? meaningfulWords : words).slice(0, 7);
+  const titleBase = selectedWords.length > 0 ? selectedWords.join(' ') : normalizedPrompt.slice(0, 80);
+  const title = titleCase(titleBase);
+
+  return title.length > 120 ? title.slice(0, 120).trim() : title;
+}
+
+// Adds safe first-pass defaults so generic MVP gaps do not force clarification cards.
+export function applyPromptPlanningDefaults({
+  context,
+  prompt,
+}: {
+  context: AgentPlanningContext;
+  prompt?: string;
+}): AgentPlanningContext {
+  if (!hasConcretePromptSignals(prompt, context)) return context;
+
+  const anchors = extractFallbackPlanningAnchors(prompt, context);
+  if (anchors.length < 2) return context;
+
+  const subject = formatAnchorLabel(anchors);
+  const titleSubject = titleCase(subject);
+
+  return {
+    ...context,
+    targetOutcome: context.targetOutcome ?? `Deliver the smallest usable ${subject} workflow described by the prompt.`,
+    inScope: context.inScope.length > 0
+      ? context.inScope
+      : [`${titleSubject} workflow described by the initial prompt.`],
+    outOfScope: mergeStrings(context.outOfScope, [
+      `Adjacent ${subject} capabilities not named in the prompt are out of scope for the first plan.`,
+    ]),
+    assumptions: mergeStrings(context.assumptions, [
+      `Use a focused MVP boundary for ${subject} unless the prompt or later user messages specify a broader release.`,
+      `Use representative ${subject} data for planning unless a live integration is explicitly required.`,
+    ]),
+    acceptanceCriteria: context.acceptanceCriteria.length > 0
+      ? context.acceptanceCriteria
+      : [`A representative ${subject} scenario can be completed or reviewed through the prompt-specific workflow.`],
+    knownRequirements: mergeStrings(context.knownRequirements, [
+      `Plan the prompt-named ${subject} workflow using the concrete terms from the initial request.`,
+    ]),
+  };
+}
+
+// Detects generic MVP cards that should be assumed instead of shown to the user.
+function isGenericMvpClarificationQuestion(question: AgentQuestion) {
+  const questionText = normalizeQuestionText(question.prompt);
+  const optionText = normalizeQuestionText(question.options.map((option) => `${option.label} ${option.description}`).join(' '));
+
+  return (
+    /first release boundary|workflow should define the first release|what should count as success|what should prove .* plan is successful/.test(questionText) ||
+    /core data flow|operator review|sample records pass|auditable output|focused mvp|balanced v1|broad platform|end-to-end demo|production-ready slice|exploratory prototype/.test(optionText)
+  );
+}
+
+// Determines whether provider questions contain a concrete unresolved implementation decision.
+function hasMaterialProviderQuestion(analysis: AgentPlanningTurnAnalysis, context: AgentPlanningContext, prompt: string | undefined) {
+  const anchors = extractPlanningAnchors({ prompt: prompt ?? '', context });
+
+  return analysis.candidateQuestions.some((question) =>
+    !isGenericMvpClarificationQuestion(question) &&
+    isPromptSpecificClarificationQuestion({ question, anchors })
+  );
+}
+
 function resolveReadinessBlockerReason({
   objectiveClear,
   scopeBounded,
@@ -197,10 +302,12 @@ export function evaluatePlanningReadiness({
   analysis,
   context,
   answeredQuestionCount,
+  prompt,
 }: {
   analysis: AgentPlanningTurnAnalysis;
   context: AgentPlanningContext;
   answeredQuestionCount: number;
+  prompt?: string;
 }): AgentPlanningReadiness {
   const objectiveClear = Boolean(context.objective?.trim());
   const hasScopeSignals =
@@ -230,7 +337,11 @@ export function evaluatePlanningReadiness({
     analysis.decision.action === 'complete_planning' &&
     analysis.decision.reason === 'requirements_satisfied';
   const deterministicChecksPass = deterministicReason === 'requirements_satisfied';
-  const canCompletePlanning = modelCompleted && deterministicChecksPass;
+  const genericClarificationResolvedByDefaults =
+    analysis.decision.action === 'ask_questions' &&
+    RESOLVABLE_GENERIC_REASONS.includes(analysis.decision.reason) &&
+    !hasMaterialProviderQuestion(analysis, context, prompt);
+  const canCompletePlanning = deterministicChecksPass && (modelCompleted || genericClarificationResolvedByDefaults);
 
   return {
     objectiveClear,
@@ -248,8 +359,9 @@ export function evaluatePlanningReadiness({
       blockingUnknowns.length === 0 ? 'No blocking unknowns remain.' : 'Blocking unknowns remain.',
       unresolvedUnknowns.length === 0 ? 'No unresolved unknowns remain.' : 'Unresolved unknowns remain.',
       modelCompleted ? 'Model requested planning completion.' : `Model requested clarification: ${analysis.decision.reason}.`,
+      genericClarificationResolvedByDefaults ? 'Generic clarification request was satisfied by prompt-derived planning defaults.' : '',
       deterministicChecksPass ? 'Deterministic readiness checks passed.' : `Deterministic blocker: ${deterministicReason}.`,
-    ],
+    ].filter(Boolean),
   };
 }
 
@@ -316,6 +428,11 @@ export function selectClarificationQuestions({
 
     if (seenExistingTexts.has(normalizedText) || seenCandidateTexts.has(normalizedText)) {
       discardedQuestions.push({ questionKey, prompt, reason: 'Question text already exists.' });
+      continue;
+    }
+
+    if (isGenericMvpClarificationQuestion(candidateQuestion)) {
+      discardedQuestions.push({ questionKey, prompt, reason: 'Question asks for generic MVP scope or success-bar input.' });
       continue;
     }
 
@@ -585,28 +702,28 @@ function buildContextualFallbackClarificationQuestions(
 
   if (!readiness.scopeBounded) {
     questions.push(buildQuestion(
-      'prompt-specific-release-boundary',
+      'prompt-specific-implementation-anchor',
       'scope',
-      `Which ${anchorLabel} workflow should define the first release?`,
-      `The plan needs one concrete boundary for ${subject} before it can produce specific implementation tasks.`,
+      `Which ${anchorLabel} detail should anchor the first implementation pass?`,
+      `The plan can assume a focused MVP, but it still needs the most important ${subject} detail for concrete tasks.`,
       [
-        { optionKey: 'core-data-flow', label: 'Core data flow', description: `Plan the smallest usable flow around ${anchorLabel}.`, isRecommended: true },
-        { optionKey: 'operator-review', label: 'Operator review', description: `Prioritize screens and actions for reviewing ${anchorLabel}.` },
-        { optionKey: 'data-foundation', label: 'Data foundation', description: `Prioritize durable models, imports, and validation for ${anchorLabel}.` },
+        { optionKey: 'source-records', label: 'Source records', description: `Define the ${anchorLabel} records, fields, and statuses first.`, isRecommended: true },
+        { optionKey: 'user-actions', label: 'User actions', description: `Prioritize the user decisions and state changes around ${anchorLabel}.` },
+        { optionKey: 'system-output', label: 'System output', description: `Prioritize the reports, events, or artifacts produced from ${anchorLabel}.` },
       ]
     ));
   }
 
   if (!readiness.hasAcceptanceCriteria) {
     questions.push(buildQuestion(
-      'prompt-specific-success-bar',
+      'prompt-specific-output-detail',
       'acceptance_criteria',
-      `What should prove the ${anchorLabel} plan is successful?`,
-      `The plan needs a verifiable success bar tied to ${subject}, not a generic demo milestone.`,
+      `Which ${anchorLabel} output needs the clearest implementation detail?`,
+      `The plan can assume representative ${subject} verification, but it needs the output shape that matters most.`,
       [
-        { optionKey: 'sample-records-pass', label: 'Sample records pass', description: `Use representative ${anchorLabel} records to prove the workflow works.`, isRecommended: true },
-        { optionKey: 'exceptions-visible', label: 'Exceptions visible', description: `Users can identify and act on important ${anchorLabel} exceptions.` },
-        { optionKey: 'auditable-output', label: 'Auditable output', description: `The workflow produces traceable ${anchorLabel} outputs for review.` },
+        { optionKey: 'exception-states', label: 'Exception states', description: `Make unresolved, reviewed, and resolved ${anchorLabel} states explicit.`, isRecommended: true },
+        { optionKey: 'audit-trail', label: 'Audit trail', description: `Show who changed ${anchorLabel} records and why.` },
+        { optionKey: 'summary-metrics', label: 'Summary metrics', description: `Expose totals, counts, and variance indicators for ${anchorLabel}.` },
       ]
     ));
   }

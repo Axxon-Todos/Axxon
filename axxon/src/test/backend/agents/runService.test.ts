@@ -51,16 +51,16 @@ function createAskAnalysis(): AgentPlanningTurnAnalysis {
     blockingUnknowns: ['first-release success criteria'],
     resolvedQuestionKeys: [],
     candidateQuestions: [{
-      questionKey: 'first-release-success-bar',
-      category: 'acceptance_criteria',
-      prompt: 'What should count as success for the first release?',
-      whyThisMatters: 'The plan needs a clear success bar before it can choose implementation depth.',
+      questionKey: 'planning-loop-input-behavior',
+      category: 'ux',
+      prompt: 'Which planning agent loop input behavior should the plan detail first?',
+      whyThisMatters: 'The implementation plan needs the exact user input path that blocks the planning agent loop.',
       required: true,
       blocking: true,
       options: [
-        { optionKey: 'end-to-end-demo', label: 'End-to-end demo', description: 'Prove the flow works from prompt to plan.', isRecommended: true },
-        { optionKey: 'production-ready-slice', label: 'Production slice', description: 'Require hardened behavior and operational checks.' },
-        { optionKey: 'exploratory-prototype', label: 'Prototype', description: 'Validate the concept before hardening.' },
+        { optionKey: 'structured-cards', label: 'Structured cards', description: 'Answer planning agent questions through a compact guided card batch.', isRecommended: true },
+        { optionKey: 'message-composer', label: 'Message composer', description: 'Provide planning context through a free-form message path.' },
+        { optionKey: 'hybrid-input', label: 'Hybrid input', description: 'Support both guided cards and free-form planning context.' },
       ],
     }],
     confidence: 0.55,
@@ -164,6 +164,7 @@ describe('agent planning run service', () => {
       userId: user.id,
       data: { prompt: 'Finalize the planning agent loop', runType: 'planning' },
     });
+    expect(created.title).toBe('Planning Agent Loop');
 
     const claimed = await claimAgentRunForWork(created.id);
     expect(claimed?.state).toBe('preparing');
@@ -192,18 +193,15 @@ describe('agent planning run service', () => {
       userId: user.id,
       data: {
         answers: [{
-          questionKey: 'first-release-success-bar',
-          selectedOptionKey: 'end-to-end-demo',
+          questionKey: 'planning-loop-input-behavior',
+          selectedOptionKey: 'structured-cards',
           note: 'Use API smoke testing as the local success bar.',
         }],
       },
     });
     const answeredRun = await AgentRepository.getRun(created.id);
-    expect(answeredRun?.planningContext.acceptanceCriteria).toContain(
-      'What should count as success for the first release?: End-to-end demo. Prove the flow works from prompt to plan. Note: Use API smoke testing as the local success bar.'
-    );
     expect(answeredRun?.planningContext.knownRequirements).toContain(
-      'What should count as success for the first release?: End-to-end demo. Prove the flow works from prompt to plan. Note: Use API smoke testing as the local success bar.'
+      'Which planning agent loop input behavior should the plan detail first?: Structured cards. Answer planning agent questions through a compact guided card batch. Note: Use API smoke testing as the local success bar.'
     );
 
     await claimAgentRunForWork(created.id);
@@ -241,6 +239,22 @@ describe('agent planning run service', () => {
       userId: user.id,
       data: { prompt: 'Implement the task', runType: 'coding' },
     })).rejects.toBeInstanceOf(BadRequestError);
+  });
+
+  it('creates a brief planning title before worker analysis', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const prompt = 'can we make a fintech dashboard that tracks all payments reconciliation and ledgers with operator exception review';
+
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: { prompt, runType: 'planning' },
+    });
+
+    expect(created.title).toBe('Fintech Dashboard Tracks Payments Reconciliation Ledgers Operator');
+    expect(created.title).not.toBe(prompt.slice(0, 120));
+    expect(created.messages[0]?.content).toBe(prompt);
   });
 
   it('asks for a planning objective with a message instead of question cards for vague prompts', async () => {

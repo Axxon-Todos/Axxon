@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyPlanningContext,
   createInitialPlanningReadiness,
+  applyPromptPlanningDefaults,
   buildFallbackPlanArtifact,
+  buildPlanningRunTitle,
+  evaluatePlanningReadiness,
   evaluatePlanArtifactQuality,
   extractPlanningAnchors,
+  type AgentPlanningTurnAnalysis,
   type AgentPlanArtifact,
   type AgentQuestion,
 } from '@/lib/agents/domain';
@@ -177,12 +181,13 @@ describe('planning quality evaluation', () => {
     });
 
     expect(result.discardedQuestions).toEqual(expect.arrayContaining([
-      expect.objectContaining({ reason: 'Question does not reference the current planning prompt.' }),
+      expect.objectContaining({ reason: 'Question asks for generic MVP scope or success-bar input.' }),
     ]));
     expect(result.questions.map((question) => question.prompt).join(' ')).toMatch(/payment|reconciliation|ledger/);
+    expect(result.questions.map((question) => question.prompt).join(' ')).not.toMatch(/first release|plan is successful/);
   });
 
-  it('does not use generic model unknowns in fintech fallback question labels', () => {
+  it('uses detailed fallback questions instead of generic release and success cards', () => {
     const readiness = {
       ...createInitialPlanningReadiness(),
       objectiveClear: true,
@@ -206,9 +211,60 @@ describe('planning quality evaluation', () => {
       readiness,
     });
     const fallbackText = result.questions.map((question) => question.prompt).join(' ');
+    const optionText = result.questions.flatMap((question) => question.options.map((option) => option.label)).join(' ');
 
     expect(fallbackText).not.toContain('functionality');
+    expect(fallbackText).not.toMatch(/first release|plan is successful/);
+    expect(optionText).not.toMatch(/Core data flow|Sample records pass|Auditable output/);
     expect(fallbackText).toMatch(/payment reconciliation|ledger|fintech/);
+  });
+
+  it('summarizes planning run titles before provider analysis', () => {
+    expect(buildPlanningRunTitle('can we make a fintech dashboard that tracks all payments reconciliation and ledgers')).toBe(
+      'Fintech Dashboard Tracks Payments Reconciliation Ledgers'
+    );
+    expect(buildPlanningRunTitle('Finalize the planning agent loop')).toBe('Planning Agent Loop');
+  });
+
+  it('allows generic readiness gaps to be satisfied by prompt-derived defaults', () => {
+    const prompt = 'Create a fintech dashboard that tracks payment reconciliation and ledger exceptions';
+    const analysis: AgentPlanningTurnAnalysis = {
+      title: null,
+      summary: null,
+      assistantMessage: null,
+      contextPatch: {
+        objective: prompt,
+        knownRequirements: ['Track payment reconciliation and ledger exceptions.'],
+        planningConfidence: 0.82,
+      },
+      knownRequirements: ['Track payment reconciliation and ledger exceptions.'],
+      unresolvedUnknowns: [],
+      blockingUnknowns: [],
+      resolvedQuestionKeys: [],
+      candidateQuestions: [createGenericScopeQuestion()],
+      confidence: 0.82,
+      decision: { action: 'ask_questions', reason: 'missing_acceptance_criteria' },
+    };
+    const context = applyPromptPlanningDefaults({
+      context: {
+        ...createEmptyPlanningContext(),
+        objective: prompt,
+        knownRequirements: ['Track payment reconciliation and ledger exceptions.'],
+        planningConfidence: 0.82,
+      },
+      prompt,
+    });
+    const readiness = evaluatePlanningReadiness({
+      analysis,
+      context,
+      answeredQuestionCount: 0,
+      prompt,
+    });
+
+    expect(context.assumptions.join(' ')).toContain('focused MVP');
+    expect(context.acceptanceCriteria.join(' ')).toMatch(/representative .*payment|representative .*ledger/);
+    expect(readiness.recommendedNextAction).toBe('complete_planning');
+    expect(readiness.reasonSummary).toContain('Generic clarification request was satisfied by prompt-derived planning defaults.');
   });
 
   it('fails generic phase-template plans before review', () => {

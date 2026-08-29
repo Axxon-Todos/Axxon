@@ -5,9 +5,11 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/utils/apiE
 import { publishBoardUpdate } from '@/lib/wsServer';
 import {
   applyClarificationAnswersToContext,
+  applyPromptPlanningDefaults,
   assertAgentTransition,
   attachPlanArtifactQuality,
   buildClarificationAnswerSummary,
+  buildPlanningRunTitle,
   createEmptyPlanningContext,
   createInitialPlanningReadiness,
   createAgentRunCommandSchema,
@@ -37,10 +39,6 @@ import { AgentRepository } from '../infrastructure/repository';
 import { executeAgentTool } from '../toolCalls/registry';
 
 type RunUpdate = Partial<Pick<AgentRun, 'questions' | 'planningContext' | 'readiness' | 'clarificationTurnCount' | 'planArtifact' | 'failureMessage'>>;
-
-function titleFromPrompt(prompt: string) {
-  return prompt.replace(/\s+/g, ' ').trim().slice(0, 120);
-}
 
 async function getAccess(run: { organizationId: number; boardId: number; createdBy: number }, userId: number) {
   await requireBoardInOrganization(run.organizationId, run.boardId, userId);
@@ -222,7 +220,7 @@ export async function createAgentRun(input: { organizationId: number; boardId: n
       boardId: input.boardId,
       createdBy: input.userId,
       runType: parsed.data.runType,
-      title: titleFromPrompt(prompt),
+      title: buildPlanningRunTitle(prompt),
       prompt,
     }, trx);
     await AgentRepository.appendEvent({ runId: created.id, type: 'run.created', fromState: null, toState: 'queued', actorType: 'user', actorId: input.userId }, trx);
@@ -331,11 +329,15 @@ export async function applyWorkerPlanningAnalysis(runId: number, analysis: Agent
     if (!locked || locked.state !== 'planning') return null;
     requirePlanningRun(locked);
 
-    const planningContext = mergePlanningContext(locked.planningContext || createEmptyPlanningContext(), analysis);
+    const planningContext = applyPromptPlanningDefaults({
+      context: mergePlanningContext(locked.planningContext || createEmptyPlanningContext(), analysis),
+      prompt: locked.prompt,
+    });
     const readiness = evaluatePlanningReadiness({
       analysis,
       context: planningContext,
       answeredQuestionCount: countAnsweredQuestions(messages),
+      prompt: locked.prompt,
     });
 
     if (analysis.decision.action === 'respond') {
