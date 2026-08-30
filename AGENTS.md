@@ -18,18 +18,13 @@ Axxon is an agent-work orchestration platform for software teams.
 - `/dashboard/orgs/[organizationId]/boards/[boardId]/settings`
 - GitHub setup uses a static bridge at `/dashboard/integrations/github/setup` and lands on the canonical org page at `/dashboard/orgs/[organizationId]/integrations/github/setup`.
 - The canonical API surface is org-scoped under `src/app/api/organizations/**`.
-- The organization AI workspace at `/dashboard/orgs/[organizationId]/ai` now supports two modes:
-  - Assistant mode: org-scoped, general-purpose chat with persisted creator-owned threads.
-  - Planning mode: board-bound, creator-owned planning sessions with a clarification loop, guided multi-option clarification cards, structured plan artifacts, and persisted async planning runs executed through pluggable executors.
-- Active planning clarification cards render inline in the planning transcript, while the standard planning composer stays visible but disabled until the active clarification batch or planner processing finishes.
-- Planning runs are the execution source of truth. Sessions and transcript messages are user-facing records, but planner execution state, retries, and executor selection persist in `planning_runs`.
-- The org AI assistant chat endpoint lives at `src/app/api/organizations/[organizationId]/ai/chat/route.ts`.
-- Persisted org AI assistant thread reads live at `src/app/api/organizations/[organizationId]/ai/threads/route.ts` and `src/app/api/organizations/[organizationId]/ai/threads/[threadId]/route.ts`.
-- Planning session APIs live under `src/app/api/organizations/[organizationId]/boards/[boardId]/ai/planning/**`.
-- Planning session create and reply routes persist the turn immediately, create a queued planning run, publish the refreshed session snapshot, and return without waiting for planner completion.
-- The retryable processing step lives at `src/app/api/organizations/[organizationId]/boards/[boardId]/ai/planning/sessions/[sessionId]/process/route.ts`, and it now re-enqueues retryable or stale runs instead of executing the planner inline.
-- Assistant threads persist in `chat_threads` and `chat_messages`; planning sessions persist in `planning_sessions`, `planning_session_messages`, `planning_session_questions`, and `planning_runs`.
-- Planning session realtime updates are creator-scoped socket events and are the primary UI update path; use polling only as reconnect or stale-run recovery fallback. Do not broadcast creator-owned planning session payloads to shared board rooms.
+- Agent backend code belongs exclusively under `axxon/src/lib/agents/**`; Next route handlers remain thin adapters under `src/app/api/organizations/**/agents/**`.
+- Board agent runs are shared with board members and transition only through the centralized state machine and append-only event log.
+- Agent run APIs live under `src/app/api/organizations/[organizationId]/boards/[boardId]/agents/runs/**`.
+- Planning agent runs may request either structured clarification answers or a free-form planning message. Use `awaiting_input` for structured question batches and `awaiting_message` for conversational prompts such as vague greetings.
+- Free-form planning context is submitted through the org-scoped run message API and must be persisted in `agent_run_messages`; workers should discard stale planning output when newer user messages arrive mid-turn.
+- Agent jobs are persisted in `agent_jobs` and processed by the standalone `pnpm agent:worker` runtime; do not run agent workers inside the Socket.IO process.
+- Agent plan approval emits a durable `agent.dispatch.requested` outbox event. This phase does not permit GitHub writes or autonomous code execution.
 - The public GitHub entrypoints are limited to `/api/integrations/github/callback` and `/api/webhooks/github`.
 - During this development phase, do not add backward-compatibility layers, redirects, dual-write paths, or legacy board-only endpoints unless explicitly requested.
 
@@ -50,7 +45,8 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Keep GitHub App setup bridge pages under `axxon/src/app/dashboard/integrations/**`.
 - Shared product-shell UI belongs in `axxon/src/components/ui`.
 - Feature-specific UI belongs in `axxon/src/components/features/**`.
-- Organization AI assistant and planning UI belongs in `axxon/src/components/features/organizationAi`, including the shared mode switcher, assistant thread sidebar, and planning session workspace.
+- Agent UI must call the org-scoped agent-run API and keep lifecycle interpretation in the backend state-machine response.
+- Agent UI should render structured clarification batches as a compact single-card carousel with bulk answer submission, while free-form planning prompts use the run message composer.
 - Analytics-specific visualizations and section components should stay under `axxon/src/components/features/boardAnalytics`; only promote primitives to `axxon/src/components/ui` when reused across multiple features.
 - Board settings components and access-management UI should stay under `axxon/src/components/features/boardSettings`.
 - Sprint-specific board UI should stay under `axxon/src/components/features/boardSprints`, and sprint pages must live under `axxon/src/app/dashboard/orgs/[organizationId]/boards/[boardId]/sprints`.
@@ -58,9 +54,9 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Reusable domain types should live under `axxon/src/lib/types`.
 - GitHub API/auth helpers belong in `axxon/src/lib/github`, while org-level install/sync orchestration belongs in `axxon/src/lib/integrations/github`.
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
-- Persisted organization AI assistant thread persistence belongs in `axxon/src/lib/models/chatThreads.ts`, and append-only assistant message persistence belongs in `axxon/src/lib/models/chatMessages.ts`.
-- Planning session persistence belongs in `axxon/src/lib/models/planningSessions.ts`, `axxon/src/lib/models/planningSessionMessages.ts`, `axxon/src/lib/models/planningSessionQuestions.ts`, and `axxon/src/lib/models/planningRuns.ts`.
-- Planning executor contracts, queue dispatch, and worker orchestration belong in `axxon/src/lib/ai/planningExecutors.ts`, `axxon/src/lib/ai/planningRunQueue.ts`, and `axxon/src/lib/ai/planningRunWorker.ts`.
+- Agent persistence, provider adapters, queue dispatch, worker orchestration, and contracts all belong in `axxon/src/lib/agents/**`.
+- Agent-callable tools must live under `axxon/src/lib/agents/toolCalls`; state-scoped tool allowances belong in the agent state-machine node metadata.
+- The org-level agent planning workspace lives at `axxon/src/app/dashboard/orgs/[organizationId]/ai`, with feature UI under `axxon/src/components/features/agents`.
 - Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
 - Sprint persistence belongs in the existing `src/lib` layers and should extend shared todo payloads through shared types instead of adding separate view-only task models.
 
@@ -106,8 +102,7 @@ Knex is used at the model and migrations layer.
 - Board member adds should use org-member `userIds`, not raw email entry, and only allow users who already belong to the org.
 - Board-to-repository access is an explicit allowlist stored in `board_repository_access`; only org owners should mutate it.
 - Restrict GitHub install/finalize/sync actions to org owners. Repository listing can remain visible to org members.
-- Restrict persisted organization AI assistant thread reads and continuations to the thread creator after org membership is validated.
-- Restrict planning session reads and continuations to the session creator after board membership is validated.
+- Board members may read board agent runs; only the run initiator and organization owners may submit input, request changes, approve, retry, or cancel when the returned state capability permits it.
 - Do not bypass authorization helpers for org-scoped resources.
 - Maintain secure defaults for auth, cookies, secrets, and socket access.
 - Read GitHub webhook request bodies raw before JSON parsing, verify `X-Hub-Signature-256`, and persist deliveries before processing.
@@ -127,7 +122,7 @@ Vitest is available for backend and frontend suites. Tests are part of the expec
   - organization creation and membership rules
   - org-scoped board creation and access
   - organization AI assistant thread creation, creator-only access, and append-only message ordering
-  - planning session creation, planning run creation, structured clarification card persistence, batch answer submission, async run retries, readiness evaluation, and structured plan generation
+  - planning session creation, planning run creation, structured clarification card persistence, batch answer submission, free-form planning message submission, async run retries, readiness evaluation, and structured plan generation
   - auth and authorization helpers
   - analytics and board workspace behavior
   - sprint CRUD, sprint assignment rules, and sprint-filtered board views
