@@ -69,6 +69,16 @@ const board = {
   updated_at: '2026-01-01T00:00:00.000Z',
 };
 
+const secondBoard = {
+  id: '8',
+  name: 'Growth Board',
+  organization_id: 12,
+  created_by: 7,
+  color: '#22d3ee',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+};
+
 function createRun(overrides: Partial<AgentRunDetail> = {}): AgentRunDetail {
   return {
     id: 44,
@@ -153,6 +163,86 @@ describe('PlanningWorkspace', () => {
       );
     });
     expect(await screen.findByText('Created plan')).toBeInTheDocument();
+  });
+
+  it('reloads planning runs when the board dropdown changes', async () => {
+    mockedFetchBoards.mockResolvedValue([board, secondBoard]);
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    const boardSelect = await screen.findByRole('combobox', { name: 'Board context' });
+    await waitFor(() => {
+      expect(boardSelect).toHaveValue('5');
+    });
+
+    fireEvent.change(boardSelect, {
+      target: { value: '8' },
+    });
+
+    await waitFor(() => {
+      expect(mockedFetchAgentRuns).toHaveBeenCalledWith('12', '8');
+    });
+  });
+
+  it('switches selected runs from the planning runs sidebar', async () => {
+    const firstRun = createRun();
+    const secondRun = createRun({
+      id: 45,
+      title: 'Plan board analytics',
+      prompt: 'Build board analytics filters',
+      messages: [{
+        id: 3,
+        runId: 45,
+        role: 'user',
+        content: 'Build board analytics filters',
+        metadata: null,
+        createdAt: '2026-01-01T00:02:00.000Z',
+      }],
+    });
+    mockedFetchAgentRuns.mockResolvedValue([firstRun, secondRun]);
+    mockedFetchAgentRunDetail.mockImplementation(async (_organizationId, _boardId, runId) =>
+      runId === 45 ? secondRun : firstRun
+    );
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    expect(await screen.findByText('What should count as success?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Plan board analytics/i }));
+
+    await waitFor(() => {
+      expect(mockedFetchAgentRunDetail).toHaveBeenCalledWith('12', '5', 45);
+    });
+    expect(await screen.findByText('Build board analytics filters')).toBeInTheDocument();
+  });
+
+  it('collapses and expands long initial prompt messages', async () => {
+    const longPrompt = `Build the org AI planning workspace with ${'clear transcript behavior '.repeat(24)}and keep this ending hidden until expanded.`;
+    const longPromptRun = createRun({
+      prompt: longPrompt,
+      messages: [{
+        id: 9,
+        runId: 44,
+        role: 'user',
+        content: longPrompt,
+        metadata: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      questions: [],
+      capabilities: ['view', 'submit_message', 'cancel'],
+    });
+    mockedFetchAgentRuns.mockResolvedValue([longPromptRun]);
+    mockedFetchAgentRunDetail.mockResolvedValue(longPromptRun);
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    const showMoreButton = await screen.findByRole('button', { name: /show more/i });
+    const messageContent = showMoreButton.parentElement;
+    expect(messageContent).not.toHaveTextContent(/ending hidden until expanded/i);
+    fireEvent.click(showMoreButton);
+
+    expect(messageContent).toHaveTextContent(/ending hidden until expanded/i);
+    fireEvent.click(screen.getByRole('button', { name: /show less/i }));
+    expect(messageContent).not.toHaveTextContent(/ending hidden until expanded/i);
   });
 
   it('renders clarification questions as a carousel and submits all answers', async () => {
@@ -253,6 +343,29 @@ describe('PlanningWorkspace', () => {
 
     await waitFor(() => {
       expect(mockedSubmitAgentRunMessage).toHaveBeenCalledWith('12', '5', 44, 'Plan the multi-question carousel.');
+    });
+  });
+
+  it('renders run cancellation from the bottom composer area', async () => {
+    const cancellableRun = createRun({
+      state: 'planning',
+      questions: [],
+      capabilities: ['view', 'submit_message', 'cancel'],
+    });
+    mockedFetchAgentRuns.mockResolvedValue([cancellableRun]);
+    mockedFetchAgentRunDetail.mockResolvedValue(cancellableRun);
+    mockedCancelAgentRun.mockResolvedValue(createRun({ state: 'cancelled', questions: [], capabilities: ['view'] }));
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    const composer = await screen.findByLabelText('Add context or correction');
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    expect(cancelButton.closest('form')).toContainElement(composer);
+
+    fireEvent.click(cancelButton);
+
+    await waitFor(() => {
+      expect(mockedCancelAgentRun).toHaveBeenCalledWith('12', '5', 44);
     });
   });
 

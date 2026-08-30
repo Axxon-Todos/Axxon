@@ -1,13 +1,28 @@
-// Renders the org-level planning workspace for creating and reviewing board-scoped agent runs.
+// Renders the org-level planning workspace as a board-scoped chat surface for agent runs.
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Bot, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, GitBranch, Loader2, MessageSquareText, RotateCcw, Send, XCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  GitBranch,
+  Loader2,
+  MessageSquareText,
+  PanelLeft,
+  Plus,
+  RotateCcw,
+  Send,
+  XCircle,
+} from 'lucide-react';
 
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import PageHero from '@/components/ui/PageHero';
+import SideDrawer from '@/components/ui/SideDrawer';
 import Surface from '@/components/ui/Surface';
 import { useAgentRunsRealtime } from '@/hooks/useAgentRunsRealtime';
 import { useSocket } from '@/hooks/useSocket';
@@ -23,10 +38,20 @@ import {
   submitAgentRunMessage,
 } from '@/lib/api/agents/agentRuns';
 import { fetchBoards } from '@/lib/api/boards/getBoards';
-import type { AgentClarificationAnswer, AgentPlanArtifact, AgentQuestion, AgentRun, AgentRunDetail, AgentRunState } from '@/lib/types/agentTypes';
+import type {
+  AgentClarificationAnswer,
+  AgentPlanArtifact,
+  AgentQuestion,
+  AgentRun,
+  AgentRunDetail,
+  AgentRunMessage,
+  AgentRunState,
+} from '@/lib/types/agentTypes';
 import type { BoardBaseData } from '@/lib/types/boardTypes';
+import { cn } from '@/lib/utils/cn';
 
 const activeStates = new Set<AgentRunState>(['queued', 'preparing', 'planning', 'dispatching']);
+const collapsedMessageLength = 420;
 
 const stateLabels: Record<AgentRunState, string> = {
   queued: 'Queued',
@@ -44,6 +69,7 @@ const stateLabels: Record<AgentRunState, string> = {
   cancelled: 'Cancelled',
 };
 
+// Formats run timestamps for compact sidebar and thread metadata.
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -53,16 +79,19 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+// Checks whether the backend currently allows a run action for this actor.
 function hasCapability(run: AgentRunDetail | undefined, capability: string) {
   return Boolean(run?.capabilities.includes(capability as never));
 }
 
+// Maps lifecycle states onto existing semantic badge variants.
 function stateBadgeVariant(state: AgentRunState) {
   if (state === 'completed' || state === 'awaiting_plan_review') return 'success' as const;
   if (state === 'failed' || state === 'cancelled') return 'danger' as const;
   return 'default' as const;
 }
 
+// Returns concise working-state copy for the assistant status row.
 function getWorkingCopy(run: AgentRunDetail) {
   const state = run.state;
   if (state === 'queued') return ['Queued for planning', 'The agent will read the latest context shortly.'];
@@ -72,13 +101,30 @@ function getWorkingCopy(run: AgentRunDetail) {
   }
   if (state === 'planning') return ['Analyzing requirements', 'The agent is deciding whether to ask questions or draft the plan.'];
   if (state === 'dispatching') return ['Dispatching approved plan', 'The approved plan is being handed to the next agent stage.'];
-  return ['Agent is working', 'This panel updates when the board receives the next agent-run event.'];
+  return ['Agent is working', 'This thread updates when the board receives the next agent-run event.'];
 }
 
+// Returns the persisted transcript, synthesizing the initial prompt only when older data has no messages.
+function getThreadMessages(run: AgentRunDetail): AgentRunMessage[] {
+  if (run.messages.length > 0) return run.messages;
+
+  return [{
+    id: -run.id,
+    runId: run.id,
+    role: 'user',
+    content: run.prompt,
+    metadata: null,
+    createdAt: run.createdAt,
+  }];
+}
+
+// Hosts board selection, run history, thread rendering, and the contextual composer.
 export default function PlanningWorkspace({ organizationId }: { organizationId: string }) {
   const queryClient = useQueryClient();
   const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [isNewPlanMode, setIsNewPlanMode] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [feedback, setFeedback] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
@@ -108,10 +154,11 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
   });
 
   useEffect(() => {
+    if (isNewPlanMode) return;
     if (!selectedRunId && runs.length > 0) {
       setSelectedRunId(runs[0].id);
     }
-  }, [runs, selectedRunId]);
+  }, [isNewPlanMode, runs, selectedRunId]);
 
   useAgentRunsRealtime(organizationId, selectedBoardId, socketRef);
 
@@ -127,9 +174,10 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
   };
 
   const createMutation = useMutation({
-    mutationFn: () => createPlanningAgentRun(organizationId, selectedBoardId!, prompt),
+    mutationFn: () => createPlanningAgentRun(organizationId, selectedBoardId!, prompt.trim()),
     onSuccess: (run) => {
       setPrompt('');
+      setIsNewPlanMode(false);
       setSelectedRunId(run.id);
       refreshAgentQueries(run);
     },
@@ -142,7 +190,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
   });
 
   const messageMutation = useMutation({
-    mutationFn: () => submitAgentRunMessage(organizationId, selectedBoardId!, activeRun!.id, messageDraft),
+    mutationFn: () => submitAgentRunMessage(organizationId, selectedBoardId!, activeRun!.id, messageDraft.trim()),
     onSuccess: (run) => {
       setMessageDraft('');
       refreshAgentQueries(run);
@@ -150,7 +198,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
   });
 
   const changesMutation = useMutation({
-    mutationFn: () => requestAgentRunChanges(organizationId, selectedBoardId!, activeRun!.id, feedback),
+    mutationFn: () => requestAgentRunChanges(organizationId, selectedBoardId!, activeRun!.id, feedback.trim()),
     onSuccess: (run) => {
       setFeedback('');
       refreshAgentQueries(run);
@@ -172,171 +220,612 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
     onSuccess: refreshAgentQueries,
   });
 
-  const isCreatingDisabled = !selectedBoardId || prompt.trim().length === 0 || createMutation.isPending;
+  const hasSelectedRun = Boolean(activeRun && !isNewPlanMode);
+  const selectedRun = hasSelectedRun ? activeRun! : null;
+  const canSendRunMessage = hasSelectedRun && hasCapability(activeRun, 'submit_message');
+  const isAnyMutationPending =
+    createMutation.isPending ||
+    inputMutation.isPending ||
+    messageMutation.isPending ||
+    changesMutation.isPending ||
+    approveMutation.isPending ||
+    cancelMutation.isPending ||
+    retryMutation.isPending;
+  const actionError =
+    createMutation.error?.message ||
+    inputMutation.error?.message ||
+    messageMutation.error?.message ||
+    changesMutation.error?.message ||
+    approveMutation.error?.message ||
+    cancelMutation.error?.message ||
+    retryMutation.error?.message ||
+    null;
+
+  const openNewPlan = () => {
+    setIsNewPlanMode(true);
+    setSelectedRunId(null);
+    setMessageDraft('');
+    setFeedback('');
+    setIsHistoryOpen(false);
+  };
+  const selectRun = (runId: number) => {
+    setIsNewPlanMode(false);
+    setSelectedRunId(runId);
+    setMessageDraft('');
+    setFeedback('');
+    setIsHistoryOpen(false);
+  };
+  const selectBoard = (boardId: string | null) => {
+    setSelectedBoardId(boardId);
+    setSelectedRunId(null);
+    setIsNewPlanMode(false);
+    setPrompt('');
+    setMessageDraft('');
+    setFeedback('');
+  };
 
   return (
-    <div className="app-page space-y-6">
-      <PageHero
-        kicker="Agent Planning"
-        title="Build a plan with a guided agent loop."
-        description="Create a board-scoped planning run, answer only the decisions that matter, and review the generated implementation plan from one focused workspace."
-        actions={
-          <Badge>
-            <Bot className="h-3.5 w-3.5" />
-            Realtime planning state
-          </Badge>
-        }
-      />
+    <div className="app-page h-[calc(100vh-5.5rem)] min-h-[40rem] max-w-[1600px] overflow-hidden">
+      <div className="flex min-h-0 flex-1 gap-4">
+        <aside className="hidden w-[21rem] shrink-0 lg:block">
+          <RunSidebar
+            runs={runs}
+            selectedRunId={hasSelectedRun ? selectedRunId : null}
+            selectedBoard={selectedBoard}
+            isLoading={isRunsLoading}
+            isNewPlanMode={isNewPlanMode || !activeRun}
+            onNewPlan={openNewPlan}
+            onSelectRun={selectRun}
+          />
+        </aside>
 
-      <div className="grid gap-6 xl:grid-cols-[0.95fr_1.45fr]">
-        <section className="space-y-6">
-          <Surface variant="strong" className="rounded-[2rem] p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="app-kicker">Board context</p>
-                <h2 className="mt-2 text-2xl font-semibold">Select a board</h2>
-              </div>
-              <GitBranch className="h-5 w-5 app-text-muted" />
-            </div>
+        <Surface variant="strong" className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[1.5rem]">
+          <ChatHeader
+            activeRun={selectedRun}
+            boards={boards}
+            selectedBoardId={selectedBoardId}
+            isBoardsLoading={isBoardsLoading}
+            onBoardChange={selectBoard}
+            onOpenHistory={() => setIsHistoryOpen(true)}
+            onNewPlan={openNewPlan}
+          />
 
-            <select
-              className="app-input mt-5"
-              value={selectedBoardId ?? ''}
-              disabled={isBoardsLoading || boards.length === 0}
-              onChange={(event) => {
-                setSelectedBoardId(event.target.value || null);
-                setSelectedRunId(null);
-              }}
-            >
-              {boards.length === 0 ? (
-                <option value="">No boards available</option>
-              ) : (
-                boards.map((board) => (
-                  <option key={board.id} value={String(board.id)}>
-                    {board.name || 'Untitled Board'}
-                  </option>
-                ))
-              )}
-            </select>
+          <ChatThread
+            run={selectedRun}
+            isRunLoading={Boolean(selectedRunId && isRunLoading)}
+            isNewPlanMode={isNewPlanMode || !activeRun}
+            feedback={feedback}
+            onFeedbackChange={setFeedback}
+            onSubmitAnswers={(answers) => inputMutation.mutate(answers)}
+            onRequestChanges={() => changesMutation.mutate()}
+            onApprove={() => approveMutation.mutate()}
+            onRetry={() => retryMutation.mutate()}
+            isSubmitting={isAnyMutationPending}
+          />
 
-            <form
-              className="mt-5 space-y-4"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!isCreatingDisabled) createMutation.mutate();
-              }}
-            >
-              <label className="block text-sm font-medium" htmlFor="agent-planning-prompt">
-                What should the agent plan?
-              </label>
-              <textarea
-                id="agent-planning-prompt"
-                className="app-input min-h-36 resize-y"
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Example: Rebuild the planning UI and wire it to the new agent state machine."
-              />
-              {createMutation.error ? (
-                <p className="text-sm text-[var(--app-danger)]">{createMutation.error.message}</p>
-              ) : null}
-              <Button type="submit" variant="primary" disabled={isCreatingDisabled}>
-                {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Create plan
-              </Button>
-            </form>
-          </Surface>
-
-          <Surface variant="strong" className="rounded-[2rem] p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="app-kicker">Planning runs</p>
-                <h2 className="mt-2 text-2xl font-semibold">{selectedBoard?.name ?? 'Board runs'}</h2>
-              </div>
-              <Badge>{runs.length} runs</Badge>
-            </div>
-
-            <div className="mt-5 space-y-3">
-              {isRunsLoading ? (
-                <RunStatusCard label="Loading runs..." />
-              ) : runs.length === 0 ? (
-                <RunStatusCard label="No planning runs yet. Create one from the prompt above." />
-              ) : (
-                runs.map((run) => (
-                  <button
-                    key={run.id}
-                    type="button"
-                    onClick={() => setSelectedRunId(run.id)}
-                    className={`w-full rounded-2xl border p-4 text-left transition ${
-                      selectedRunId === run.id
-                        ? 'border-[color-mix(in_srgb,var(--app-accent)_55%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_10%,var(--app-panel-strong))]'
-                        : 'border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_76%,transparent)] hover:border-[color-mix(in_srgb,var(--app-accent)_30%,var(--app-border))]'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{run.title}</p>
-                        <p className="mt-1 text-xs app-text-muted">{formatDate(run.updatedAt)}</p>
-                      </div>
-                      <Badge variant={stateBadgeVariant(run.state)}>{stateLabels[run.state]}</Badge>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          </Surface>
-        </section>
-
-        <Surface variant="strong" className="flex min-h-[30rem] max-h-[calc(100svh-9rem)] overflow-hidden rounded-[2rem] p-5 sm:p-6 xl:sticky xl:top-6 xl:h-[calc(100svh-9rem)] xl:min-h-0">
-          {isRunLoading ? (
-            <RunStatusCard label="Loading selected run..." />
-          ) : activeRun ? (
-            <RunDetail
-              run={activeRun}
-              feedback={feedback}
-              onFeedbackChange={setFeedback}
-              messageDraft={messageDraft}
-              onMessageDraftChange={setMessageDraft}
-              onSubmitAnswers={(answers) => inputMutation.mutate(answers)}
-              onSubmitMessage={() => messageMutation.mutate()}
-              onRequestChanges={() => changesMutation.mutate()}
-              onApprove={() => approveMutation.mutate()}
-              onCancel={() => cancelMutation.mutate()}
-              onRetry={() => retryMutation.mutate()}
-              isSubmitting={
-                inputMutation.isPending ||
-                messageMutation.isPending ||
-                changesMutation.isPending ||
-                approveMutation.isPending ||
-                cancelMutation.isPending ||
-                retryMutation.isPending
+          <ChatComposer
+            mode={canSendRunMessage ? 'message' : 'create'}
+            value={canSendRunMessage ? messageDraft : prompt}
+            disabledReason={!selectedBoardId ? 'Select a board before starting a plan.' : null}
+            isSubmitting={canSendRunMessage ? messageMutation.isPending : createMutation.isPending}
+            selectedRun={selectedRun}
+            canCancel={hasCapability(selectedRun ?? undefined, 'cancel')}
+            isCanceling={cancelMutation.isPending}
+            onChange={canSendRunMessage ? setMessageDraft : setPrompt}
+            onSubmit={() => {
+              if (canSendRunMessage) {
+                messageMutation.mutate();
+              } else {
+                createMutation.mutate();
               }
-              error={
-                inputMutation.error?.message ||
-                messageMutation.error?.message ||
-                changesMutation.error?.message ||
-                approveMutation.error?.message ||
-                cancelMutation.error?.message ||
-                retryMutation.error?.message ||
-                null
-              }
-            />
-          ) : (
-            <div className="flex h-full min-h-96 items-center justify-center rounded-[1.5rem] border border-dashed border-[var(--app-border)] p-8 text-center">
-              <div>
-                <ClipboardList className="mx-auto h-10 w-10 app-text-muted" />
-                <h2 className="mt-4 text-2xl font-semibold">Create or select a planning run</h2>
-                <p className="mt-2 max-w-md app-text-muted">
-                  The generated plan, clarification questions, and review actions will appear here.
-                </p>
-              </div>
+            }}
+            onCancel={() => cancelMutation.mutate()}
+            onNewPlan={openNewPlan}
+          />
+
+          {actionError ? (
+            <div className="border-t border-[var(--app-border)] px-4 py-3 text-sm text-[var(--app-danger)] sm:px-6">
+              {actionError}
             </div>
-          )}
+          ) : null}
         </Surface>
+      </div>
+
+      <SideDrawer
+        isOpen={isHistoryOpen}
+        title="Planning runs"
+        description={selectedBoard?.name ?? 'Select a board to load run history.'}
+        onClose={() => setIsHistoryOpen(false)}
+      >
+        <RunSidebar
+          runs={runs}
+          selectedRunId={hasSelectedRun ? selectedRunId : null}
+          selectedBoard={selectedBoard}
+          isLoading={isRunsLoading}
+          isNewPlanMode={isNewPlanMode || !activeRun}
+          onNewPlan={openNewPlan}
+          onSelectRun={selectRun}
+        />
+      </SideDrawer>
+    </div>
+  );
+}
+
+// Renders the compact desktop/mobile run history control.
+function RunSidebar({
+  runs,
+  selectedRunId,
+  selectedBoard,
+  isLoading,
+  isNewPlanMode,
+  onNewPlan,
+  onSelectRun,
+}: {
+  runs: AgentRun[];
+  selectedRunId: number | null;
+  selectedBoard: BoardBaseData | null;
+  isLoading: boolean;
+  isNewPlanMode: boolean;
+  onNewPlan: () => void;
+  onSelectRun: (runId: number) => void;
+}) {
+  return (
+    <Surface variant="strong" className="flex h-full flex-col overflow-hidden rounded-[1.5rem]">
+      <div className="border-b border-[var(--app-border)] p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="app-kicker">Planning runs</p>
+            <h2 className="mt-2 truncate text-lg font-semibold">{selectedBoard?.name ?? 'Board runs'}</h2>
+          </div>
+          <Badge>{runs.length} runs</Badge>
+        </div>
+        <Button className="mt-4 w-full" variant="primary" onClick={onNewPlan}>
+          <Plus className="h-4 w-4" />
+          New plan
+        </Button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {isLoading ? (
+          <RunStatusCard label="Loading runs..." />
+        ) : runs.length === 0 ? (
+          <RunStatusCard label="No planning runs yet. Start from the composer below." />
+        ) : (
+          <div className="space-y-2">
+            {isNewPlanMode ? (
+              <div className="rounded-2xl border border-[color-mix(in_srgb,var(--app-accent)_45%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_9%,var(--app-panel-strong))] p-3">
+                <p className="text-sm font-medium">New planning run</p>
+                <p className="mt-1 text-xs app-text-muted">Use the composer to start a fresh plan.</p>
+              </div>
+            ) : null}
+            {runs.map((run) => (
+              <RunListItem
+                key={run.id}
+                run={run}
+                isSelected={selectedRunId === run.id}
+                onSelect={() => onSelectRun(run.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </Surface>
+  );
+}
+
+// Renders one compact run row in the history sidebar.
+function RunListItem({
+  run,
+  isSelected,
+  onSelect,
+}: {
+  run: AgentRun;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'w-full rounded-2xl border p-3 text-left transition',
+        isSelected
+          ? 'border-[color-mix(in_srgb,var(--app-accent)_55%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_10%,var(--app-panel-strong))]'
+          : 'border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_76%,transparent)] hover:border-[color-mix(in_srgb,var(--app-accent)_30%,var(--app-border))]'
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{run.title}</p>
+          <p className="mt-1 line-clamp-2 text-xs leading-5 app-text-muted">{run.prompt}</p>
+        </div>
+        <Badge variant={stateBadgeVariant(run.state)}>{stateLabels[run.state]}</Badge>
+      </div>
+      <p className="mt-2 text-xs app-text-muted">{formatDate(run.updatedAt)}</p>
+    </button>
+  );
+}
+
+// Renders the chat header with mobile history access and board selection.
+function ChatHeader({
+  activeRun,
+  boards,
+  selectedBoardId,
+  isBoardsLoading,
+  onBoardChange,
+  onOpenHistory,
+  onNewPlan,
+}: {
+  activeRun: AgentRunDetail | null;
+  boards: BoardBaseData[];
+  selectedBoardId: string | null;
+  isBoardsLoading: boolean;
+  onBoardChange: (boardId: string | null) => void;
+  onOpenHistory: () => void;
+  onNewPlan: () => void;
+}) {
+  return (
+    <header className="shrink-0 border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_94%,transparent)] px-4 py-3 backdrop-blur-xl sm:px-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <Button className="lg:hidden" size="icon" aria-label="Open planning runs" onClick={onOpenHistory}>
+            <PanelLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-accent)_12%,var(--app-panel))]">
+            <Bot className="h-5 w-5 text-[var(--app-accent-strong)]" />
+          </div>
+          <div className="min-w-0">
+            <p className="app-kicker">Agent planning</p>
+            <h1 className="truncate text-lg font-semibold sm:text-xl">
+              {activeRun?.title ?? 'New planning run'}
+            </h1>
+          </div>
+          {activeRun ? <Badge variant={stateBadgeVariant(activeRun.state)}>{stateLabels[activeRun.state]}</Badge> : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button className="hidden lg:inline-flex" onClick={onNewPlan}>
+            <Plus className="h-4 w-4" />
+            New plan
+          </Button>
+          <BoardSelector
+            boards={boards}
+            selectedBoardId={selectedBoardId}
+            isLoading={isBoardsLoading}
+            onChange={onBoardChange}
+          />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// Renders the board dropdown in the chat toolbar.
+function BoardSelector({
+  boards,
+  selectedBoardId,
+  isLoading,
+  onChange,
+}: {
+  boards: BoardBaseData[];
+  selectedBoardId: string | null;
+  isLoading: boolean;
+  onChange: (boardId: string | null) => void;
+}) {
+  return (
+    <label className="app-select-shell flex min-w-[15rem] items-center gap-2 px-3 py-2">
+      <GitBranch className="h-4 w-4 app-text-muted" />
+      <span className="sr-only">Board context</span>
+      <select
+        className="min-w-0 flex-1 bg-transparent text-sm font-medium outline-none"
+        value={selectedBoardId ?? ''}
+        disabled={isLoading || boards.length === 0}
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        {boards.length === 0 ? (
+          <option value="">No boards available</option>
+        ) : (
+          boards.map((board) => (
+            <option key={board.id} value={String(board.id)}>
+              {board.name || 'Untitled Board'}
+            </option>
+          ))
+        )}
+      </select>
+      <ChevronDown className="h-4 w-4 app-text-muted" />
+    </label>
+  );
+}
+
+// Renders the selected run as a centered chat transcript with inline agent artifacts.
+function ChatThread({
+  run,
+  isRunLoading,
+  isNewPlanMode,
+  feedback,
+  onFeedbackChange,
+  onSubmitAnswers,
+  onRequestChanges,
+  onApprove,
+  onRetry,
+  isSubmitting,
+}: {
+  run: AgentRunDetail | null;
+  isRunLoading: boolean;
+  isNewPlanMode: boolean;
+  feedback: string;
+  onFeedbackChange: (value: string) => void;
+  onSubmitAnswers: (answers: AgentClarificationAnswer[]) => void;
+  onRequestChanges: () => void;
+  onApprove: () => void;
+  onRetry: () => void;
+  isSubmitting: boolean;
+}) {
+  if (isRunLoading) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <RunStatusCard label="Loading selected run..." />
+      </div>
+    );
+  }
+
+  if (!run || isNewPlanMode) {
+    return <NewPlanEmptyState />;
+  }
+
+  const [workingTitle, workingDescription] = getWorkingCopy(run);
+  const messages = getThreadMessages(run);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-5">
+        {messages.map((message) => (
+          <ChatMessage
+            key={message.id}
+            role={message.role === 'user' ? 'user' : 'agent'}
+            timestamp={formatDate(message.createdAt)}
+          >
+            <ExpandableMessageContent content={message.content} />
+          </ChatMessage>
+        ))}
+
+        {activeStates.has(run.state) ? (
+          <ChatMessage role="agent">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[var(--app-accent)]" />
+              <div>
+                <p className="font-medium">{workingTitle}</p>
+                <p className="mt-1 text-sm app-text-muted">{workingDescription}</p>
+              </div>
+            </div>
+          </ChatMessage>
+        ) : null}
+
+        {run.failureMessage ? (
+          <ChatMessage role="agent">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-5 w-5 text-[var(--app-danger)]" />
+              <div>
+                <p className="font-medium text-[var(--app-danger)]">Run failed</p>
+                <p className="mt-1 text-sm app-text-muted">{run.failureMessage}</p>
+              </div>
+            </div>
+          </ChatMessage>
+        ) : null}
+
+        {run.state === 'awaiting_input' ? (
+          <ChatMessage role="agent" wide>
+            <QuestionPanel run={run} onSubmitAnswers={onSubmitAnswers} isSubmitting={isSubmitting} />
+          </ChatMessage>
+        ) : null}
+
+        {run.planArtifact ? (
+          <ChatMessage role="agent" wide>
+            <PlanArtifactPanel
+              artifact={run.planArtifact}
+              feedback={feedback}
+              onFeedbackChange={onFeedbackChange}
+              onRequestChanges={onRequestChanges}
+              onApprove={onApprove}
+              canRequestChanges={hasCapability(run, 'request_changes')}
+              canApprove={hasCapability(run, 'approve_plan')}
+              isSubmitting={isSubmitting}
+            />
+          </ChatMessage>
+        ) : null}
+
+        {hasCapability(run, 'retry') ? (
+          <ChatMessage role="agent">
+            <div className="flex flex-wrap gap-3">
+              <Button onClick={onRetry} disabled={isSubmitting}>
+                <RotateCcw className="h-4 w-4" />
+                Retry
+              </Button>
+            </div>
+          </ChatMessage>
+        ) : null}
       </div>
     </div>
   );
 }
 
+// Renders the centered empty state when composing a new run.
+function NewPlanEmptyState() {
+  return (
+    <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
+      <div className="max-w-md text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-accent)_12%,var(--app-panel))]">
+          <MessageSquareText className="h-6 w-6 text-[var(--app-accent-strong)]" />
+        </div>
+        <h2 className="mt-4 text-2xl font-semibold">Start with a planning prompt.</h2>
+        <p className="mt-2 text-sm leading-6 app-text-muted">
+          Pick the board context above, then describe what the agent should plan from the composer below.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Renders one chat bubble with consistent alignment and metadata.
+function ChatMessage({
+  role,
+  timestamp,
+  wide = false,
+  children,
+}: {
+  role: 'user' | 'agent';
+  timestamp?: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  const isUser = role === 'user';
+
+  return (
+    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+      <div className={cn('min-w-0', wide ? 'w-full' : 'max-w-[min(42rem,92%)]')}>
+        <div className={cn('mb-1 flex items-center gap-2 text-xs app-text-muted', isUser ? 'justify-end' : 'justify-start')}>
+          <span>{isUser ? 'You' : 'Agent'}</span>
+          {timestamp ? <span>{timestamp}</span> : null}
+        </div>
+        <div
+          className={cn(
+            'rounded-2xl border px-4 py-3 text-sm leading-6 shadow-[0_18px_40px_-34px_rgba(0,0,0,0.55)]',
+            isUser
+              ? 'border-[color-mix(in_srgb,var(--app-accent)_36%,var(--app-border))] bg-[color-mix(in_srgb,var(--app-accent)_14%,var(--app-panel-strong))]'
+              : 'border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_82%,transparent)]'
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Renders long chat text with ChatGPT-style expand and collapse controls.
+function ExpandableMessageContent({ content }: { content: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const shouldCollapse = content.length > collapsedMessageLength;
+  const visibleContent = shouldCollapse && !isExpanded
+    ? `${content.slice(0, collapsedMessageLength).trimEnd()}...`
+    : content;
+
+  return (
+    <div>
+      <p className="whitespace-pre-wrap break-words">{visibleContent}</p>
+      {shouldCollapse ? (
+        <button
+          type="button"
+          className="mt-2 text-xs font-semibold text-[var(--app-accent-strong)] hover:text-[var(--app-highlight)]"
+          onClick={() => setIsExpanded((value) => !value)}
+        >
+          {isExpanded ? 'Show less' : 'Show more'}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// Renders the sticky contextual composer for new plans and follow-up run messages.
+function ChatComposer({
+  mode,
+  value,
+  disabledReason,
+  isSubmitting,
+  selectedRun,
+  canCancel,
+  isCanceling,
+  onChange,
+  onSubmit,
+  onCancel,
+  onNewPlan,
+}: {
+  mode: 'create' | 'message';
+  value: string;
+  disabledReason: string | null;
+  isSubmitting: boolean;
+  selectedRun: AgentRunDetail | null;
+  canCancel: boolean;
+  isCanceling: boolean;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onNewPlan: () => void;
+}) {
+  const isMessageMode = mode === 'message';
+  const label = isMessageMode ? 'Add context or correction' : 'What should the agent plan?';
+  const placeholder = isMessageMode
+    ? 'Tell the agent what changed or what it should plan next.'
+    : 'Ask the agent to plan a feature, refactor, workflow, or investigation.';
+  const canSubmit = value.trim().length > 0 && !isSubmitting && !disabledReason;
+
+  return (
+    <form
+      className="shrink-0 border-t border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_95%,transparent)] px-4 py-4 backdrop-blur-xl sm:px-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canSubmit) onSubmit();
+      }}
+    >
+      {selectedRun && !isMessageMode ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_74%,transparent)] px-3 py-2 text-xs app-text-muted">
+          <span>This run is in {stateLabels[selectedRun.state].toLowerCase()} state. Start a new plan to continue prompting.</span>
+          <Button size="sm" onClick={onNewPlan}>
+            <Plus className="h-4 w-4" />
+            New plan
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="mx-auto max-w-4xl">
+        <label className="sr-only" htmlFor="agent-chat-composer">
+          {label}
+        </label>
+        <div className="flex items-end gap-3 rounded-[1.25rem] border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-soft)_84%,transparent)] p-2 focus-within:border-[color-mix(in_srgb,var(--app-accent)_48%,var(--app-border))]">
+          <textarea
+            id="agent-chat-composer"
+            className="max-h-48 min-h-12 flex-1 resize-y bg-transparent px-2 py-2 text-sm leading-6 outline-none placeholder:text-[var(--app-muted)]"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder={placeholder}
+            disabled={Boolean(disabledReason)}
+          />
+          {canCancel ? (
+            <Button
+              className="hidden shrink-0 sm:inline-flex"
+              variant="danger"
+              disabled={isCanceling}
+              onClick={onCancel}
+            >
+              {isCanceling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+              Cancel
+            </Button>
+          ) : null}
+          <Button type="submit" variant="primary" size="icon" disabled={!canSubmit} aria-label={isMessageMode ? 'Send message' : 'Create plan'}>
+            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+        {canCancel ? (
+          <Button
+            className="mt-3 w-full sm:hidden"
+            variant="danger"
+            disabled={isCanceling}
+            onClick={onCancel}
+          >
+            {isCanceling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
+            Cancel run
+          </Button>
+        ) : null}
+        <div className="mt-2 flex items-center justify-between gap-3 text-xs app-text-muted">
+          <span>{disabledReason ?? (isMessageMode ? 'Message the selected run.' : 'Creates a board-scoped planning run.')}</span>
+          <span>{isMessageMode ? 'Message' : 'New plan'}</span>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+// Renders compact status text reused by sidebars and loading states.
 function RunStatusCard({ label }: { label: string }) {
   return (
     <div className="rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_72%,transparent)] px-4 py-3 text-sm app-text-muted">
@@ -345,193 +834,7 @@ function RunStatusCard({ label }: { label: string }) {
   );
 }
 
-function RunDetail({
-  run,
-  feedback,
-  onFeedbackChange,
-  messageDraft,
-  onMessageDraftChange,
-  onSubmitAnswers,
-  onSubmitMessage,
-  onRequestChanges,
-  onApprove,
-  onCancel,
-  onRetry,
-  isSubmitting,
-  error,
-}: {
-  run: AgentRunDetail;
-  feedback: string;
-  onFeedbackChange: (value: string) => void;
-  messageDraft: string;
-  onMessageDraftChange: (value: string) => void;
-  onSubmitAnswers: (answers: AgentClarificationAnswer[]) => void;
-  onSubmitMessage: () => void;
-  onRequestChanges: () => void;
-  onApprove: () => void;
-  onCancel: () => void;
-  onRetry: () => void;
-  isSubmitting: boolean;
-  error: string | null;
-}) {
-  const [workingTitle, workingDescription] = getWorkingCopy(run);
-
-  return (
-    <div className="flex min-h-0 w-full flex-col gap-6">
-      <div className="shrink-0 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="app-kicker">Active run</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">{run.title}</h2>
-          <p className="mt-2 max-w-2xl app-text-muted">{run.prompt}</p>
-        </div>
-        <Badge variant={stateBadgeVariant(run.state)}>{stateLabels[run.state]}</Badge>
-      </div>
-
-      <div className="shrink-0 grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Confidence" value={`${Math.round((run.readiness?.confidence ?? 0) * 100)}%`} />
-        <MetricCard label="Clarification turns" value={String(run.clarificationTurnCount)} />
-        <MetricCard label="Updated" value={formatDate(run.updatedAt)} />
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
-        {activeStates.has(run.state) ? (
-          <Surface className="rounded-2xl p-4">
-            <div className="flex items-center gap-3">
-              <Loader2 className="h-5 w-5 animate-spin text-[var(--app-accent)]" />
-              <div>
-                <p className="font-medium">{workingTitle}</p>
-                <p className="text-sm app-text-muted">{workingDescription}</p>
-              </div>
-            </div>
-          </Surface>
-        ) : null}
-
-        {run.messages.length > 1 ? <RunMessagesPanel messages={run.messages} /> : null}
-
-        {hasCapability(run, 'submit_message') ? (
-          <MessageComposer
-            value={messageDraft}
-            onChange={onMessageDraftChange}
-            onSubmit={onSubmitMessage}
-            isSubmitting={isSubmitting}
-          />
-        ) : null}
-
-        {run.failureMessage ? (
-          <Surface className="rounded-2xl border-[color-mix(in_srgb,var(--app-danger)_36%,var(--app-border))] p-4">
-            <p className="font-medium text-[var(--app-danger)]">Run failed</p>
-            <p className="mt-1 text-sm app-text-muted">{run.failureMessage}</p>
-          </Surface>
-        ) : null}
-
-        {run.state === 'awaiting_input' ? (
-          <QuestionPanel run={run} onSubmitAnswers={onSubmitAnswers} isSubmitting={isSubmitting} />
-        ) : null}
-
-        {run.planArtifact ? (
-          <PlanArtifactPanel
-            artifact={run.planArtifact}
-            feedback={feedback}
-            onFeedbackChange={onFeedbackChange}
-            onRequestChanges={onRequestChanges}
-            onApprove={onApprove}
-            canRequestChanges={hasCapability(run, 'request_changes')}
-            canApprove={hasCapability(run, 'approve_plan')}
-            isSubmitting={isSubmitting}
-          />
-        ) : null}
-      </div>
-
-      <div className="shrink-0 flex flex-wrap gap-3 border-t border-[var(--app-border)] pt-4">
-        {hasCapability(run, 'retry') ? (
-          <Button onClick={onRetry} disabled={isSubmitting}>
-            <RotateCcw className="h-4 w-4" />
-            Retry
-          </Button>
-        ) : null}
-        {hasCapability(run, 'cancel') ? (
-          <Button variant="danger" onClick={onCancel} disabled={isSubmitting}>
-            <XCircle className="h-4 w-4" />
-            Cancel
-          </Button>
-        ) : null}
-      </div>
-
-      {error ? <p className="text-sm text-[var(--app-danger)]">{error}</p> : null}
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <Surface className="rounded-2xl p-4">
-      <p className="app-kicker">{label}</p>
-      <p className="mt-2 text-xl font-semibold">{value}</p>
-    </Surface>
-  );
-}
-
-function RunMessagesPanel({ messages }: { messages: AgentRunDetail['messages'] }) {
-  return (
-    <Surface className="rounded-2xl p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="app-kicker">Conversation</p>
-        <Badge>{messages.length} messages</Badge>
-      </div>
-      <div className="mt-3 max-h-80 space-y-3 overflow-y-auto pr-1">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`rounded-2xl border border-[var(--app-border)] p-3 ${
-              message.role === 'user'
-                ? 'bg-[color-mix(in_srgb,var(--app-accent)_8%,var(--app-panel))]'
-                : 'bg-[color-mix(in_srgb,var(--app-panel)_72%,transparent)]'
-            }`}
-          >
-            <p className="text-xs font-medium uppercase app-text-muted">
-              {message.role === 'user' ? 'You' : 'Agent'}
-            </p>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{message.content}</p>
-          </div>
-        ))}
-      </div>
-    </Surface>
-  );
-}
-
-function MessageComposer({
-  value,
-  onChange,
-  onSubmit,
-  isSubmitting,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  isSubmitting: boolean;
-}) {
-  const canSubmit = value.trim().length > 0 && !isSubmitting;
-
-  return (
-    <Surface className="rounded-2xl p-4">
-      <label className="block text-sm font-medium" htmlFor="agent-run-message">
-        Add context or correction
-      </label>
-      <textarea
-        id="agent-run-message"
-        className="app-input mt-3 min-h-24 resize-y"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder="Tell the agent what changed or what it should plan next."
-      />
-      <Button className="mt-3" variant="primary" onClick={onSubmit} disabled={!canSubmit}>
-        {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-        Send message
-      </Button>
-    </Surface>
-  );
-}
-
+// Renders structured clarification questions as an inline assistant artifact.
 function QuestionPanel({
   run,
   onSubmitAnswers,
@@ -560,18 +863,16 @@ function QuestionPanel({
   const canGoForward = activeQuestionIndex < run.questions.length - 1;
 
   return (
-    <Surface className="rounded-[1.6rem] p-5">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <MessageSquareText className="mt-1 h-5 w-5 text-[var(--app-accent)]" />
           <div>
             <p className="app-kicker">Clarification needed</p>
-            <h3 className="mt-2 text-2xl font-semibold">Answer these decisions to continue.</h3>
+            <h3 className="mt-2 text-xl font-semibold">Answer these decisions to continue.</h3>
           </div>
         </div>
-        <div>
-          <Badge>{answeredCount}/{run.questions.length} answered</Badge>
-        </div>
+        <Badge>{answeredCount}/{run.questions.length} answered</Badge>
       </div>
 
       <div className="mt-5">
@@ -610,10 +911,11 @@ function QuestionPanel({
           Submit all answers
         </Button>
       </div>
-    </Surface>
+    </div>
   );
 }
 
+// Renders the active clarification question with selectable answers and an optional note.
 function QuestionCard({
   question,
   answer,
@@ -707,6 +1009,7 @@ function QuestionCard({
   );
 }
 
+// Renders the generated plan artifact and review controls inline in the thread.
 function PlanArtifactPanel({
   artifact,
   feedback,
@@ -727,12 +1030,12 @@ function PlanArtifactPanel({
   isSubmitting: boolean;
 }) {
   return (
-    <Surface className="rounded-[1.6rem] p-5">
+    <div>
       <div className="flex items-start gap-3">
         <CheckCircle2 className="mt-1 h-5 w-5 text-[var(--app-success)]" />
         <div>
           <p className="app-kicker">Generated plan</p>
-          <h3 className="mt-2 text-2xl font-semibold">{artifact.objective}</h3>
+          <h3 className="mt-2 text-xl font-semibold">{artifact.objective}</h3>
           <p className="mt-2 app-text-muted">{artifact.summary}</p>
         </div>
       </div>
@@ -800,7 +1103,7 @@ function PlanArtifactPanel({
           </div>
         </div>
       ) : null}
-    </Surface>
+    </div>
   );
 }
 
@@ -833,6 +1136,7 @@ function ImplementationDetailsPanel({ artifact }: { artifact: AgentPlanArtifact 
   );
 }
 
+// Renders plan quality issues near the generated artifact header.
 function PlanQualityPanel({ artifact }: { artifact: AgentPlanArtifact }) {
   const quality = artifact.quality;
   if (!quality || quality.issues.length === 0) return null;
@@ -855,6 +1159,7 @@ function PlanQualityPanel({ artifact }: { artifact: AgentPlanArtifact }) {
   );
 }
 
+// Renders a titled list within generated plan sections.
 function PlanList({ title, items, compact = false }: { title: string; items: string[]; compact?: boolean }) {
   if (items.length === 0) return null;
 
