@@ -98,7 +98,19 @@ const GENERIC_PLAN_PATTERNS = [
   'address feedback',
   'launch phase',
   'deploy dashboard',
+  'deploy application',
   'configure monitoring',
+  'install rust',
+  'set up next js project',
+  'setup next js project',
+  'set up nextjs project',
+  'setup nextjs project',
+  'build dashboard layout',
+  'create dashboard layout',
+  'implement real time data stream',
+  'create visualization components',
+  'test frontend and backend integration',
+  'monitor application performance',
   'notify stakeholders',
   'reviewed and approved by stakeholders',
   'resources are allocated',
@@ -145,11 +157,51 @@ const MONITORING_SLOT_PATTERNS = [{
   promptPatterns: [/graph/, /chart/, /visual/, /analytics/],
   artifactPatterns: [/recharts/, /chart\.?js/, /\bd3\b/, /visx/, /echarts/, /canvas/, /webgl/, /visualization/],
 }, {
-  code: 'missing_storage_retention',
-  label: 'storage and retention',
+  code: 'missing_storage_backend',
+  label: 'storage backend',
   promptPatterns: [/monitor/, /telemetry/, /performance/, /metric/],
-  artifactPatterns: [/retention/, /history/, /storage/, /time-series/, /database/, /warehouse/, /rollup/],
+  artifactPatterns: [/event store/, /rollup table/, /metrics backend/, /trace store/, /telemetry store/, /prometheus/, /influxdb/, /timescaledb/, /postgres/, /database/, /warehouse/],
+}, {
+  code: 'missing_retention_window',
+  label: 'retention window',
+  promptPatterns: [/monitor/, /telemetry/, /performance/, /metric/],
+  artifactPatterns: [/\b\d+\s?(h|hr|hrs|hour|hours|d|day|days|m|mo|month|months|y|yr|year|years)\b/, /24h/, /7d/, /30d/, /90d/, /180d/, /1y/, /retention window/],
 }] as const;
+
+const MATERIAL_OPEN_QUESTION_PATTERNS = [
+  /exporter/,
+  /collector/,
+  /realtime/,
+  /real time/,
+  /websocket/,
+  /sse/,
+  /graph/,
+  /visuali[sz]ation/,
+  /chart/,
+  /telemetry/,
+  /eval/,
+  /tool call/,
+  /trace/,
+  /storage/,
+  /database/,
+  /backend/,
+  /retention/,
+  /rollup/,
+  /access/,
+  /auth/,
+  /permission/,
+  /acceptance/,
+  /success/,
+] as const;
+
+const CONDITIONAL_SECURITY_QUESTION_PATTERNS = [
+  /compliance/,
+  /security regulation/,
+  /regulated/,
+  /policy/,
+  /privacy/,
+  /pii/,
+] as const;
 
 // Normalizes free-form text for matching planner anchors and generic-template phrases.
 function normalizeText(value: string) {
@@ -300,6 +352,31 @@ function collectArtifactText(artifact: AgentPlanArtifact) {
   ].join(' ');
 }
 
+// Collects final-plan fields that must not contain unresolved implementation alternatives.
+function collectArtifactDecisionValues(artifact: AgentPlanArtifact) {
+  return [
+    ...(artifact.implementationDetails ? [
+      ...artifact.implementationDetails.dataFlow,
+      ...artifact.implementationDetails.tooling,
+      ...artifact.implementationDetails.integrations,
+      ...artifact.implementationDetails.realtimeStrategy,
+      ...artifact.implementationDetails.storageAndRetention,
+      ...artifact.implementationDetails.observability,
+      ...artifact.implementationDetails.securityAndAccess,
+    ] : []),
+    ...artifact.requirements,
+    ...artifact.assumptions,
+    ...artifact.constraints,
+    ...artifact.technicalDecisions.flatMap((decision) => [decision.area, decision.choice, decision.rationale]),
+    ...artifact.implementationPhases.flatMap((phase) => [
+      phase.title,
+      phase.summary,
+      ...phase.tasks.flatMap((task) => [task.title, task.description, ...task.acceptanceCriteria]),
+    ]),
+    ...artifact.successCriteria,
+  ].filter((value): value is string => Boolean(value?.trim()));
+}
+
 // Extracts technology names that the final plan must explicitly carry forward.
 function extractPromptTechnologyTerms(prompt: string) {
   const normalizedPrompt = normalizeText(prompt);
@@ -318,6 +395,111 @@ function extractPromptTechnologyTerms(prompt: string) {
 // Checks normalized text against a bounded group of quality patterns.
 function hasPatternMatch(value: string, patterns: readonly RegExp[]) {
   return patterns.some((pattern) => pattern.test(value));
+}
+
+// Determines whether security or compliance questions materially affect the requested plan.
+function hasSecuritySensitiveSignals({
+  artifact,
+  context,
+  prompt,
+}: {
+  artifact: AgentPlanArtifact;
+  context?: AgentPlanningContext | null;
+  prompt: string;
+}) {
+  const sourceText = normalizeText([
+    prompt,
+    ...collectPlanningContextText(context),
+    artifact.summary,
+    artifact.objective,
+    ...artifact.requirements,
+    ...artifact.constraints,
+    ...artifact.successCriteria,
+  ].join(' '));
+
+  return hasPatternMatch(sourceText, [
+    /production/,
+    /customer/,
+    /payment/,
+    /finance/,
+    /ledger/,
+    /health/,
+    /audit/,
+    /auth/,
+    /access/,
+    /permission/,
+    /regulated/,
+    /compliance/,
+    /pii/,
+  ]);
+}
+
+// Finds final-plan open questions that should have been resolved before artifact generation.
+function findMaterialOpenQuestions({
+  artifact,
+  context,
+  prompt,
+}: {
+  artifact: AgentPlanArtifact;
+  context?: AgentPlanningContext | null;
+  prompt: string;
+}) {
+  const securitySensitive = hasSecuritySensitiveSignals({ artifact, context, prompt });
+
+  return artifact.openQuestions.filter((question) => {
+    const normalizedQuestion = normalizeText(question);
+    const materialQuestion = hasPatternMatch(normalizedQuestion, MATERIAL_OPEN_QUESTION_PATTERNS);
+    const conditionalSecurityQuestion =
+      securitySensitive && hasPatternMatch(normalizedQuestion, CONDITIONAL_SECURITY_QUESTION_PATTERNS);
+
+    return materialQuestion || conditionalSecurityQuestion;
+  });
+}
+
+// Finds plan lines that leave a material implementation choice as "A or B" instead of choosing one path.
+function findUndecidedMaterialAlternatives(artifact: AgentPlanArtifact) {
+  return collectArtifactDecisionValues(artifact).filter((value) => {
+    const normalizedValue = normalizeText(value);
+    const hasMaterialTerm = hasPatternMatch(normalizedValue, [
+      /prometheus/,
+      /influxdb/,
+      /timescaledb/,
+      /postgres/,
+      /database/,
+      /storage/,
+      /event store/,
+      /metrics backend/,
+      /collector/,
+      /gateway/,
+      /websocket/,
+      /server sent/,
+      /sse/,
+      /polling/,
+      /recharts/,
+      /chart/,
+      /\bd3\b/,
+      /visx/,
+      /canvas/,
+      /webgl/,
+    ]);
+    const hasAlternative = /\b(or|versus|vs)\b/.test(normalizedValue) || /\beither\b/.test(normalizedValue);
+
+    return hasMaterialTerm && hasAlternative;
+  });
+}
+
+// Finds monitoring data flow that connects the dashboard directly to an OTEL collector path.
+function findInvalidMonitoringDataFlow(artifact: AgentPlanArtifact) {
+  return collectArtifactDecisionValues(artifact).filter((value) => {
+    const normalizedValue = normalizeText(value);
+    const mentionsCollector = /opentelemetry collector|otel collector|collector/.test(normalizedValue);
+    const mentionsDashboard = /next js|nextjs|frontend|dashboard|client/.test(normalizedValue);
+    const connectsDashboard = /subscrib|connect|receive|stream|proxy|read/.test(normalizedValue);
+    const directCollectorBridge =
+      /subscrib.*collector|collector.*subscrib|proxy.*collector|collector.*proxy|stream.*collector|collector.*stream/.test(normalizedValue);
+
+    return mentionsCollector && mentionsDashboard && connectsDashboard && directCollectorBridge;
+  });
 }
 
 // Finds realtime monitoring detail groups that are absent from the generated plan.
@@ -530,6 +712,39 @@ export function evaluatePlanArtifactQuality({
     });
   }
 
+  const materialOpenQuestions = findMaterialOpenQuestions({ artifact, context, prompt });
+  if (materialOpenQuestions.length > 0) {
+    score -= 25;
+    pushIssue(issues, {
+      code: 'material_open_questions',
+      severity: 'error',
+      message: 'The plan leaves implementation-changing questions unresolved after generation.',
+      evidence: materialOpenQuestions,
+    });
+  }
+
+  const undecidedMaterialAlternatives = findUndecidedMaterialAlternatives(artifact);
+  if (undecidedMaterialAlternatives.length > 0) {
+    score -= 20;
+    pushIssue(issues, {
+      code: 'undecided_material_alternatives',
+      severity: 'error',
+      message: 'The plan keeps material implementation choices as alternatives instead of selecting one path.',
+      evidence: undecidedMaterialAlternatives,
+    });
+  }
+
+  const invalidMonitoringDataFlow = findInvalidMonitoringDataFlow(artifact);
+  if (invalidMonitoringDataFlow.length > 0) {
+    score -= 20;
+    pushIssue(issues, {
+      code: 'invalid_monitoring_data_flow',
+      severity: 'error',
+      message: 'The plan connects dashboard consumption directly to the OpenTelemetry collector instead of a backend API or stored stream.',
+      evidence: invalidMonitoringDataFlow,
+    });
+  }
+
   if (
     hasPatternMatch(normalizedPromptText, [/monitor/, /performance/, /telemetry/, /eval/, /tool call/, /real[\s-]?time/, /graph/]) &&
     (artifact.requirements.length < 4 || artifact.implementationPhases.flatMap((phase) => phase.tasks).length < 5)
@@ -575,7 +790,9 @@ export function buildPlanQualityFeedback(
     'Regenerate the plan so every phase and task is specific to the prompt and planning context.',
     anchors.length > 0 ? `Required prompt anchors to reuse in phase titles, task descriptions, and acceptance criteria: ${anchors.join(', ')}.` : '',
     'Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates unless the user explicitly requested those phases.',
-    'Do not introduce unprovided stack choices as facts; put uncertain choices in assumptions or openQuestions.',
+    'Do not introduce unprovided stack choices as facts; put uncertain choices in assumptions or non-material notes.',
+    'Do not leave exporter, realtime transport, graphing, telemetry, storage, retention, auth, or acceptance-test decisions in openQuestions.',
+    'For monitoring plans, route dashboard reads through a backend API or stored stream; do not connect Next.js directly to an OpenTelemetry collector.',
     ...quality.issues.map((issue) => `${issue.code}: ${issue.message} Evidence: ${issue.evidence.join('; ')}`),
   ].filter(Boolean).join('\n');
 }

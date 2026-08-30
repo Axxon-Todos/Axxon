@@ -40,6 +40,14 @@ import { executeAgentTool } from '../toolCalls/registry';
 
 type RunUpdate = Partial<Pick<AgentRun, 'questions' | 'planningContext' | 'readiness' | 'clarificationTurnCount' | 'planArtifact' | 'failureMessage'>>;
 
+const STRUCTURED_PLAN_QUALITY_QUESTION_CODES = new Set([
+  'missing_implementation_detail_slots',
+  'material_open_questions',
+  'undecided_material_alternatives',
+  'invalid_monitoring_data_flow',
+  'thin_telemetry_scope',
+]);
+
 async function getAccess(run: { organizationId: number; boardId: number; createdBy: number }, userId: number) {
   await requireBoardInOrganization(run.organizationId, run.boardId, userId);
   let isOrganizationOwner = false;
@@ -505,15 +513,96 @@ function buildPlanQualityFailureMessage(quality: AgentPlanningQuality) {
   ].join(' ');
 }
 
-// Moves a planning run back to user-message input when generated plans remain too generic.
+// Converts failed artifact quality into readiness context for one more structured clarification attempt.
+function buildPlanQualityReadiness(quality: AgentPlanningQuality) {
+  const qualityUnknowns = quality.issues.flatMap((issue) =>
+    issue.evidence.length > 0 ? issue.evidence : [issue.message]
+  );
+
+  return {
+    ...createInitialPlanningReadiness(),
+    objectiveClear: true,
+    scopeBounded: true,
+    hasAcceptanceCriteria: true,
+    unresolvedUnknowns: qualityUnknowns,
+    blockingUnknowns: qualityUnknowns,
+    confidence: Math.max(0, Math.min(quality.score / 100, 1)),
+    recommendedNextAction: 'ask_questions' as const,
+    reasonSummary: [
+      'Generated plan failed deterministic quality review.',
+      'Ask structured material follow-up questions when unique cards are available.',
+    ],
+  };
+}
+
+// Determines whether failed plan quality can be repaired by another structured question batch.
+function shouldAskStructuredPlanQualityQuestions(quality: AgentPlanningQuality) {
+  return quality.issues.some((issue) => STRUCTURED_PLAN_QUALITY_QUESTION_CODES.has(issue.code));
+}
+
+// Moves a planning run back to structured input when possible, otherwise to user-message input.
 export async function requestWorkerPlanQualityInput(runId: number, quality: AgentPlanningQuality) {
   const updatedRun = await db.transaction(async (trx) => {
     const locked = await AgentRepository.lockRun(runId, trx);
     if (!locked || locked.state !== 'planning') return null;
+    requirePlanningRun(locked);
+    const readiness = buildPlanQualityReadiness(quality);
+
+    if (shouldAskStructuredPlanQualityQuestions(quality)) {
+      const historicalQuestions = extractHistoricalQuestions(await AgentRepository.listToolCalls(locked.id, trx));
+      const toolInput = {
+        candidateQuestions: [],
+        existingQuestions: [...historicalQuestions, ...locked.questions],
+        planningContext: locked.planningContext,
+        prompt: locked.prompt,
+        readiness,
+      };
+      const toolResult = executeAgentTool({
+        toolName: 'ask_clarification_questions',
+        state: locked.state,
+        input: toolInput,
+      });
+
+      if (toolResult.questions.length > 0) {
+        const nextState = assertAgentTransition(locked.state, 'input.required');
+        const updated = await AgentRepository.updateRun(locked.id, locked.version, {
+          state: nextState,
+          questions: toolResult.questions,
+          readiness,
+          planArtifact: null,
+          clarificationTurnCount: locked.clarificationTurnCount + 1,
+        }, trx);
+        await AgentRepository.createToolCall({
+          runId: locked.id,
+          toolName: 'ask_clarification_questions',
+          status: 'completed',
+          reasonCode: 'blocking_unknowns',
+          toolInput: toolInput as unknown as Record<string, unknown>,
+          result: toolResult as unknown as Record<string, unknown>,
+        }, trx);
+        await AgentRepository.addMessage(locked.id, 'assistant', buildQuestionIntro(toolResult.questions), {
+          toolName: 'ask_clarification_questions',
+          questionKeys: toolResult.questions.map((question) => question.questionKey),
+          reason: 'plan_quality_failed',
+          quality,
+        }, trx);
+        await AgentRepository.appendEvent({
+          runId: locked.id,
+          type: 'input.required',
+          fromState: locked.state,
+          toState: updated.state,
+          actorType: 'worker',
+          payload: { reason: 'plan_quality_failed', quality, questionKeys: toolResult.questions.map((question) => question.questionKey) },
+        }, trx);
+        return updated;
+      }
+    }
+
     const nextState = assertAgentTransition(locked.state, 'message.required');
     const updated = await AgentRepository.updateRun(locked.id, locked.version, {
       state: nextState,
       questions: [],
+      readiness,
       planArtifact: null,
     }, trx);
     await AgentRepository.addMessage(locked.id, 'assistant', buildPlanQualityFailureMessage(quality), {

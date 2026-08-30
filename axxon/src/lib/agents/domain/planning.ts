@@ -239,8 +239,12 @@ export function findMissingMaterialPlanningSlots(prompt: string | undefined, con
     missingSlots.push('metrics/events scope');
   }
 
-  if (wantsMonitoring && !containsAny(contextText, [/retention/, /history/, /storage/, /time-series/, /database/, /warehouse/, /rollup/])) {
-    missingSlots.push('storage/retention');
+  if (wantsMonitoring && !containsAny(contextText, [/event store/, /rollup table/, /metrics backend/, /trace store/, /telemetry store/, /prometheus/, /influxdb/, /timescaledb/, /postgres/, /database/, /warehouse/])) {
+    missingSlots.push('storage backend');
+  }
+
+  if (wantsMonitoring && !containsAny(contextText, [/\b\d+\s?(h|hr|hrs|hour|hours|d|day|days|m|mo|month|months|y|yr|year|years)\b/, /24h/, /7d/, /30d/, /90d/, /180d/, /1y/, /retention window/])) {
+    missingSlots.push('retention window');
   }
 
   return missingSlots;
@@ -855,16 +859,30 @@ function buildMaterialSlotFallbackQuestions(
     ));
   }
 
-  if (missingSlots.has('storage/retention')) {
+  if (missingSlots.has('storage backend')) {
     questions.push(buildQuestion(
-      'agent-telemetry-retention',
+      'agent-telemetry-storage-backend',
       'constraints',
-      'How should monitoring history and retention be planned?',
-      'Realtime graphs also need historical storage rules for reloads, rollups, and trend views.',
+      'Where should monitoring history and rollups be stored for the first release?',
+      'Realtime graphs need one storage boundary for reloads, rollups, and trend views instead of an open backend choice.',
       [
-        { optionKey: 'time-series-rollups', label: 'Time-series rollups', description: 'Store raw recent events and aggregate older data into graph-friendly buckets.', isRecommended: true },
-        { optionKey: 'event-history', label: 'Event history', description: 'Keep ordered raw event history as the source of dashboard truth.' },
-        { optionKey: 'short-lived-window', label: 'Short-lived window', description: 'Keep only recent realtime data until longer retention is required.' },
+        { optionKey: 'app-event-store-rollups', label: 'App event store', description: 'Persist raw telemetry in the application event store and aggregate graph data into rollup tables.', isRecommended: true },
+        { optionKey: 'prometheus-trace-store', label: 'Metrics backend', description: 'Use a Prometheus-compatible metrics backend plus a trace or event store for ordered records.' },
+        { optionKey: 'timescale-database', label: 'TimescaleDB', description: 'Use TimescaleDB as the dedicated telemetry history backend.' },
+      ]
+    ));
+  }
+
+  if (missingSlots.has('retention window')) {
+    questions.push(buildQuestion(
+      'agent-telemetry-retention-window',
+      'constraints',
+      'What retention window should define the monitoring MVP?',
+      'The implementation plan needs concrete raw-event and rollup durations so storage, cleanup, and acceptance tests are explicit.',
+      [
+        { optionKey: 'one-day-raw-ninety-day-rollups', label: '24h raw, 90d rollups', description: 'Keep 24 hours of raw events and 90 days of graph rollups for the first release.', isRecommended: true },
+        { optionKey: 'seven-day-raw-one-eighty-day-rollups', label: '7d raw, 180d rollups', description: 'Keep seven days of raw events and 180 days of rollups for deeper debugging.' },
+        { optionKey: 'thirty-day-raw-one-year-rollups', label: '30d raw, 1y rollups', description: 'Keep 30 days of raw events and one year of rollups for longer operational history.' },
       ]
     ));
   }

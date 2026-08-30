@@ -317,6 +317,49 @@ describe('agent planning run service', () => {
     expect(detail.events.at(-1)?.payload).toMatchObject({ reason: 'plan_quality_failed' });
   });
 
+  it('returns to structured input when generated plans miss material monitoring decisions', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: {
+        prompt: 'i want to make a dashboard built with rust and nextjs to monitor my agents performance in realtime with heavy visual graphs showing realtime evals and tool calls',
+        runType: 'planning',
+      },
+    });
+
+    await claimAgentRunForWork(created.id);
+    await startAgentPlanningTurn(created.id);
+    const updated = await requestWorkerPlanQualityInput(created.id, {
+      score: 35,
+      passed: false,
+      issues: [{
+        code: 'missing_implementation_detail_slots',
+        severity: 'error',
+        message: 'The plan is missing concrete monitoring implementation details.',
+        evidence: ['storage backend', 'retention window'],
+      }],
+    });
+
+    expect(updated?.state).toBe('awaiting_input');
+    const detail = await getAgentRunDetail({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+    });
+    expect(detail.planArtifact).toBeNull();
+    expect(detail.questions.map((question) => question.questionKey)).toEqual([
+      'agent-telemetry-exporter',
+      'agent-realtime-transport',
+      'agent-visualization-tooling',
+    ]);
+    expect(detail.messages.at(-1)?.content).toContain('3 quick decisions');
+    expect(detail.events.at(-1)?.type).toBe('input.required');
+    expect(detail.events.at(-1)?.payload).toMatchObject({ reason: 'plan_quality_failed' });
+  });
+
   it('accepts free-form context while awaiting input and queues replanning', async () => {
     const { board, organization, user } = await createBoardAgentFixture();
     const created = await createAgentRun({

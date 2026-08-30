@@ -156,6 +156,261 @@ function createSpecificFintechPlan(): AgentPlanArtifact {
   };
 }
 
+// Builds the monitoring context produced after all material monitoring choices are clarified.
+function createMonitoringPlanningContext() {
+  return {
+    ...createEmptyPlanningContext(),
+    objective: monitoringPrompt,
+    inScope: ['Realtime agent performance dashboard for eval results, tool calls, run traces, latency, cost, and failures.'],
+    outOfScope: ['Autonomous remediation from dashboard alerts.'],
+    acceptanceCriteria: [
+      'The Next.js dashboard renders ordered realtime eval and tool-call records from the WebSocket stream.',
+      'Telemetry reloads use 24h raw events and 90d rollups from the app event store.',
+    ],
+    knownRequirements: [
+      'Rust emits agent telemetry through an OpenTelemetry collector.',
+      'A WebSocket stream pushes realtime monitoring updates to the Next.js dashboard.',
+      'Recharts renders eval, tool-call, trace, latency, cost, and failure graphs.',
+      'The app event store persists raw telemetry and rollup tables.',
+      'Keep 24h raw events and 90d graph rollups.',
+    ],
+    technicalDecisions: [{
+      area: 'telemetry exporter',
+      choice: 'OpenTelemetry collector',
+      rationale: 'Emit spans, metrics, and events from Rust into an OTEL collector.',
+      source: 'clarified' as const,
+    }, {
+      area: 'realtime transport',
+      choice: 'WebSocket stream',
+      rationale: 'Push live run, eval, and tool-call updates over a bidirectional socket.',
+      source: 'clarified' as const,
+    }, {
+      area: 'graphing stack',
+      choice: 'Recharts',
+      rationale: 'Use the existing React charting dependency already present in the app.',
+      source: 'clarified' as const,
+    }, {
+      area: 'monitoring storage',
+      choice: 'App event store with rollup tables',
+      rationale: 'Persist raw telemetry in the application event store and aggregate graph data into rollup tables.',
+      source: 'clarified' as const,
+    }, {
+      area: 'retention window',
+      choice: '24h raw events and 90d rollups',
+      rationale: 'Bound first-release storage and cleanup behavior.',
+      source: 'clarified' as const,
+    }],
+    planningConfidence: 0.92,
+  };
+}
+
+// Builds a model artifact matching the monitoring plan failure reported by the user.
+function createUnderspecifiedMonitoringPlan(): AgentPlanArtifact {
+  return {
+    summary: 'A dashboard built with Rust and NextJS to monitor agents performance in real-time, showing heavy visual graphs of realtime evals and tool calls.',
+    objective: 'Build a dashboard to monitor agents performance in real-time using Rust and NextJS',
+    implementationDetails: {
+      dataFlow: [
+        'Rust agent runtime emits telemetry data via OpenTelemetry collector.',
+        'OpenTelemetry collector buffers data and forwards it to an intermediary storage layer.',
+        'Next.js frontend subscribes to a WebSocket stream for real-time updates.',
+      ],
+      tooling: [
+        'Rust compiler and standard library for agent runtime logic.',
+        'NextJS framework for dashboard components.',
+        'OpenTelemetry collector for data collection and forwarding.',
+        'WebSocket library for bi-directional communication.',
+      ],
+      integrations: [
+        'Integrate Rust OpenTelemetry exporter with an intermediary storage system like Prometheus or InfluxDB.',
+        'Next.js frontend subscribes to a WebSocket server that will proxy the real-time data stream from the collector.',
+      ],
+      realtimeStrategy: ['Use WebSocket for near-instant bi-directional communication between agent and dashboard.'],
+      storageAndRetention: ['Set retention policies based on business needs.'],
+      observability: ['Monitor WebSocket connections and performance metrics using Next.js built-in tools or external services.'],
+      securityAndAccess: ['Implement authentication/authorization for dashboard access.'],
+    },
+    scope: {
+      inScope: ['Real-time visual graphs of evals and tool calls.'],
+      outOfScope: ['Advanced features not explicitly mentioned in the initial prompt are out of scope.'],
+    },
+    requirements: [
+      'Rust agent telemetry to be emitted via OpenTelemetry collector.',
+      'Real-time updates on the Next.js dashboard using WebSocket stream.',
+      'Visual graphs showing evals and tool calls.',
+      'Support for multiple monitoring records including latency, cost, failures.',
+    ],
+    assumptions: ['Use a focused MVP boundary based on prompt requirements.'],
+    constraints: [],
+    affectedAreas: ['Rust agent runtime', 'Next.js dashboard'],
+    technicalDecisions: [{
+      area: 'graphing stack',
+      choice: 'Recharts',
+      rationale: 'Use the existing React charting dependency already present in the app.',
+      source: 'clarified',
+    }],
+    implementationPhases: [{
+      id: 'setup-development-environment',
+      title: 'Setup Development Environment',
+      summary: 'Setting up Rust, Next.js, and OpenTelemetry collector development environments.',
+      tasks: [{
+        id: 'install-rust',
+        title: 'Install Rust and necessary dependencies',
+        description: 'Install Rust and required libraries for agent runtime logic.',
+        type: 'setup',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Rust compiler and dependencies are installed on the development machine.'],
+      }, {
+        id: 'set-up-next-js-project',
+        title: 'Set up Next.js project',
+        description: 'Create a new Next.js project with the necessary dependencies for dashboard components.',
+        type: 'setup',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Next.js project is created with all required components and dependencies.'],
+      }],
+    }, {
+      id: 'develop-frontend-components',
+      title: 'Develop Frontend Components',
+      summary: 'Creating React components to visualize agent performance data.',
+      tasks: [{
+        id: 'build-dashboard-layout',
+        title: 'Build dashboard layout',
+        description: 'Design and implement the overall layout for the monitoring dashboard.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Dashboard layout is designed and implemented.'],
+      }, {
+        id: 'create-visualization-components',
+        title: 'Create visualization components',
+        description: 'Develop components for visualizing evals, tool calls, latency, cost, and failures.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Visual components for all required monitoring records are created.'],
+      }, {
+        id: 'deploy-application',
+        title: 'Deploy application',
+        description: 'Deploy the Next.js frontend and Rust agent runtime to a production environment.',
+        type: 'deployment',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Application is successfully deployed.'],
+      }],
+    }],
+    risks: ['Risk of data loss due to collector buffer overflow or backend failure.'],
+    successCriteria: ['Successful deployment and stable operation in a production environment.'],
+    openQuestions: [
+      'What are the specific requirements for data retention policies?',
+      'Are there any compliance or security regulations that need to be considered?',
+    ],
+    notes: ['Ensure all code is well-documented and tested thoroughly.'],
+  };
+}
+
+// Builds a monitoring artifact with resolved material decisions and measurable verification.
+function createDecisionCompleteMonitoringPlan(): AgentPlanArtifact {
+  return {
+    summary: 'Build a Rust and Next.js realtime agent performance dashboard backed by OpenTelemetry, app event storage, WebSocket updates, and Recharts views.',
+    objective: monitoringPrompt,
+    implementationDetails: {
+      dataFlow: [
+        'Rust agent runtime emits eval results, tool calls, run traces, latency, cost, and failures through OpenTelemetry spans, metrics, and events.',
+        'The OpenTelemetry collector forwards telemetry into the app event store and rollup tables.',
+        'A backend WebSocket service reads stored telemetry and rollup updates before streaming ordered dashboard events.',
+        'The Next.js dashboard renders Recharts views from WebSocket updates and reload backfill API reads.',
+      ],
+      tooling: ['Rust OpenTelemetry SDK', 'OpenTelemetry collector', 'Next.js', 'WebSocket service', 'Recharts'],
+      integrations: ['Integrate Rust telemetry emission with the OpenTelemetry collector and app event store.'],
+      realtimeStrategy: ['Stream ordered eval, tool-call, trace, latency, cost, and failure events over WebSocket with reconnect backfill.'],
+      storageAndRetention: ['Persist raw telemetry in the app event store for 24h and aggregate graph rollups for 90d.'],
+      observability: ['Track collector ingestion lag, WebSocket fanout lag, dropped event count, and dashboard render delay.'],
+      securityAndAccess: ['Require authenticated dashboard access and enforce organization-scoped telemetry reads.'],
+    },
+    scope: {
+      inScope: ['Realtime agent performance graphs', 'Eval result and tool-call ordering', 'Run trace, latency, cost, and failure monitoring'],
+      outOfScope: ['Automated incident remediation'],
+    },
+    requirements: [
+      'Rust must emit first-class telemetry for eval results, tool calls, run traces, latency, cost, and failures.',
+      'The OpenTelemetry collector must forward records into app event storage and 90d rollup tables.',
+      'The WebSocket service must stream ordered realtime agent events to the Next.js dashboard.',
+      'The Next.js dashboard must use Recharts for eval, tool-call, trace, latency, cost, and failure graph panels.',
+      'Reloaded dashboard sessions must backfill from 24h raw events and 90d rollups.',
+    ],
+    assumptions: ['The app event store and rollup tables are the first-release monitoring history backend.'],
+    constraints: ['Keep telemetry reads scoped to authenticated organization members.'],
+    affectedAreas: ['Rust agent runtime', 'OpenTelemetry collector pipeline', 'backend WebSocket service', 'Next.js monitoring dashboard'],
+    technicalDecisions: createMonitoringPlanningContext().technicalDecisions,
+    implementationPhases: [{
+      id: 'telemetry-contract',
+      title: 'Agent telemetry contract',
+      summary: 'Define records and ordering keys for realtime eval, tool-call, trace, latency, cost, and failure monitoring.',
+      tasks: [{
+        id: 'define-agent-telemetry-records',
+        title: 'Define agent telemetry records',
+        description: 'Create schemas for eval results, tool calls, run traces, latency, cost, failures, run id, sequence number, and timestamp.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: [],
+        acceptanceCriteria: ['Every eval, tool call, trace, latency, cost, and failure record includes run id, sequence number, and timestamp.'],
+      }],
+    }, {
+      id: 'rust-otel-ingestion',
+      title: 'Rust OpenTelemetry ingestion',
+      summary: 'Emit Rust agent telemetry through OTEL and persist it for dashboard reads.',
+      tasks: [{
+        id: 'emit-rust-agent-telemetry',
+        title: 'Emit Rust agent telemetry',
+        description: 'Instrument the Rust agent runtime to emit OpenTelemetry spans, metrics, and events for evals, tool calls, traces, latency, cost, and failures.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: ['define-agent-telemetry-records'],
+        acceptanceCriteria: ['A sample Rust run produces OTEL records for evals, tool calls, traces, latency, cost, and failures.'],
+      }, {
+        id: 'persist-telemetry-rollups',
+        title: 'Persist telemetry rollups',
+        description: 'Forward collector output into the app event store, keep 24h raw events, and write 90d rollup buckets for Recharts queries.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: ['emit-rust-agent-telemetry'],
+        acceptanceCriteria: ['Raw agent events expire after 24h while eval, tool-call, latency, cost, and failure rollups remain queryable for 90d.'],
+      }],
+    }, {
+      id: 'dashboard-streaming',
+      title: 'Next.js realtime dashboard',
+      summary: 'Stream ordered telemetry into Recharts panels with reload backfill.',
+      tasks: [{
+        id: 'stream-agent-monitoring-events',
+        title: 'Stream agent monitoring events',
+        description: 'Build a backend WebSocket service that reads app event store updates and sends ordered eval, tool-call, trace, latency, cost, and failure events to Next.js.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: ['persist-telemetry-rollups'],
+        acceptanceCriteria: ['The dashboard receives ordered WebSocket events with no duplicate tool calls after reconnect.'],
+      }, {
+        id: 'render-recharts-monitoring-views',
+        title: 'Render Recharts monitoring views',
+        description: 'Render realtime eval, tool-call, trace, latency, cost, and failure graph panels in the Next.js dashboard.',
+        type: 'implementation',
+        priority: 'high',
+        dependencyIds: ['stream-agent-monitoring-events'],
+        acceptanceCriteria: ['Recharts panels update from WebSocket events and reload from 24h raw history plus 90d rollups.'],
+      }],
+    }],
+    risks: ['High telemetry volume can increase collector lag and WebSocket fanout delay.'],
+    successCriteria: [
+      'Realtime eval and tool-call updates appear in the Next.js dashboard within a measured p95 live update target.',
+      'Reconnect backfill preserves ordered tool-call and eval records without duplicates.',
+      '24h raw telemetry and 90d rollups support reloads for eval, trace, latency, cost, and failure graphs.',
+    ],
+    openQuestions: [],
+    notes: ['Compliance-specific retention can be revisited if regulated telemetry is introduced later.'],
+  };
+}
+
 describe('planning quality evaluation', () => {
   it('extracts prompt anchors for concrete fintech requests', () => {
     const anchors = extractPlanningAnchors({
@@ -310,7 +565,8 @@ describe('planning quality evaluation', () => {
       'data source/exporter',
       'realtime transport',
       'visualization tooling',
-      'storage/retention',
+      'storage backend',
+      'retention window',
     ]));
     expect(readiness.recommendedNextAction).toBe('ask_questions');
     expect(readiness.blockingUnknowns.join(' ')).toContain('data source/exporter');
@@ -343,6 +599,40 @@ describe('planning quality evaluation', () => {
     expect(questionText).toContain('How should Rust export agent telemetry to the Next.js dashboard?');
     expect(questionText).toContain('Which realtime delivery model should stream agent monitoring updates?');
     expect(questionText).toContain('Which graphing stack should the monitoring dashboard standardize on?');
+  });
+
+  it('asks remaining monitoring prompts for telemetry scope, storage backend, and retention window', () => {
+    const context = {
+      ...createEmptyPlanningContext(),
+      objective: monitoringPrompt,
+      inScope: ['Realtime agent performance dashboard.'],
+      acceptanceCriteria: ['The dashboard renders ordered realtime eval and tool-call records.'],
+      knownRequirements: [
+        'Rust emits telemetry through an OpenTelemetry collector.',
+        'A WebSocket stream pushes updates to the Next.js dashboard.',
+        'Recharts renders realtime monitoring graphs.',
+      ],
+      technicalDecisions: createMonitoringPlanningContext().technicalDecisions.slice(0, 3),
+    };
+    const result = askClarificationQuestions({
+      candidateQuestions: [],
+      existingQuestions: [],
+      planningContext: context,
+      prompt: monitoringPrompt,
+      readiness: {
+        ...createInitialPlanningReadiness(),
+        objectiveClear: true,
+        scopeBounded: true,
+        hasAcceptanceCriteria: true,
+        blockingUnknowns: findMissingMaterialPlanningSlots(monitoringPrompt, context),
+      },
+    });
+    const questionText = result.questions.map((question) => question.prompt).join(' ');
+
+    expect(questionText).toContain('Which agent telemetry records should be first-class in the plan?');
+    expect(questionText).toContain('Where should monitoring history and rollups be stored for the first release?');
+    expect(questionText).toContain('What retention window should define the monitoring MVP?');
+    expect(result.questions.find((question) => question.questionKey === 'agent-telemetry-scope')?.allowMultiple).toBe(true);
   });
 
   it('persists multi-select telemetry scope answers into planning memory', () => {
@@ -416,6 +706,34 @@ describe('planning quality evaluation', () => {
       'missing_implementation_detail_slots',
       'thin_complex_plan',
     ]));
+  });
+
+  it('fails monitoring plans that still defer material choices after generation', () => {
+    const quality = evaluatePlanArtifactQuality({
+      artifact: createUnderspecifiedMonitoringPlan(),
+      context: createMonitoringPlanningContext(),
+      prompt: monitoringPrompt,
+    });
+
+    expect(quality.passed).toBe(false);
+    expect(quality.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'generic_project_template',
+      'material_open_questions',
+      'undecided_material_alternatives',
+      'invalid_monitoring_data_flow',
+    ]));
+  });
+
+  it('passes decision-complete monitoring plans with resolved implementation choices', () => {
+    const quality = evaluatePlanArtifactQuality({
+      artifact: createDecisionCompleteMonitoringPlan(),
+      context: createMonitoringPlanningContext(),
+      prompt: monitoringPrompt,
+    });
+
+    expect(quality.passed).toBe(true);
+    expect(quality.score).toBeGreaterThanOrEqual(70);
+    expect(quality.issues).toEqual([]);
   });
 
   it('passes prompt-anchored plans with concrete acceptance criteria', () => {

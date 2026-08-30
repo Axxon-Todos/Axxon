@@ -68,7 +68,7 @@ describe('Ollama planning provider', () => {
     expect(requestBody.format).toBe('json');
     expect(requestBody.messages[0].content).toContain('Required JSON shape');
     expect(requestBody.messages[0].content).toContain('Assume routine MVP defaults');
-    expect(requestBody.messages[0].content).toContain('data exporter, realtime transport, telemetry scope, graphing stack');
+    expect(requestBody.messages[0].content).toContain('data exporter, realtime transport, telemetry scope, graphing stack, storage backend, retention window');
     expect(requestBody.messages[0].content).toContain('Never ask cards shaped like');
     expect(requestBody.messages[0].content).toContain('"contextPatch"');
     expect(requestBody.messages[0].content).toContain('"candidateQuestions"');
@@ -203,6 +203,9 @@ describe('Ollama planning provider', () => {
     expect(requestBody.messages[0].content).toContain('Do not use generic Planning, Design, Development, Testing, Demo, Launch');
     expect(requestBody.messages[0].content).toContain('"implementationDetails"');
     expect(requestBody.messages[0].content).toContain('exporter/collector');
+    expect(requestBody.messages[0].content).toContain('storage backend, retention window');
+    expect(requestBody.messages[0].content).toContain('backend API/WebSocket service');
+    expect(requestBody.messages[0].content).toContain('openQuestions must not include unresolved exporter');
     expect(qualityPrompt).toContain('previous plan failed quality review');
     expect(qualityPrompt).toContain('Required prompt anchors');
     expect(qualityPrompt).toContain('generic_project_template');
