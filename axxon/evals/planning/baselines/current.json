@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-08-29T00:00:00.000Z",
+  "provider": "fixture",
+  "cases": [
+    {
+      "caseId": "golden-greeting-awaits-message",
+      "passed": true,
+      "deterministicScore": 100
+    },
+    {
+      "caseId": "golden-sprint-capacity-multi-turn",
+      "passed": true,
+      "deterministicScore": 100
+    },
+    {
+      "caseId": "golden-generic-plan-falls-back",
+      "passed": true,
+      "deterministicScore": 100
+    }
+  ]
+}
