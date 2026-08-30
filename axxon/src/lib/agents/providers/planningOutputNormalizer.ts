@@ -217,7 +217,7 @@ function normalizeStringArray(value: unknown, fieldPath: string, diagnostics: st
       return [];
     }
     if (nextEntry !== entry) {
-      diagnostics.push(`Normalized ${fieldPath}[${index}] to "${truncateDiagnostic(String(nextEntry))}".`);
+      diagnostics.push(`Normalized ${fieldPath}[${index}] to "${truncateDiagnostic(String(nextEntry))}"`);
     }
     return [nextEntry];
   });
