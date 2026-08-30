@@ -792,30 +792,20 @@ function ChatComposer({
           />
           {canCancel ? (
             <Button
-              className="hidden shrink-0 sm:inline-flex"
+              className="shrink-0"
               variant="danger"
+              size="icon"
+              aria-label="Cancel run"
               disabled={isCanceling}
               onClick={onCancel}
             >
               {isCanceling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-              Cancel
             </Button>
           ) : null}
           <Button type="submit" variant="primary" size="icon" disabled={!canSubmit} aria-label={isMessageMode ? 'Send message' : 'Create plan'}>
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
-        {canCancel ? (
-          <Button
-            className="mt-3 w-full sm:hidden"
-            variant="danger"
-            disabled={isCanceling}
-            onClick={onCancel}
-          >
-            {isCanceling ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-            Cancel run
-          </Button>
-        ) : null}
         <div className="mt-2 flex items-center justify-between gap-3 text-xs app-text-muted">
           <span>{disabledReason ?? (isMessageMode ? 'Message the selected run.' : 'Creates a board-scoped planning run.')}</span>
           <span>{isMessageMode ? 'Message' : 'New plan'}</span>

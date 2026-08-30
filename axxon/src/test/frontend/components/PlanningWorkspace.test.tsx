@@ -359,7 +359,9 @@ describe('PlanningWorkspace', () => {
     renderWithProviders(<PlanningWorkspace organizationId="12" />);
 
     const composer = await screen.findByLabelText('Add context or correction');
-    const cancelButton = screen.getByRole('button', { name: 'Cancel' });
+    const cancelButtons = screen.getAllByRole('button', { name: 'Cancel run' });
+    const cancelButton = cancelButtons[0];
+    expect(cancelButtons).toHaveLength(1);
     expect(cancelButton.closest('form')).toContainElement(composer);
 
     fireEvent.click(cancelButton);
