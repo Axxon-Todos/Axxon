@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyPlanningContext,
   createInitialPlanningReadiness,
+  applyClarificationAnswersToContext,
   applyPromptPlanningDefaults,
   buildFallbackPlanArtifact,
   buildPlanningRunTitle,
   evaluatePlanningReadiness,
   evaluatePlanArtifactQuality,
   extractPlanningAnchors,
+  findMissingMaterialPlanningSlots,
   type AgentPlanningTurnAnalysis,
   type AgentPlanArtifact,
   type AgentQuestion,
@@ -16,6 +18,7 @@ import {
 import { askClarificationQuestions } from '@/lib/agents/toolCalls/askClarificationQuestions';
 
 const fintechPrompt = 'Create a fintech dashboard that tracks all payments reconciliation and ledgers';
+const monitoringPrompt = 'i want to make a dashboard built with rust and nextjs to monitor my agents performance in realtime with heavy visual graphs showing realtime evals and tool calls in orders alongside many other crucial monitoring requirements';
 
 // Builds the planning context used by fintech quality tests.
 function createFintechPlanningContext() {
@@ -163,6 +166,13 @@ describe('planning quality evaluation', () => {
     expect(anchors).toEqual(expect.arrayContaining(['payment', 'reconciliation', 'ledger', 'fintech']));
   });
 
+  it('extracts useful anchors from realtime agent monitoring prompts', () => {
+    const anchors = extractPlanningAnchors({ prompt: monitoringPrompt, context: null });
+
+    expect(anchors).toEqual(expect.arrayContaining(['agent performance', 'realtime eval', 'tool call', 'dashboard', 'nextjs']));
+    expect(anchors).not.toEqual(expect.arrayContaining(['want built', 'built rust']));
+  });
+
   it('rejects generic clarification cards and falls back to prompt-specific questions', () => {
     const readiness = {
       ...createInitialPlanningReadiness(),
@@ -267,6 +277,102 @@ describe('planning quality evaluation', () => {
     expect(readiness.reasonSummary).toContain('Generic clarification request was satisfied by prompt-derived planning defaults.');
   });
 
+  it('requires monitoring implementation slots before completing planning', () => {
+    const analysis: AgentPlanningTurnAnalysis = {
+      title: null,
+      summary: null,
+      assistantMessage: null,
+      contextPatch: {
+        objective: monitoringPrompt,
+        knownRequirements: ['Monitor realtime evals and tool calls for agent performance.'],
+        planningConfidence: 0.9,
+      },
+      knownRequirements: ['Monitor realtime evals and tool calls for agent performance.'],
+      unresolvedUnknowns: [],
+      blockingUnknowns: [],
+      resolvedQuestionKeys: [],
+      candidateQuestions: [],
+      confidence: 0.9,
+      decision: { action: 'complete_planning', reason: 'requirements_satisfied' },
+    };
+    const context = applyPromptPlanningDefaults({
+      context: {
+        ...createEmptyPlanningContext(),
+        objective: monitoringPrompt,
+        knownRequirements: ['Monitor realtime evals and tool calls for agent performance.'],
+        planningConfidence: 0.9,
+      },
+      prompt: monitoringPrompt,
+    });
+    const readiness = evaluatePlanningReadiness({ analysis, context, answeredQuestionCount: 0, prompt: monitoringPrompt });
+
+    expect(findMissingMaterialPlanningSlots(monitoringPrompt, context)).toEqual(expect.arrayContaining([
+      'data source/exporter',
+      'realtime transport',
+      'visualization tooling',
+      'storage/retention',
+    ]));
+    expect(readiness.recommendedNextAction).toBe('ask_questions');
+    expect(readiness.blockingUnknowns.join(' ')).toContain('data source/exporter');
+  });
+
+  it('asks monitoring prompts for exporter, realtime, and graphing choices', () => {
+    const context = applyPromptPlanningDefaults({
+      context: {
+        ...createEmptyPlanningContext(),
+        objective: monitoringPrompt,
+        knownRequirements: ['Monitor realtime evals and tool calls for agent performance.'],
+      },
+      prompt: monitoringPrompt,
+    });
+    const result = askClarificationQuestions({
+      candidateQuestions: [],
+      existingQuestions: [],
+      planningContext: context,
+      prompt: monitoringPrompt,
+      readiness: {
+        ...createInitialPlanningReadiness(),
+        objectiveClear: true,
+        scopeBounded: true,
+        hasAcceptanceCriteria: true,
+        blockingUnknowns: findMissingMaterialPlanningSlots(monitoringPrompt, context),
+      },
+    });
+    const questionText = result.questions.map((question) => question.prompt).join(' ');
+
+    expect(questionText).toContain('How should Rust export agent telemetry to the Next.js dashboard?');
+    expect(questionText).toContain('Which realtime delivery model should stream agent monitoring updates?');
+    expect(questionText).toContain('Which graphing stack should the monitoring dashboard standardize on?');
+  });
+
+  it('persists multi-select telemetry scope answers into planning memory', () => {
+    const question: AgentQuestion = {
+      questionKey: 'agent-telemetry-scope',
+      category: 'scope',
+      prompt: 'Which agent telemetry records should be first-class in the plan?',
+      whyThisMatters: 'The implementation plan needs structured telemetry priorities.',
+      required: true,
+      blocking: true,
+      allowMultiple: true,
+      options: [
+        { optionKey: 'eval-results', label: 'Eval results', description: 'Track eval score and pass/fail state.' },
+        { optionKey: 'tool-calls', label: 'Tool calls', description: 'Track tool name, status, latency, and errors.' },
+        { optionKey: 'run-traces', label: 'Run traces', description: 'Track ordered agent steps and state transitions.' },
+      ],
+    };
+    const context = applyClarificationAnswersToContext({
+      context: createEmptyPlanningContext(),
+      questions: [question],
+      answers: [{
+        questionKey: 'agent-telemetry-scope',
+        selectedOptionKeys: ['eval-results', 'tool-calls', 'run-traces'],
+      }],
+    });
+
+    expect(context.inScope[0]).toContain('Eval results, Tool calls, Run traces');
+    expect(context.knownRequirements[0]).toContain('Track tool name, status, latency, and errors.');
+  });
+
   it('fails generic phase-template plans before review', () => {
     const quality = evaluatePlanArtifactQuality({
       artifact: createGenericFintechPlan(),
@@ -279,6 +385,36 @@ describe('planning quality evaluation', () => {
       'generic_project_template',
       'generic_acceptance_criteria',
       'unsupported_stack_assumption',
+    ]));
+  });
+
+  it('fails shallow monitoring plans that omit material implementation details', () => {
+    const artifact = createGenericFintechPlan();
+    artifact.objective = monitoringPrompt;
+    artifact.summary = 'Build a Rust and Next.js realtime monitoring dashboard for agent performance.';
+    artifact.requirements = [
+      'Show realtime agent performance.',
+      'Show evals and tool calls.',
+      'Use visual graphs.',
+    ];
+    artifact.technicalDecisions = [{
+      area: 'dashboard stack',
+      choice: 'Use Rust and Next.js with Chart.js.',
+      rationale: 'The prompt names Rust and Next.js and asks for heavy visual graphs.',
+      source: 'assumed',
+    }];
+
+    const quality = evaluatePlanArtifactQuality({
+      artifact,
+      context: createEmptyPlanningContext(),
+      prompt: monitoringPrompt,
+    });
+
+    expect(quality.passed).toBe(false);
+    expect(quality.issues.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'unsupported_stack_assumption',
+      'missing_implementation_detail_slots',
+      'thin_complex_plan',
     ]));
   });
 

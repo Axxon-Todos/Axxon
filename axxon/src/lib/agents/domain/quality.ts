@@ -13,8 +13,6 @@ const MIN_PROMPT_ANCHOR_COVERAGE = 2;
 const STOP_WORDS = new Set([
   'about',
   'above',
-  'agent',
-  'agents',
   'all',
   'also',
   'and',
@@ -22,13 +20,14 @@ const STOP_WORDS = new Set([
   'application',
   'are',
   'ask',
+  'alongside',
   'based',
   'build',
+  'built',
   'can',
   'core',
   'create',
   'current',
-  'dashboard',
   'define',
   'develop',
   'does',
@@ -46,16 +45,19 @@ const STOP_WORDS = new Set([
   'include',
   'into',
   'make',
+  'many',
   'more',
   'must',
   'need',
   'needs',
+  'other',
   'plan',
   'planning',
   'prompt',
   'release',
   'scope',
   'should',
+  'showing',
   'specific',
   'system',
   'that',
@@ -70,6 +72,7 @@ const STOP_WORDS = new Set([
   'when',
   'with',
   'workflow',
+  'want',
 ]);
 
 const GENERIC_PLAN_PATTERNS = [
@@ -122,7 +125,31 @@ const COMMON_ASSUMED_STACK_TERMS = [
   'postgres',
   'mongodb',
   'mysql',
+  'chart.js',
+  'chartjs',
 ];
+
+const MONITORING_SLOT_PATTERNS = [{
+  code: 'missing_data_exporter',
+  label: 'data exporter',
+  promptPatterns: [/monitor/, /telemetry/, /performance/, /eval/, /tool call/],
+  artifactPatterns: [/export/, /collector/, /gateway/, /opentelemetry/, /\botel\b/, /prometheus/, /api/, /event log/, /source record/],
+}, {
+  code: 'missing_realtime_strategy',
+  label: 'realtime strategy',
+  promptPatterns: [/real[\s-]?time/, /stream/, /live/],
+  artifactPatterns: [/websocket/, /\bsse\b/, /server-sent/, /poll/, /stream/, /pubsub/, /redis/, /event bus/],
+}, {
+  code: 'missing_visualization_tooling',
+  label: 'visualization tooling',
+  promptPatterns: [/graph/, /chart/, /visual/, /analytics/],
+  artifactPatterns: [/recharts/, /chart\.?js/, /\bd3\b/, /visx/, /echarts/, /canvas/, /webgl/, /visualization/],
+}, {
+  code: 'missing_storage_retention',
+  label: 'storage and retention',
+  promptPatterns: [/monitor/, /telemetry/, /performance/, /metric/],
+  artifactPatterns: [/retention/, /history/, /storage/, /time-series/, /database/, /warehouse/, /rollup/],
+}] as const;
 
 // Normalizes free-form text for matching planner anchors and generic-template phrases.
 function normalizeText(value: string) {
@@ -136,9 +163,26 @@ function normalizeText(value: string) {
 // Converts simple plural anchor forms into a stable singular match key.
 function normalizeAnchor(value: string) {
   const normalized = normalizeText(value);
+  if (normalized.endsWith('js')) return normalized;
   if (normalized.endsWith('ies') && normalized.length > 5) return `${normalized.slice(0, -3)}y`;
-  if (normalized.endsWith('s') && normalized.length > 4) return normalized.slice(0, -1);
+  if (normalized.endsWith('s') && normalized.length > 4 && !normalized.endsWith('ss')) return normalized.slice(0, -1);
   return normalized;
+}
+
+// Scores phrase anchors so domain workflow phrases beat accidental adjacent words.
+function getPhraseAnchorPriority(anchor: string) {
+  if (/agent performance|tool call|realtime eval|eval tool|monitor performance/.test(anchor)) return 4;
+  if (/monitoring dashboard|dashboard|realtime|telemetry|eval|trace|metric/.test(anchor)) return 3;
+  if (/rust|nextjs|postgres|redis|opentelemetry/.test(anchor)) return 2;
+  return 1;
+}
+
+// Scores single-token anchors so named technologies remain visible in planner prompts.
+function getTokenAnchorPriority(anchor: string) {
+  if (/rust|nextjs|postgres|redis|opentelemetry/.test(anchor)) return 4;
+  if (/dashboard|realtime|telemetry|eval|trace|metric|monitor|monitoring|performance/.test(anchor)) return 3;
+  if (/tool|call|agent|graph|visual/.test(anchor)) return 2;
+  return 1;
 }
 
 // Collects all meaningful context strings that should influence plan quality.
@@ -191,10 +235,17 @@ export function extractPlanningAnchors({
     bigrams.push(`${first} ${second}`);
   }
 
+  const uniqueBigrams = bigrams.filter((bigram, index) => bigrams.indexOf(bigram) === index);
   const anchors = [
-    ...bigrams.filter((bigram, index) => bigrams.indexOf(bigram) === index).slice(0, 4),
+    ...uniqueBigrams
+      .sort((left, right) => getPhraseAnchorPriority(right) - getPhraseAnchorPriority(left))
+      .slice(0, 4),
     ...[...tokenCounts.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .sort((left, right) =>
+        right[1] - left[1] ||
+        getTokenAnchorPriority(right[0]) - getTokenAnchorPriority(left[0]) ||
+        left[0].localeCompare(right[0])
+      )
       .map(([token]) => token)
       .slice(0, 10),
   ];
@@ -221,6 +272,15 @@ function collectArtifactText(artifact: AgentPlanArtifact) {
   return [
     artifact.summary,
     artifact.objective,
+    ...(artifact.implementationDetails ? [
+      ...artifact.implementationDetails.dataFlow,
+      ...artifact.implementationDetails.tooling,
+      ...artifact.implementationDetails.integrations,
+      ...artifact.implementationDetails.realtimeStrategy,
+      ...artifact.implementationDetails.storageAndRetention,
+      ...artifact.implementationDetails.observability,
+      ...artifact.implementationDetails.securityAndAccess,
+    ] : []),
     ...artifact.scope.inScope,
     ...artifact.scope.outOfScope,
     ...artifact.requirements,
@@ -238,6 +298,52 @@ function collectArtifactText(artifact: AgentPlanArtifact) {
     ...artifact.openQuestions,
     ...artifact.notes,
   ].join(' ');
+}
+
+// Extracts technology names that the final plan must explicitly carry forward.
+function extractPromptTechnologyTerms(prompt: string) {
+  const normalizedPrompt = normalizeText(prompt);
+  const technologies: string[] = [];
+
+  if (/\brust\b/.test(normalizedPrompt)) technologies.push('rust');
+  if (/next\s?js|nextjs/.test(normalizedPrompt)) technologies.push('nextjs');
+  if (/typescript/.test(normalizedPrompt)) technologies.push('typescript');
+  if (/postgres|postgresql/.test(normalizedPrompt)) technologies.push('postgresql');
+  if (/redis/.test(normalizedPrompt)) technologies.push('redis');
+  if (/opentelemetry|\botel\b/.test(normalizedPrompt)) technologies.push('opentelemetry');
+
+  return technologies;
+}
+
+// Checks normalized text against a bounded group of quality patterns.
+function hasPatternMatch(value: string, patterns: readonly RegExp[]) {
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+// Finds realtime monitoring detail groups that are absent from the generated plan.
+function findMissingMonitoringSlots({ prompt, artifactText }: { prompt: string; artifactText: string }) {
+  const normalizedPrompt = normalizeText(prompt);
+  const normalizedArtifactText = normalizeText(artifactText);
+
+  return MONITORING_SLOT_PATTERNS.filter((slot) =>
+    hasPatternMatch(normalizedPrompt, slot.promptPatterns) &&
+    !hasPatternMatch(normalizedArtifactText, slot.artifactPatterns)
+  );
+}
+
+// Counts concrete telemetry record families named in the generated plan.
+function countTelemetrySignals(artifactText: string) {
+  const normalizedArtifactText = normalizeText(artifactText);
+
+  return ['eval', 'tool call', 'trace', 'latency', 'failure', 'cost', 'queue', 'token', 'run state']
+    .filter((signal) => normalizedArtifactText.includes(signal)).length;
+}
+
+// Handles common spelling variants when checking named technology coverage.
+function artifactCoversTechnology(normalizedArtifactText: string, technology: string) {
+  if (technology === 'nextjs') return /next\s?js|nextjs/.test(normalizedArtifactText);
+  if (technology === 'opentelemetry') return /opentelemetry|\botel\b/.test(normalizedArtifactText);
+  return normalizedArtifactText.includes(technology);
 }
 
 // Adds a bounded quality issue to the current diagnostic list.
@@ -286,9 +392,10 @@ function findUnsupportedStackAssumptions({
   const normalizedSource = normalizeText(sourceText);
   const normalizedArtifact = normalizeText(artifactText);
 
-  return COMMON_ASSUMED_STACK_TERMS.filter((term) =>
-    normalizedArtifact.includes(term) && !normalizedSource.includes(term)
-  );
+  return COMMON_ASSUMED_STACK_TERMS.filter((term) => {
+    const normalizedTerm = normalizeText(term);
+    return normalizedArtifact.includes(normalizedTerm) && !normalizedSource.includes(normalizedTerm);
+  });
 }
 
 // Computes the share of implementation tasks that reference prompt-specific anchors.
@@ -334,6 +441,8 @@ export function evaluatePlanArtifactQuality({
 }): AgentPlanningQuality {
   const anchors = extractPlanningAnchors({ prompt, context });
   const artifactText = collectArtifactText(artifact);
+  const normalizedArtifactText = normalizeText(artifactText);
+  const normalizedPromptText = normalizeText(prompt);
   const sourceText = [prompt, ...collectPlanningContextText(context)].join(' ');
   const issues: AgentPlanningQualityIssue[] = [];
   let score = 100;
@@ -395,6 +504,52 @@ export function evaluatePlanArtifactQuality({
       severity: 'warning',
       message: 'The plan introduces stack choices that were not established by the prompt or context.',
       evidence: unsupportedStackTerms,
+    });
+  }
+
+  const missingTechnologies = extractPromptTechnologyTerms(prompt)
+    .filter((technology) => !artifactCoversTechnology(normalizedArtifactText, technology));
+  if (missingTechnologies.length > 0) {
+    score -= 20;
+    pushIssue(issues, {
+      code: 'missing_prompt_technology',
+      severity: 'error',
+      message: 'The plan omits technologies named in the planning prompt.',
+      evidence: missingTechnologies,
+    });
+  }
+
+  const missingMonitoringSlots = findMissingMonitoringSlots({ prompt, artifactText });
+  if (missingMonitoringSlots.length > 0) {
+    score -= 25;
+    pushIssue(issues, {
+      code: 'missing_implementation_detail_slots',
+      severity: 'error',
+      message: 'The plan is missing concrete monitoring implementation details.',
+      evidence: missingMonitoringSlots.map((slot) => slot.label),
+    });
+  }
+
+  if (
+    hasPatternMatch(normalizedPromptText, [/monitor/, /performance/, /telemetry/, /eval/, /tool call/, /real[\s-]?time/, /graph/]) &&
+    (artifact.requirements.length < 4 || artifact.implementationPhases.flatMap((phase) => phase.tasks).length < 5)
+  ) {
+    score -= 15;
+    pushIssue(issues, {
+      code: 'thin_complex_plan',
+      severity: 'error',
+      message: 'The plan does not break the complex monitoring request into enough concrete requirements and tasks.',
+      evidence: [`${artifact.requirements.length} requirements`, `${artifact.implementationPhases.flatMap((phase) => phase.tasks).length} tasks`],
+    });
+  }
+
+  if (hasPatternMatch(normalizedPromptText, [/monitor/, /telemetry/, /agent/]) && countTelemetrySignals(artifactText) < 3) {
+    score -= 15;
+    pushIssue(issues, {
+      code: 'thin_telemetry_scope',
+      severity: 'error',
+      message: 'The plan does not name enough first-class telemetry records for the monitoring workflow.',
+      evidence: ['Expected at least three of evals, tool calls, traces, latency, failures, cost, queue state, token usage, or run state.'],
     });
   }
 

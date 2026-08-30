@@ -33,18 +33,28 @@ export const agentQuestionSchema = z.object({
   whyThisMatters: z.string().trim().min(1).max(260),
   required: z.boolean(),
   blocking: z.boolean(),
-  options: z.array(agentQuestionOptionSchema).min(3).max(4),
+  allowMultiple: z.boolean().optional(),
+  options: z.array(agentQuestionOptionSchema).min(3).max(7),
+});
+
+const agentClarificationAnswerInputSchema = z.object({
+  questionKey: z.string().trim().min(1).max(80),
+  selectedOptionKey: z.string().trim().min(1).max(80).optional(),
+  selectedOptionKeys: z.array(z.string().trim().min(1).max(80)).min(1).max(6).optional(),
+  note: z.string().trim().max(1200).nullable().optional(),
+}).superRefine((answer, context) => {
+  if (!answer.selectedOptionKey && !answer.selectedOptionKeys?.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one selected option is required',
+      path: ['selectedOptionKey'],
+    });
+  }
 });
 
 export const submitAgentInputCommandSchema = z.object({
   answers: z
-    .array(
-      z.object({
-        questionKey: z.string().trim().min(1).max(80),
-        selectedOptionKey: z.string().trim().min(1).max(80),
-        note: z.string().trim().max(1200).nullable().optional(),
-      })
-    )
+    .array(agentClarificationAnswerInputSchema)
     .min(1)
     .max(3),
 });
@@ -195,9 +205,20 @@ export const agentPlanningTurnAnalysisSchema: z.ZodType<AgentPlanningTurnAnalysi
   }
 });
 
+const agentPlanImplementationDetailsSchema = z.object({
+  dataFlow: z.array(z.string().trim().min(1).max(240)).max(12),
+  tooling: z.array(z.string().trim().min(1).max(240)).max(12),
+  integrations: z.array(z.string().trim().min(1).max(240)).max(12),
+  realtimeStrategy: z.array(z.string().trim().min(1).max(240)).max(12),
+  storageAndRetention: z.array(z.string().trim().min(1).max(240)).max(12),
+  observability: z.array(z.string().trim().min(1).max(240)).max(12),
+  securityAndAccess: z.array(z.string().trim().min(1).max(240)).max(12),
+});
+
 export const agentPlanArtifactSchema = z.object({
   summary: z.string().trim().min(1).max(1200),
   objective: z.string().trim().min(1).max(1200),
+  implementationDetails: agentPlanImplementationDetailsSchema.optional(),
   scope: z.object({
     inScope: z.array(z.string().trim().min(1).max(240)).max(25),
     outOfScope: z.array(z.string().trim().min(1).max(240)).max(25),

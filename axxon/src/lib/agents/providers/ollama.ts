@@ -204,7 +204,8 @@ const PLANNING_ANALYSIS_SYSTEM_PROMPT = [
   'Assume routine MVP defaults when the prompt has a concrete objective: smallest usable prompt-named workflow, representative/sample data unless live integrations are named, and adjacent features out of scope unless named.',
   'Do not ask users to choose generic first-release scope, release boundary, success bar, timeline, resource allocation, or stakeholder-approval details when those can be handled as assumptions.',
   'Only use complete_planning when objective, requirements, constraints, risks, and implementation-impacting unknowns are clear enough to generate a trustworthy implementation plan.',
-  'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must resolve a prompt-specific unknown about workflow steps, data/source shape, actors, permissions, integrations, edge cases, outputs, auditability, or constraints.',
+  'For realtime monitoring, dashboard, graph, eval, tool-call, or agent-performance prompts, treat data exporter, realtime transport, telemetry scope, graphing stack, storage/retention, and operational requirements as material planning slots.',
+  'If asking questions, include 1 to 3 candidateQuestions. Each candidate question must resolve a prompt-specific unknown about workflow steps, data/source shape, exporter/collector, actors, permissions, integrations, realtime transport, visualization tooling, telemetry records, storage/retention, edge cases, outputs, auditability, or constraints.',
   'Each candidate question must have exactly 3 concrete options and exactly one recommended option.',
   'Do not ask generic scope, timeline, resource allocation, stakeholder approval, or success-bar questions when the prompt contains specific product/domain terms; ask about the actual workflow, data, actors, constraints, outputs, or audit trail instead.',
   'Never ask cards shaped like "Which workflow should define the first release?" or "What should prove the plan is successful?"; make safe assumptions for those generic parts.',
@@ -255,10 +256,12 @@ const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
   'Return JSON only.',
   'Generate the final structured implementation plan from the completed planning context and transcript.',
   'Do not ask follow-up questions in this stage.',
-  'The plan must include objective, requirements, scope, assumptions, constraints, affectedAreas, technicalDecisions, implementationPhases, risks, successCriteria, openQuestions, and notes.',
+  'The plan must include objective, implementationDetails, requirements, scope, assumptions, constraints, affectedAreas, technicalDecisions, implementationPhases, risks, successCriteria, openQuestions, and notes.',
+  'implementationDetails must cover dataFlow, tooling, integrations, realtimeStrategy, storageAndRetention, observability, and securityAndAccess. Use [] only when that section is truly not relevant.',
+  'For realtime monitoring, dashboard, graph, eval, tool-call, or agent-performance prompts, explicitly name the exporter/collector, realtime transport, telemetry records, graphing approach, storage/retention approach, and operational visibility.',
   'Every requirement, phase, task, and acceptance criterion must be anchored to concrete terms from the prompt or clarified context.',
-  'Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates unless the user explicitly requested those process phases.',
-  'Do not invent stack choices such as React, Node, Express, or PostgreSQL as facts unless they are explicit or already established by context; use assumptions or openQuestions for uncertain choices.',
+  'Do not use generic Planning, Design, Development, Testing, Demo, Launch, "Setup project", "Create layout", or "Integrate charts" phase templates unless the user explicitly requested those process phases.',
+  'Do not invent stack choices such as React, Node, Express, PostgreSQL, or Chart.js as facts unless they are explicit, clarified, or already established by context; use assumptions or openQuestions for uncertain choices.',
   'Each implementation phase must include id, title, summary, and implementation tasks with id, title, description, type, priority, dependencyIds, and acceptanceCriteria.',
   `Technical decision source must be exactly one of: ${TECHNICAL_DECISION_SOURCE_VALUES}.`,
   'Task priority must be exactly one of: low, medium, high.',
@@ -269,6 +272,15 @@ const PLANNING_ARTIFACT_SYSTEM_PROMPT = [
 const PLANNING_ARTIFACT_JSON_SHAPE = `{
   "summary": "string",
   "objective": "string",
+  "implementationDetails": {
+    "dataFlow": [],
+    "tooling": [],
+    "integrations": [],
+    "realtimeStrategy": [],
+    "storageAndRetention": [],
+    "observability": [],
+    "securityAndAccess": []
+  },
   "scope": {
     "inScope": [],
     "outOfScope": []

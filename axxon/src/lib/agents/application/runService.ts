@@ -135,18 +135,26 @@ function validateClarificationAnswers(questions: AgentQuestion[], answers: Agent
 
   return answers.map((answer) => {
     const questionKey = normalizeAgentQuestionKey(answer.questionKey);
-    const selectedOptionKey = normalizeAgentQuestionKey(answer.selectedOptionKey);
+    const selectedOptionKeys = [
+      ...(answer.selectedOptionKeys?.length ? answer.selectedOptionKeys : []),
+      ...(!answer.selectedOptionKeys?.length && answer.selectedOptionKey ? [answer.selectedOptionKey] : []),
+    ].map(normalizeAgentQuestionKey).filter((optionKey, index, keys) => keys.indexOf(optionKey) === index);
 
     if (seenQuestionKeys.has(questionKey)) throw new BadRequestError('Each clarification question can only be answered once');
     seenQuestionKeys.add(questionKey);
 
     const question = questionsByKey.get(questionKey);
     if (!question) throw new BadRequestError('Clarification answers do not match the current question set');
-    if (!question.options.some((option) => option.optionKey === selectedOptionKey)) {
+    if (selectedOptionKeys.length === 0) throw new BadRequestError('Select at least one clarification option');
+    if (!question.allowMultiple && selectedOptionKeys.length > 1) throw new BadRequestError('This clarification question accepts only one answer');
+    if (selectedOptionKeys.includes('none-of-the-above') && selectedOptionKeys.length > 1) {
+      throw new BadRequestError('None of the above cannot be combined with other answers');
+    }
+    if (!selectedOptionKeys.every((selectedOptionKey) => question.options.some((option) => option.optionKey === selectedOptionKey))) {
       throw new BadRequestError('Selected clarification option is invalid');
     }
 
-    return { ...answer, questionKey, selectedOptionKey, note: answer.note?.trim() || null };
+    return { ...answer, questionKey, selectedOptionKey: selectedOptionKeys[0], selectedOptionKeys, note: answer.note?.trim() || null };
   });
 }
 

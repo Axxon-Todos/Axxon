@@ -170,6 +170,46 @@ describe('PlanningWorkspace', () => {
       expect(mockedSubmitAgentRunInput).toHaveBeenCalledWith('12', '5', 44, [{
         questionKey: 'success-bar',
         selectedOptionKey: 'demo',
+        selectedOptionKeys: ['demo'],
+        note: null,
+      }]);
+    });
+  });
+
+  it('submits multi-select clarification answers', async () => {
+    const multiSelectRun = createRun({
+      questions: [{
+        questionKey: 'agent-telemetry-scope',
+        category: 'scope',
+        prompt: 'Which agent telemetry records should be first-class in the plan?',
+        whyThisMatters: 'The implementation plan needs structured telemetry priorities.',
+        required: true,
+        blocking: true,
+        allowMultiple: true,
+        options: [
+          { optionKey: 'eval-results', label: 'Eval results', description: 'Track eval scores.', isRecommended: true },
+          { optionKey: 'tool-calls', label: 'Tool calls', description: 'Track tool status and latency.' },
+          { optionKey: 'run-traces', label: 'Run traces', description: 'Track ordered agent steps.' },
+          { optionKey: 'none-of-the-above', label: 'None of the above', description: 'Add a note with a better answer.' },
+        ],
+      }],
+    });
+    mockedFetchAgentRuns.mockResolvedValue([multiSelectRun]);
+    mockedFetchAgentRunDetail.mockResolvedValue(multiSelectRun);
+    mockedSubmitAgentRunInput.mockResolvedValue(createRun({ state: 'queued', questions: [] }));
+
+    renderWithProviders(<PlanningWorkspace organizationId="12" />);
+
+    expect(await screen.findByText('Which agent telemetry records should be first-class in the plan?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Eval results/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Tool calls/i }));
+    fireEvent.click(screen.getByRole('button', { name: /submit all answers/i }));
+
+    await waitFor(() => {
+      expect(mockedSubmitAgentRunInput).toHaveBeenCalledWith('12', '5', 44, [{
+        questionKey: 'agent-telemetry-scope',
+        selectedOptionKey: 'eval-results',
+        selectedOptionKeys: ['eval-results', 'tool-calls'],
         note: null,
       }]);
     });
@@ -250,15 +290,29 @@ describe('PlanningWorkspace', () => {
       planArtifact: {
         summary: 'Improve the planning UI with focused quality diagnostics.',
         objective: 'Plan the agent UI',
+        implementationDetails: {
+          dataFlow: ['Persist plan quality scores from the agent backend to the planning workspace.'],
+          tooling: ['Render diagnostics with the existing planning workspace UI primitives.'],
+          integrations: [],
+          realtimeStrategy: ['Refresh plan quality output when agent run realtime events arrive.'],
+          storageAndRetention: [],
+          observability: ['Expose the quality score and issue messages in the review panel.'],
+          securityAndAccess: ['Only board members can view generated plan diagnostics.'],
+        },
         scope: {
           inScope: ['Planning UI review'],
-          outOfScope: [],
+          outOfScope: ['Automated code execution'],
         },
         requirements: ['Show quality diagnostics on generated plans.'],
         assumptions: [],
-        constraints: [],
+        constraints: ['Keep review controls on org-scoped agent APIs.'],
         affectedAreas: ['agent planning workspace'],
-        technicalDecisions: [],
+        technicalDecisions: [{
+          area: 'quality display',
+          choice: 'Render server-scored plan quality inline.',
+          rationale: 'The user needs quality failures visible before approving a plan.',
+          source: 'explicit',
+        }],
         implementationPhases: [{
           id: 'quality-diagnostics',
           title: 'Quality diagnostics',
@@ -275,8 +329,8 @@ describe('PlanningWorkspace', () => {
         }],
         risks: [],
         successCriteria: ['Users can see why a generated plan needs changes.'],
-        openQuestions: [],
-        notes: [],
+        openQuestions: ['Should warnings block approval later?'],
+        notes: ['Quality scoring comes from the backend.'],
         quality: {
           score: 62,
           passed: false,
@@ -295,6 +349,11 @@ describe('PlanningWorkspace', () => {
     renderWithProviders(<PlanningWorkspace organizationId="12" />);
 
     expect(await screen.findByText('Plan quality review')).toBeInTheDocument();
+    expect(screen.getByText('Implementation details')).toBeInTheDocument();
+    expect(screen.getByText(/Persist plan quality scores/i)).toBeInTheDocument();
+    expect(screen.getByText(/Automated code execution/i)).toBeInTheDocument();
+    expect(screen.getByText(/quality display/i)).toBeInTheDocument();
+    expect(screen.getByText(/Should warnings block approval later/i)).toBeInTheDocument();
     expect(screen.getByText('62/100')).toBeInTheDocument();
     expect(screen.getByText(/generic project-management template/i)).toBeInTheDocument();
   });

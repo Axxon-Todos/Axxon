@@ -552,7 +552,7 @@ function QuestionPanel({
   const activeQuestion = run.questions[Math.min(activeQuestionIndex, Math.max(run.questions.length - 1, 0))];
   const answers = run.questions.flatMap((question) => {
     const answer = answersByQuestion[question.questionKey];
-    return answer?.selectedOptionKey ? [answer] : [];
+    return answer?.selectedOptionKey || answer?.selectedOptionKeys?.length ? [answer] : [];
   });
   const canSubmit = answers.length === run.questions.length && run.capabilities.includes('submit_input');
   const answeredCount = answers.length;
@@ -625,6 +625,31 @@ function QuestionCard({
   positionLabel: string;
   onChange: (answer: AgentClarificationAnswer) => void;
 }) {
+  const selectedOptionKeys = answer?.selectedOptionKeys ?? (answer?.selectedOptionKey ? [answer.selectedOptionKey] : []);
+  const selectedOptionKeySet = new Set(selectedOptionKeys);
+  const updateSingleAnswer = (optionKey: string) => {
+    onChange({
+      questionKey: question.questionKey,
+      selectedOptionKey: optionKey,
+      selectedOptionKeys: [optionKey],
+      note: answer?.note ?? null,
+    });
+  };
+  const updateMultiAnswer = (optionKey: string, checked: boolean) => {
+    const nextOptionKeys = optionKey === 'none-of-the-above'
+      ? checked ? [optionKey] : []
+      : checked
+        ? [...selectedOptionKeys.filter((key) => key !== 'none-of-the-above'), optionKey]
+        : selectedOptionKeys.filter((key) => key !== optionKey);
+
+    onChange({
+      questionKey: question.questionKey,
+      selectedOptionKey: nextOptionKeys[0] ?? '',
+      selectedOptionKeys: nextOptionKeys,
+      note: answer?.note ?? null,
+    });
+  };
+
   return (
     <div className="rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_68%,transparent)] p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -643,10 +668,16 @@ function QuestionCard({
           >
             <input
               className="mt-1"
-              type="radio"
+              type={question.allowMultiple ? 'checkbox' : 'radio'}
               name={question.questionKey}
-              checked={answer?.selectedOptionKey === option.optionKey}
-              onChange={() => onChange({ questionKey: question.questionKey, selectedOptionKey: option.optionKey, note: answer?.note ?? null })}
+              checked={selectedOptionKeySet.has(option.optionKey)}
+              onChange={(event) => {
+                if (question.allowMultiple) {
+                  updateMultiAnswer(option.optionKey, event.target.checked);
+                } else {
+                  updateSingleAnswer(option.optionKey);
+                }
+              }}
             />
             <span>
               <span className="font-medium">
@@ -665,7 +696,8 @@ function QuestionCard({
         onChange={(event) =>
           onChange({
             questionKey: question.questionKey,
-            selectedOptionKey: answer?.selectedOptionKey ?? '',
+            selectedOptionKey: selectedOptionKeys[0] ?? '',
+            selectedOptionKeys,
             note: event.target.value,
           })
         }
@@ -706,8 +738,15 @@ function PlanArtifactPanel({
       </div>
 
       <PlanQualityPanel artifact={artifact} />
+      <ImplementationDetailsPanel artifact={artifact} />
 
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <PlanList title="In scope" items={artifact.scope.inScope} />
+        <PlanList title="Out of scope" items={artifact.scope.outOfScope} />
+      </div>
       <PlanList title="Requirements" items={artifact.requirements} />
+      <PlanList title="Technical decisions" items={artifact.technicalDecisions.map((decision) => `${decision.area}: ${decision.choice}. ${decision.rationale}`)} />
+      <PlanList title="Constraints" items={artifact.constraints} />
       <PlanList title="Success criteria" items={artifact.successCriteria} />
 
       <div className="mt-6 space-y-4">
@@ -733,6 +772,8 @@ function PlanArtifactPanel({
 
       <PlanList title="Risks" items={artifact.risks} />
       <PlanList title="Assumptions" items={artifact.assumptions} />
+      <PlanList title="Open questions" items={artifact.openQuestions} />
+      <PlanList title="Notes" items={artifact.notes} />
 
       {(canRequestChanges || canApprove) ? (
         <div className="mt-6 border-t border-[var(--app-border)] pt-5">
@@ -760,6 +801,35 @@ function PlanArtifactPanel({
         </div>
       ) : null}
     </Surface>
+  );
+}
+
+// Renders structured implementation handoff details when the planner includes them.
+function ImplementationDetailsPanel({ artifact }: { artifact: AgentPlanArtifact }) {
+  const details = artifact.implementationDetails;
+  if (!details) return null;
+
+  const sections = [
+    ['Data flow', details.dataFlow],
+    ['Tooling', details.tooling],
+    ['Integrations', details.integrations],
+    ['Realtime strategy', details.realtimeStrategy],
+    ['Storage and retention', details.storageAndRetention],
+    ['Observability', details.observability],
+    ['Security and access', details.securityAndAccess],
+  ] as const;
+  const visibleSections = sections.filter(([, items]) => items.length > 0);
+  if (visibleSections.length === 0) return null;
+
+  return (
+    <div className="mt-6 rounded-xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_72%,transparent)] p-4">
+      <p className="app-kicker">Implementation details</p>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        {visibleSections.map(([title, items]) => (
+          <PlanList key={title} title={title} items={items} compact />
+        ))}
+      </div>
+    </div>
   );
 }
 

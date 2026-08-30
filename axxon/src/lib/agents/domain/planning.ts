@@ -20,6 +20,7 @@ const RESOLVABLE_GENERIC_REASONS: AgentPlanningDecisionReason[] = [
   'missing_acceptance_criteria',
   'low_confidence',
 ];
+const MATERIAL_SLOT_QUESTION_LIMIT = 3;
 
 export const NONE_OF_THE_ABOVE_OPTION: AgentQuestionOption = {
   optionKey: 'none-of-the-above',
@@ -183,6 +184,68 @@ function hasConcretePromptSignals(prompt: string | undefined, context: AgentPlan
   return Boolean(context.objective?.trim()) && (anchors.length >= 2 || promptText.split(/\s+/).length >= 5);
 }
 
+// Checks whether normalized prompt or context text includes one of the slot markers.
+function containsAny(value: string, patterns: RegExp[]) {
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+// Collects durable planning context fields that represent real implementation decisions.
+function collectMaterialPlanningText(context: AgentPlanningContext) {
+  return [
+    context.targetOutcome,
+    ...context.inScope,
+    ...context.outOfScope,
+    ...context.assumptions,
+    ...context.constraints,
+    ...context.acceptanceCriteria,
+    ...context.knownRequirements,
+    ...context.affectedAreas,
+    ...context.risks,
+    ...context.dependencies,
+    ...context.technicalDecisions.flatMap((decision) => [decision.area, decision.choice, decision.rationale]),
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+// Finds concrete planning slots that cannot be safely replaced by generic MVP defaults.
+export function findMissingMaterialPlanningSlots(prompt: string | undefined, context: AgentPlanningContext) {
+  const promptText = (prompt ?? '').toLowerCase();
+  const contextText = collectMaterialPlanningText(context);
+  const missingSlots: string[] = [];
+  const wantsMonitoring = containsAny(promptText, [/monitor/, /observability/, /performance/, /metric/, /telemetry/, /eval/, /tool call/, /trace/]);
+  const wantsRealtime = containsAny(promptText, [/real[\s-]?time/, /stream/, /live/]);
+  const wantsGraphs = containsAny(promptText, [/graph/, /chart/, /visual/, /analytics/]);
+  const namesRust = /\brust\b/.test(promptText);
+
+  if (!wantsMonitoring && !wantsRealtime && !wantsGraphs) return missingSlots;
+
+  if (
+    (namesRust || wantsMonitoring) &&
+    !containsAny(contextText, [/export/, /collector/, /gateway/, /opentelemetry/, /\botel\b/, /prometheus/, /api/, /event log/, /webhook/, /source record/])
+  ) {
+    missingSlots.push('data source/exporter');
+  }
+
+  if (wantsRealtime && !containsAny(contextText, [/websocket/, /\bsse\b/, /server-sent/, /poll/, /stream/, /pubsub/, /redis/, /event bus/])) {
+    missingSlots.push('realtime transport');
+  }
+
+  if (wantsGraphs && !containsAny(contextText, [/recharts/, /chart\.?js/, /\bd3\b/, /visx/, /echarts/, /canvas/, /webgl/, /time-series graph/, /visualization/])) {
+    missingSlots.push('visualization tooling');
+  }
+
+  const telemetrySignals = ['eval', 'tool call', 'trace', 'latency', 'failure', 'cost', 'queue', 'token', 'run state']
+    .filter((signal) => contextText.includes(signal));
+  if (wantsMonitoring && telemetrySignals.length < 3) {
+    missingSlots.push('metrics/events scope');
+  }
+
+  if (wantsMonitoring && !containsAny(contextText, [/retention/, /history/, /storage/, /time-series/, /database/, /warehouse/, /rollup/])) {
+    missingSlots.push('storage/retention');
+  }
+
+  return missingSlots;
+}
+
 // Builds an immediate, compact planning-run title before any provider response exists.
 export function buildPlanningRunTitle(prompt: string) {
   const normalizedPrompt = prompt.replace(/\s+/g, ' ').trim();
@@ -322,8 +385,9 @@ export function evaluatePlanningReadiness({
     context.technicalDecisions.some((decision) => decision.source === 'explicit' || decision.source === 'clarified');
   const scopeBounded = hasScopeSignals && hasBoundaryEvidence;
   const hasAcceptanceCriteria = context.acceptanceCriteria.length > 0;
-  const blockingUnknowns = dedupeStrings(context.blockingUnknowns);
-  const unresolvedUnknowns = dedupeStrings(context.unresolvedUnknowns);
+  const missingMaterialSlots = findMissingMaterialPlanningSlots(prompt, context);
+  const blockingUnknowns = dedupeStrings([...context.blockingUnknowns, ...missingMaterialSlots.map((slot) => `Missing ${slot} decision.`)]);
+  const unresolvedUnknowns = dedupeStrings([...context.unresolvedUnknowns, ...missingMaterialSlots.map((slot) => `Clarify ${slot}.`)]);
   const confidence = clampConfidence(context.planningConfidence);
   const deterministicReason = resolveReadinessBlockerReason({
     objectiveClear,
@@ -365,8 +429,9 @@ export function evaluatePlanningReadiness({
   };
 }
 
-function normalizeQuestionOptions(options: AgentQuestionOption[]) {
+function normalizeQuestionOptions(options: AgentQuestionOption[], allowMultiple = false) {
   const seen = new Set<string>();
+  const optionLimit = allowMultiple ? 6 : 3;
   const normalizedOptions = options.flatMap((option) => {
     const optionKey = normalizeAgentQuestionKey(option.optionKey || option.label);
     const label = option.label.trim();
@@ -378,7 +443,7 @@ function normalizeQuestionOptions(options: AgentQuestionOption[]) {
 
     seen.add(optionKey);
     return [{ optionKey, label, description, isRecommended: option.isRecommended === true }];
-  }).slice(0, 3);
+  }).slice(0, optionLimit);
   const recommendedKey =
     normalizedOptions.find((option) => option.isRecommended)?.optionKey ??
     normalizedOptions[0]?.optionKey ??
@@ -414,10 +479,10 @@ export function selectClarificationQuestions({
     const questionKey = normalizeAgentQuestionKey(candidateQuestion.questionKey || candidateQuestion.prompt);
     const prompt = candidateQuestion.prompt.trim();
     const normalizedText = normalizeQuestionText(prompt);
-    const options = normalizeQuestionOptions(candidateQuestion.options);
+    const options = normalizeQuestionOptions(candidateQuestion.options, candidateQuestion.allowMultiple);
 
-    if (options.length !== 4) {
-      discardedQuestions.push({ questionKey, prompt, reason: 'Question did not include three unique guided options.' });
+    if (options.length < 4) {
+      discardedQuestions.push({ questionKey, prompt, reason: 'Question did not include enough unique guided options.' });
       continue;
     }
 
@@ -448,6 +513,7 @@ export function selectClarificationQuestions({
       questionKey,
       prompt,
       whyThisMatters: candidateQuestion.whyThisMatters.trim(),
+      allowMultiple: candidateQuestion.allowMultiple,
       options,
     });
   }
@@ -465,7 +531,8 @@ function buildQuestion(
   category: AgentQuestionCategory,
   prompt: string,
   whyThisMatters: string,
-  options: AgentQuestionOption[]
+  options: AgentQuestionOption[],
+  allowMultiple = false
 ): AgentQuestion {
   return {
     questionKey,
@@ -474,6 +541,7 @@ function buildQuestion(
     whyThisMatters,
     required: true,
     blocking: true,
+    allowMultiple: allowMultiple || undefined,
     options,
   };
 }
@@ -598,10 +666,37 @@ export function buildFallbackPlanArtifact({
   const slug = slugifyPlanId(subject);
   const objective = context.objective?.trim() || prompt.trim();
   const requirements = limitPlanStrings(collectFallbackRequirements(context), 240, 30);
+  const promptText = prompt.toLowerCase();
+  const namesRust = /\brust\b/.test(promptText);
+  const namesNext = /next\.?js|nextjs/.test(promptText);
+  const wantsRealtime = /real[\s-]?time|stream|live/.test(promptText);
+  const wantsGraphs = /graph|chart|visual|analytics/.test(promptText);
+  const wantsMonitoring = /monitor|telemetry|performance|eval|tool call|trace/.test(promptText);
 
   return {
     summary: `Implement ${subject} as a focused first-release workflow using the clarified planning context.`,
     objective: limitPlanText(objective, 1200),
+    implementationDetails: {
+      dataFlow: wantsMonitoring
+        ? [`Capture ${subject} telemetry from ${namesRust ? 'the Rust runtime' : 'the runtime'} into a durable event stream before dashboard rendering.`]
+        : [`Move ${subject} records through a validated source, processing, and review path.`],
+      tooling: [
+        namesRust ? 'Use Rust for the telemetry producer or backend collector named in the prompt.' : null,
+        namesNext ? 'Use Next.js for the dashboard surface named in the prompt.' : null,
+        wantsGraphs ? 'Use the clarified or repo-standard graphing library for dense telemetry visualizations.' : null,
+      ].filter((value): value is string => Boolean(value)),
+      integrations: [`Keep external ${subject} integrations explicit as assumptions or open questions until confirmed.`],
+      realtimeStrategy: wantsRealtime
+        ? [`Stream ${subject} updates through the clarified realtime transport and define reconnect/backfill behavior.`]
+        : [],
+      storageAndRetention: wantsMonitoring
+        ? [`Persist recent raw ${subject} events and define rollups for historical dashboard views.`]
+        : [],
+      observability: wantsMonitoring
+        ? [`Track evals, tool calls, failures, latency, and run state as first-class monitoring records.`]
+        : [`Log ${subject} state transitions and validation failures for troubleshooting.`],
+      securityAndAccess: [`Enforce organization and board access before exposing ${subject} records or aggregates.`],
+    },
     scope: {
       inScope: context.inScope.length > 0 ? limitPlanStrings(context.inScope, 240, 25) : [`${titleSubject} first-release workflow`],
       outOfScope: limitPlanStrings(context.outOfScope, 240, 25),
@@ -688,11 +783,104 @@ export function buildFallbackPlanArtifact({
 }
 
 // Builds prompt-anchored fallback cards when the provider cannot supply usable questions.
+function buildMaterialSlotFallbackQuestions(
+  context: AgentPlanningContext | null | undefined,
+  prompt: string | undefined
+) {
+  if (!context) return [];
+
+  const missingSlots = new Set(findMissingMaterialPlanningSlots(prompt, context));
+  const promptText = (prompt ?? '').toLowerCase();
+  const questions: AgentQuestion[] = [];
+  const mentionsRustAndNext = /\brust\b/.test(promptText) && /next\.?js|nextjs/.test(promptText);
+
+  if (missingSlots.has('data source/exporter')) {
+    questions.push(buildQuestion(
+      'agent-telemetry-exporter',
+      'technical',
+      mentionsRustAndNext
+        ? 'How should Rust export agent telemetry to the Next.js dashboard?'
+        : 'How should agent telemetry be exported into the dashboard?',
+      'The implementation plan needs the concrete producer and consumer boundary before it can define backend tasks.',
+      [
+        { optionKey: 'opentelemetry-collector', label: 'OpenTelemetry collector', description: 'Emit spans, metrics, and events from the agent runtime into an OTEL collector.', isRecommended: true },
+        { optionKey: 'rust-api-gateway', label: 'Rust API gateway', description: 'Expose Rust-owned REST or RPC endpoints that the dashboard backend reads.' },
+        { optionKey: 'append-only-event-log', label: 'Event log', description: 'Write agent events to an append-only log that powers dashboard reads and replay.' },
+      ]
+    ));
+  }
+
+  if (missingSlots.has('realtime transport')) {
+    questions.push(buildQuestion(
+      'agent-realtime-transport',
+      'technical',
+      'Which realtime delivery model should stream agent monitoring updates?',
+      'The plan needs a specific transport so server tasks, client subscriptions, and failure handling are concrete.',
+      [
+        { optionKey: 'websocket-stream', label: 'WebSocket stream', description: 'Push live run, eval, and tool-call updates over a bidirectional socket.', isRecommended: true },
+        { optionKey: 'server-sent-events', label: 'Server-sent events', description: 'Stream dashboard updates over one-way HTTP event streams.' },
+        { optionKey: 'polling-with-rollups', label: 'Polling plus rollups', description: 'Poll recent metrics and use aggregated rollups for heavier graph views.' },
+      ]
+    ));
+  }
+
+  if (missingSlots.has('visualization tooling')) {
+    questions.push(buildQuestion(
+      'agent-visualization-tooling',
+      'technical',
+      'Which graphing stack should the monitoring dashboard standardize on?',
+      'The prompt asks for heavy visual graphs, so the plan needs the charting library and rendering tradeoff before UI work is specific.',
+      [
+        { optionKey: 'recharts', label: 'Recharts', description: 'Use the existing React charting dependency already present in the app.', isRecommended: true },
+        { optionKey: 'visx-or-d3', label: 'Visx or D3', description: 'Use lower-level primitives for custom dense telemetry visuals.' },
+        { optionKey: 'canvas-webgl', label: 'Canvas/WebGL', description: 'Use canvas-style rendering for very high-volume realtime graph updates.' },
+      ]
+    ));
+  }
+
+  if (missingSlots.has('metrics/events scope')) {
+    questions.push(buildQuestion(
+      'agent-telemetry-scope',
+      'scope',
+      'Which agent telemetry records should be first-class in the plan?',
+      'The implementation plan needs structured telemetry priorities instead of a vague monitoring requirement.',
+      [
+        { optionKey: 'eval-results', label: 'Eval results', description: 'Track eval score, suite, pass/fail state, and model/run metadata.', isRecommended: true },
+        { optionKey: 'tool-calls', label: 'Tool calls', description: 'Track tool name, arguments summary, result status, latency, and errors.' },
+        { optionKey: 'run-traces', label: 'Run traces', description: 'Track ordered agent steps, state transitions, and message timing.' },
+        { optionKey: 'latency-cost', label: 'Latency and cost', description: 'Track duration, token usage, queue time, and estimated spend.' },
+        { optionKey: 'failures', label: 'Failures', description: 'Track provider errors, tool failures, retries, and unresolved exceptions.' },
+      ],
+      true
+    ));
+  }
+
+  if (missingSlots.has('storage/retention')) {
+    questions.push(buildQuestion(
+      'agent-telemetry-retention',
+      'constraints',
+      'How should monitoring history and retention be planned?',
+      'Realtime graphs also need historical storage rules for reloads, rollups, and trend views.',
+      [
+        { optionKey: 'time-series-rollups', label: 'Time-series rollups', description: 'Store raw recent events and aggregate older data into graph-friendly buckets.', isRecommended: true },
+        { optionKey: 'event-history', label: 'Event history', description: 'Keep ordered raw event history as the source of dashboard truth.' },
+        { optionKey: 'short-lived-window', label: 'Short-lived window', description: 'Keep only recent realtime data until longer retention is required.' },
+      ]
+    ));
+  }
+
+  return questions.slice(0, MATERIAL_SLOT_QUESTION_LIMIT);
+}
+
+// Builds prompt-anchored fallback cards when the provider cannot supply usable questions.
 function buildContextualFallbackClarificationQuestions(
   readiness: AgentPlanningReadiness,
   context: AgentPlanningContext | null | undefined,
   prompt: string | undefined
 ) {
+  const materialQuestions = buildMaterialSlotFallbackQuestions(context, prompt);
+  if (materialQuestions.length > 0) return materialQuestions;
+
   const anchors = extractFallbackPlanningAnchors(prompt, context);
   if (anchors.length < 2) return [];
 
@@ -749,14 +937,26 @@ function buildContextualFallbackClarificationQuestions(
 function buildClarifiedAnswerStatement(
   question: AgentQuestion,
   answer: AgentClarificationAnswer,
-  selectedOption: AgentQuestionOption
+  selectedOptions: AgentQuestionOption[]
 ) {
   const note = answer.note?.trim();
   return [
-    `${question.prompt}: ${selectedOption.label}.`,
-    selectedOption.description,
+    `${question.prompt}: ${selectedOptions.map((option) => option.label).join(', ')}.`,
+    ...selectedOptions.map((option) => option.description),
     note ? `Note: ${note}` : null,
   ].filter(Boolean).join(' ');
+}
+
+// Resolves one or more selected option keys against the active clarification card.
+function getSelectedQuestionOptions(question: AgentQuestion, answer: AgentClarificationAnswer) {
+  const selectedOptionKeys = answer.selectedOptionKeys?.length
+    ? answer.selectedOptionKeys
+    : answer.selectedOptionKey
+      ? [answer.selectedOptionKey]
+      : [];
+  const selectedKeySet = new Set(selectedOptionKeys.map(normalizeAgentQuestionKey));
+
+  return question.options.filter((option) => selectedKeySet.has(option.optionKey));
 }
 
 // Applies one clarification answer to the relevant structured planning-context fields.
@@ -765,10 +965,10 @@ function mergeClarifiedAnswerIntoContext(
   question: AgentQuestion,
   answer: AgentClarificationAnswer
 ): AgentPlanningContext {
-  const selectedOption = question.options.find((option) => option.optionKey === answer.selectedOptionKey);
-  if (!selectedOption) return context;
+  const selectedOptions = getSelectedQuestionOptions(question, answer);
+  if (selectedOptions.length === 0) return context;
 
-  const statement = buildClarifiedAnswerStatement(question, answer, selectedOption);
+  const statement = buildClarifiedAnswerStatement(question, answer, selectedOptions);
   const nextContext: AgentPlanningContext = {
     ...context,
     inScope: [...context.inScope],
@@ -784,6 +984,7 @@ function mergeClarifiedAnswerIntoContext(
     dependencies: [...context.dependencies],
     technicalDecisions: [...context.technicalDecisions],
   };
+  const optionDescriptions = selectedOptions.map((option) => option.description);
 
   if (question.category === 'scope') {
     nextContext.inScope = mergeStrings(nextContext.inScope, [statement]);
@@ -796,8 +997,8 @@ function mergeClarifiedAnswerIntoContext(
   } else if (question.category === 'technical') {
     nextContext.technicalDecisions = mergeTechnicalDecisions(nextContext.technicalDecisions, [{
       area: question.prompt,
-      choice: selectedOption.label,
-      rationale: [selectedOption.description, answer.note?.trim()].filter(Boolean).join(' '),
+      choice: selectedOptions.map((option) => option.label).join(', '),
+      rationale: [...optionDescriptions, answer.note?.trim()].filter(Boolean).join(' '),
       source: 'clarified',
     }]);
   } else if (question.category === 'priority' && !nextContext.targetOutcome) {
@@ -879,12 +1080,12 @@ export function buildClarificationAnswerSummary(questions: AgentQuestion[], answ
     'Clarification answers submitted:',
     ...questions.map((question, index) => {
       const answer = answersByQuestionKey.get(normalizeAgentQuestionKey(question.questionKey));
-      const selectedOption = question.options.find((option) => option.optionKey === answer?.selectedOptionKey);
+      const selectedOptions = answer ? getSelectedQuestionOptions(question, answer) : [];
       const note = answer?.note?.trim();
 
       return [
         `${index + 1}. ${question.prompt}`,
-        `Answer: ${selectedOption?.label ?? 'Unknown option'}`,
+        `Answer: ${selectedOptions.length > 0 ? selectedOptions.map((option) => option.label).join(', ') : 'Unknown option'}`,
         note ? `Note: ${note}` : null,
       ].filter(Boolean).join('\n');
     }),

@@ -40,12 +40,14 @@ export type AgentQuestion = {
   whyThisMatters: string;
   required: boolean;
   blocking: boolean;
+  allowMultiple?: boolean;
   options: AgentQuestionOption[];
 };
 
 export type AgentClarificationAnswer = {
   questionKey: string;
-  selectedOptionKey: string;
+  selectedOptionKey?: string;
+  selectedOptionKeys?: string[];
   note?: string | null;
 };
 
@@ -84,6 +86,15 @@ export type AgentPlanningQuality = {
 export type AgentPlanArtifact = {
   summary: string;
   objective: string;
+  implementationDetails?: {
+    dataFlow: string[];
+    tooling: string[];
+    integrations: string[];
+    realtimeStrategy: string[];
+    storageAndRetention: string[];
+    observability: string[];
+    securityAndAccess: string[];
+  };
   scope: {
     inScope: string[];
     outOfScope: string[];
