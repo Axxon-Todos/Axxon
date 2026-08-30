@@ -56,6 +56,7 @@ Axxon now uses a dark-first slate/graphite platform theme with indigo primary ac
 - Repository persistence belongs in `axxon/src/lib/models/repositories.ts`, GitHub installation persistence in `axxon/src/lib/models/githubInstallations.ts`, and webhook audit persistence in `axxon/src/lib/models/githubWebhookEvents.ts`.
 - Agent persistence, provider adapters, queue dispatch, worker orchestration, and contracts all belong in `axxon/src/lib/agents/**`.
 - Agent-callable tools must live under `axxon/src/lib/agents/toolCalls`; state-scoped tool allowances belong in the agent state-machine node metadata.
+- Planning-agent eval harness code belongs under `axxon/src/lib/agents/evals`, with JSONL datasets under `axxon/evals/planning`.
 - The org-level agent planning workspace lives at `axxon/src/app/dashboard/orgs/[organizationId]/ai`, with feature UI under `axxon/src/components/features/agents`.
 - Board-to-repository allowlist persistence belongs in `axxon/src/lib/models/boardRepositoryAccess.ts`.
 - Sprint persistence belongs in the existing `src/lib` layers and should extend shared todo payloads through shared types instead of adding separate view-only task models.
@@ -72,6 +73,12 @@ Run commands from `axxon/`.
 - `pnpm test`: run backend and frontend test suites.
 - `pnpm test:backend`: run backend preflight checks plus backend Vitest coverage.
 - `pnpm test:frontend`: run frontend Vitest coverage.
+- `pnpm eval:planning:smoke`: run the fast fixture-backed planning-agent eval gate.
+- `pnpm eval:planning:golden`: run the broader planning-agent golden regression suite.
+- `pnpm eval:planning:judge`: run judge-calibrated planning-agent evals with required judge env vars.
+- `pnpm eval:planning:release`: run golden planning evals with required judge scoring and baseline comparison.
+- `pnpm eval:planning:mine`: convert exported planning traces into gitignored eval inbox candidates.
+- `pnpm eval:planning:update-baseline`: refresh the committed fixture baseline after intentional eval behavior changes.
 - `pnpm migrate:latest`, `pnpm migrate:latest:prod`, `pnpm seed`, `pnpm rollback`: apply, seed, or revert Knex migrations.
 - `pnpm docker:dev`: start local dev infrastructure, including the database, Redis, and Dockerized app services. Ollama is expected to run on the host.
 - `pnpm docker:dev:down`: stop the local dev infrastructure.
@@ -111,6 +118,7 @@ Knex is used at the model and migrations layer.
 Vitest is available for backend and frontend suites. Tests are part of the expected delivery for every feature, not optional cleanup.
 
 - Every meaningful change should include `pnpm lint` plus targeted automated tests.
+- Planning-agent prompt, provider, readiness, clarification, or plan-artifact changes should also run `pnpm eval:planning:smoke`; major planning-agent changes should run `pnpm eval:planning:golden`.
 - Any major feature, schema change, route change, auth change, or orchestration-flow change must also run:
   - `pnpm test:backend`
   - `pnpm test:frontend`
@@ -123,6 +131,7 @@ Vitest is available for backend and frontend suites. Tests are part of the expec
   - org-scoped board creation and access
   - organization AI assistant thread creation, creator-only access, and append-only message ordering
   - planning session creation, planning run creation, structured clarification card persistence, batch answer submission, free-form planning message submission, async run retries, readiness evaluation, and structured plan generation
+  - planning-agent eval datasets, deterministic graders, judge parsing, baseline comparison, and trace mining redaction
   - auth and authorization helpers
   - analytics and board workspace behavior
   - sprint CRUD, sprint assignment rules, and sprint-filtered board views
@@ -148,7 +157,7 @@ Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIREC
 - Planning mode in local Ollama environments should verify GPU-backed execution before processing persisted planning turns; do not silently accept CPU-bound planning runs.
 - The standard production Docker stack should use hosted Postgres through `PG_CONNECTION_STRING`, keep Redis, the Next.js app, and the websocket server inside Compose, and run migrations through the dedicated one-shot `migrate` service before app startup.
 - Coolify deployments should use `axxon/docker-compose.coolify.yml`, leave custom build/start commands empty, and keep the one-shot `migrate` service excluded from Coolify health checks.
-- GitHub Actions should run a throwaway-database migration check on pull requests to `main`, and main-branch pushes should execute the real production migration against `PRODUCTION_DATABASE_URL`.
+- GitHub Actions should run a throwaway-database migration check on pull requests to `main`, planning eval smoke checks on pull requests, judge-backed release evals before production migrations, scheduled golden/judge evals for drift detection, and main-branch pushes should execute the real production migration against `PRODUCTION_DATABASE_URL`.
 
 - Maintain current security practices for auth, repo access boundaries, and member-scoped actions.
 - Validate inputs at the API boundary and enforce permissions server-side.

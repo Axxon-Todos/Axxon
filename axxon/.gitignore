@@ -13,6 +13,9 @@
 
 # testing
 /coverage
+/.eval-runs
+/evals/planning/inbox/*.jsonl
+!/evals/planning/inbox/.gitkeep
 
 # next.js
 /.next/

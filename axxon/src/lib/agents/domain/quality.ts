@@ -418,7 +418,7 @@ export function buildPlanQualityFeedback(
   return [
     `The previous plan failed quality review with score ${quality.score}.`,
     'Regenerate the plan so every phase and task is specific to the prompt and planning context.',
-    anchors.length > 0 ? `Required prompt anchors to reuse in phase titles, task descriptions, and acceptance criteria: ${anchors.join(', ')}.` : '',
+    `Required prompt anchors to reuse in phase titles, task descriptions, and acceptance criteria: ${anchors.length > 0 ? anchors.join(', ') : 'none extracted; use concrete terms from the prompt and planning context'}.`,
     'Do not use generic Planning, Design, Development, Testing, Demo, or Launch phase templates unless the user explicitly requested those phases.',
     'Do not introduce unprovided stack choices as facts; put uncertain choices in assumptions or openQuestions.',
     ...quality.issues.map((issue) => `${issue.code}: ${issue.message} Evidence: ${issue.evidence.join('; ')}`),
