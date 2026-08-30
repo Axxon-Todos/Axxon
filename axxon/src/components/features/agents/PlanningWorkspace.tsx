@@ -287,7 +287,6 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
             isBoardsLoading={isBoardsLoading}
             onBoardChange={selectBoard}
             onOpenHistory={() => setIsHistoryOpen(true)}
-            onNewPlan={openNewPlan}
           />
 
           <ChatThread
@@ -454,7 +453,6 @@ function ChatHeader({
   isBoardsLoading,
   onBoardChange,
   onOpenHistory,
-  onNewPlan,
 }: {
   activeRun: AgentRunDetail | null;
   boards: BoardBaseData[];
@@ -462,7 +460,6 @@ function ChatHeader({
   isBoardsLoading: boolean;
   onBoardChange: (boardId: string | null) => void;
   onOpenHistory: () => void;
-  onNewPlan: () => void;
 }) {
   return (
     <header className="shrink-0 border-b border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_94%,transparent)] px-4 py-3 backdrop-blur-xl sm:px-6">
@@ -484,10 +481,6 @@ function ChatHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button className="hidden lg:inline-flex" onClick={onNewPlan}>
-            <Plus className="h-4 w-4" />
-            New plan
-          </Button>
           <BoardSelector
             boards={boards}
             selectedBoardId={selectedBoardId}
