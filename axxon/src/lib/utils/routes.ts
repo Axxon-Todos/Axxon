@@ -119,60 +119,18 @@ export function buildOrganizationBoardRepositoryAccessApiPath(
   return `${buildOrganizationApiPath(organizationId)}/board-repository-access`;
 }
 
-export function buildOrganizationAiChatApiPath(
-  organizationId: string | number
-) {
-  return `${buildOrganizationApiPath(organizationId)}/ai/chat`;
-}
-
-export function buildOrganizationAiThreadsApiPath(
-  organizationId: string | number
-) {
-  return `${buildOrganizationApiPath(organizationId)}/ai/threads`;
-}
-
-export function buildOrganizationAiThreadApiPath(
-  organizationId: string | number,
-  threadId: string | number
-) {
-  return `${buildOrganizationAiThreadsApiPath(organizationId)}/${threadId}`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionsApiPath(
+export function buildOrganizationBoardAgentRunsApiPath(
   organizationId: string | number,
   boardId: string | number
 ) {
-  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/ai/planning/sessions`;
+  return `${buildOrganizationBoardApiPath(organizationId, boardId)}/agents/runs`;
 }
 
-export function buildOrganizationBoardAiPlanningSessionApiPath(
+export function buildOrganizationBoardAgentRunApiPath(
   organizationId: string | number,
   boardId: string | number,
-  sessionId: string | number
+  runId: string | number,
+  suffix = ''
 ) {
-  return `${buildOrganizationBoardAiPlanningSessionsApiPath(organizationId, boardId)}/${sessionId}`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionMessagesApiPath(
-  organizationId: string | number,
-  boardId: string | number,
-  sessionId: string | number
-) {
-  return `${buildOrganizationBoardAiPlanningSessionApiPath(
-    organizationId,
-    boardId,
-    sessionId
-  )}/messages`;
-}
-
-export function buildOrganizationBoardAiPlanningSessionProcessApiPath(
-  organizationId: string | number,
-  boardId: string | number,
-  sessionId: string | number
-) {
-  return `${buildOrganizationBoardAiPlanningSessionApiPath(
-    organizationId,
-    boardId,
-    sessionId
-  )}/process`;
+  return `${buildOrganizationBoardAgentRunsApiPath(organizationId, boardId)}/${runId}${suffix}`;
 }

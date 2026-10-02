@@ -120,10 +120,37 @@ services:
       redis:
         condition: service_healthy
 
+  agent-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ws-dev
+    command: ["sh", "./scripts/docker-dev-entrypoint.sh", "pnpm", "agent:worker"]
+    env_file:
+      - .env.local
+      - .env.docker
+    environment:
+      NODE_ENV: development
+      AXXON_DEPLOY_STAGE: ${AXXON_DEPLOY_STAGE:-development}
+      AI_LOCAL_BASE_URL: ${AI_LOCAL_BASE_URL:-http://host.docker.internal:11434}
+      AI_LOCAL_MODEL: ${AI_LOCAL_MODEL:-qwen2.5-coder:14b}
+      PG_CONNECTION_STRING: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - .:/app
+      - agent_worker_node_modules:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+
 volumes:
   app_node_modules:
   app_next:
   ws_node_modules:
+  agent_worker_node_modules:
   db_init_node_modules:
   redis_data:
   postgres_data:

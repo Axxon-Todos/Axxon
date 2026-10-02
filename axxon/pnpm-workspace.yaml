@@ -1,0 +1,8 @@
+# Configures pnpm install policy for the single-package Axxon workspace.
+allowBuilds:
+  '@sentry/cli': true
+  '@tailwindcss/oxide': true
+  esbuild: true
+  sharp: true
+  sqlite3: true
+  unrs-resolver: true

@@ -1,6 +1,5 @@
-// Loads the org-scoped AI workspace and passes the active runtime summary into the client shell.
-import OrganizationAiWorkspace from '@/components/features/organizationAi/OrganizationAiWorkspace';
-import { getAiWorkspaceRuntimeSummary } from '@/lib/ai/config';
+// Hosts the org-level AI planning workspace while agent runs remain scoped to selected boards.
+import PlanningWorkspace from '@/components/features/agents/PlanningWorkspace';
 
 type OrganizationAiPageProps = {
   params: Promise<{
@@ -13,11 +12,5 @@ export default async function OrganizationAiPage({
 }: OrganizationAiPageProps) {
   const { organizationId } = await params;
 
-  // Resolve the runtime summary server-side so the initial page render reflects the active provider.
-  return (
-    <OrganizationAiWorkspace
-      organizationId={organizationId}
-      runtime={await getAiWorkspaceRuntimeSummary()}
-    />
-  );
+  return <PlanningWorkspace organizationId={organizationId} />;
 }

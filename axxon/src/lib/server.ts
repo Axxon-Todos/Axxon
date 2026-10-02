@@ -1,6 +1,5 @@
-// Starts the websocket server process and the long-lived planning run worker used for async planning execution.
+// Starts the websocket server process independently from the durable agent worker process.
 import http from "http";
-import { startPlanningRunWorker } from "./ai/planningRunWorker";
 import { loadRuntimeEnv } from "./env/loadRuntimeEnv";
 import { createWsServer } from "./wsServer";
 
@@ -13,7 +12,6 @@ const server = http.createServer();
 
 // Attach Socket.IO + Redis pub/sub to it
 createWsServer(server);
-startPlanningRunWorker();
 
 // Start listening
 server.listen(PORT, () => {
