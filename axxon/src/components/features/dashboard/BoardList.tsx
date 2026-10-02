@@ -120,14 +120,9 @@ export default function BoardList({
     <>
       <div
         className={clsx(
-          'space-y-2',
-          isSidebar ? 'w-full' : 'w-full overflow-y-auto p-3'
+          isSidebar ? 'w-full space-y-2' : 'w-full'
         )}
       >
-        {!isSidebar ? (
-          <h2 className="mb-6 text-center text-4xl font-bold">Boards</h2>
-        ) : null}
-
         {isSidebar ? (
           <div className="space-y-2">
             {boards.map((board, index) => {
@@ -265,7 +260,7 @@ export default function BoardList({
             })}
           </div>
         ) : (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <div className="divide-y divide-[var(--app-border)] border-t border-[var(--app-border)]">
             {boards.map((board, index) => {
               const boardAccent = resolveAccentColor(board.color);
 
@@ -275,43 +270,36 @@ export default function BoardList({
                   initial={
                     shouldReduceMotion
                       ? false
-                      : { opacity: 0, y: 14, scale: 0.985 }
+                      : { opacity: 0, y: 10 }
                   }
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{
                     ...itemTransition,
                     delay: shouldReduceMotion ? 0 : index * 0.04,
                   }}
-                  className="group glass-panel relative rounded-[1.8rem] p-5"
+                  className="group relative flex items-center gap-4 px-5 py-4 transition-colors hover:bg-[var(--app-panel-soft)] sm:px-6"
                 >
                   <Link
                     href={buildOrganizationBoardPath(organizationId, board.id)}
-                    className="absolute inset-0 rounded-[1.8rem]"
+                    aria-label={`Open ${board.name || 'Untitled Board'}`}
+                    className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--app-accent)]"
                   />
-                  <div className="pointer-events-none relative flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-3 w-3 rounded-full"
-                          style={{ backgroundColor: boardAccent }}
-                        />
-                        <span className="truncate text-lg font-semibold">
-                          {board.name || 'Untitled Board'}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm app-text-muted">
-                        Execution layer for scoped work inside this organization.
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedBoard(board)}
-                      className="pointer-events-auto relative z-10 glass-button !h-10 !w-10 !p-0"
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </button>
+                  <span className="pointer-events-none relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--app-border)] bg-[var(--app-panel-soft)] text-[var(--app-muted-strong)]">
+                    <FolderKanban className="h-[18px] w-[18px]" />
+                    <span className="absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full" style={{ backgroundColor: boardAccent }} />
+                  </span>
+                  <div className="pointer-events-none relative min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{board.name || 'Untitled Board'}</p>
+                    <p className="mt-1 text-xs app-text-muted">Board workspace</p>
                   </div>
+                  <button
+                    type="button"
+                    aria-label={`Options for ${board.name || 'Untitled Board'}`}
+                    onClick={() => setSelectedBoard(board)}
+                    className="pointer-events-auto relative z-10 glass-button !h-9 !w-9 !p-0"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
                 </motion.article>
               );
             })}

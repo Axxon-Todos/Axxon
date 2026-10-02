@@ -16,3 +16,7 @@ Run `pnpm dev-next` from `axxon/`, then open `/design-system`. The reference inc
 - Prefer a page hero followed by plain sections with fine borders. Use a card only when it groups an interaction or data unit.
 
 New screens should use CSS variables such as `var(--app-panel)`, `var(--app-border)`, and `var(--app-accent)` instead of hardcoded Tailwind palette colors. Keep diagrams and motion two-dimensional.
+
+## Dashboard directory pattern
+
+The main dashboard pairs `OrganizationList` with `DashboardProjects` under `DashboardOverview`. The organization list uses Radix Scroll Area and Tooltip primitives, while project rows use Framer Motion entrance and selection transitions. Each board query is scoped to the selected organization. Reuse this search, selection, and direct-link pattern for future directories, keeping feature-specific rows under `src/components/features`.

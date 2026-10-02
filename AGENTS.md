@@ -36,6 +36,7 @@ Axxon uses a dark-first black, white, and gray theme with light-mode support. Mo
 - Keep entity-specific board or organization colors as secondary accents only; new defaults and presets are grayscale.
 - The landing page should stay positioned as an AI-native agile platform for agent teams, with flat diagrams and short two-dimensional transitions.
 - New product screens should follow the established page-hero + surfaced-section pattern instead of inventing a separate header layout.
+- The main dashboard presents an organization directory beside boards for the selected organization. Keep board queries scoped to that selection and preserve direct org and board navigation.
 - Use Radix primitives for accessible interaction behavior, Tailwind for layout, and Framer Motion for transitions. Reuse shared components before adding feature-specific controls.
 - The live component reference is available at `/design-system` in development; `axxon/docs/design-system.md` documents the tokens and reuse rules.
 

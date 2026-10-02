@@ -102,6 +102,10 @@ export default function OrganizationWorkspace({
         />
 
         <Surface variant="strong" className="rounded-[2rem] p-6 sm:p-8">
+          <div className="mb-5">
+            <p className="app-kicker">Projects</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight">Boards in this organization</h2>
+          </div>
           <BoardList organizationId={organizationId} />
         </Surface>
 
