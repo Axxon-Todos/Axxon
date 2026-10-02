@@ -147,6 +147,7 @@ Google OAuth now uses a server-started PKCE + state flow. Prefer `GOOGLE_REDIREC
 
 - AI runtime selection is controlled by `AXXON_DEPLOY_STAGE`, not by overloading `NODE_ENV`.
 - `development` and `staging` should use the local Ollama runtime through `AI_LOCAL_BASE_URL` and `AI_LOCAL_MODEL`.
+- The local planning default is `qwen3.5-4b-32k:latest`, a Qwen 3.5 4B variant with a 32K context. Structured planning calls disable thinking to keep the JSON response in the final message. Confirm the tag is installed and GPU-backed before running planning jobs.
 - `production` should use the external OpenAI-compatible runtime through `AI_CLOUD_BASE_URL`, `AI_CLOUD_MODEL`, and `AI_CLOUD_API_KEY` when AI is enabled.
 - When the app runs in Docker and Ollama runs on the host, use `http://host.docker.internal:11434` and ensure the Ollama server is reachable beyond host loopback.
 - Planning mode in local Ollama environments should verify GPU-backed execution before processing persisted planning turns; do not silently accept CPU-bound planning runs.

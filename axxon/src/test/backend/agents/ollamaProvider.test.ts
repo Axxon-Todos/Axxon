@@ -31,6 +31,24 @@ describe('Ollama planning provider', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('uses the configured Qwen 3.5 4B model for structured planning', async () => {
+    vi.stubEnv('AI_LOCAL_MODEL', '');
+    const mockedFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        message: { content: JSON.stringify({ decision: { action: 'ask_questions', reason: 'low_confidence' } }) },
+      }),
+    });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    await analyzePlanningTurnWithOllama(createPlanningRun(), [], []);
+    const requestBody = JSON.parse(String(mockedFetch.mock.calls[0][1]?.body)) as { model: string; think: boolean };
+
+    expect(requestBody.model).toBe('qwen3.5-4b-32k:latest');
+    expect(requestBody.think).toBe(false);
   });
 
   it('parses minimal analysis JSON into the full planner structure', async () => {

@@ -47,7 +47,7 @@ export class AgentProviderValidationError extends Error {
 
 function getOllamaConfig() {
   const baseUrl = (process.env.AI_LOCAL_BASE_URL || 'http://127.0.0.1:11434').replace(/\/+$/, '');
-  const model = process.env.AI_LOCAL_MODEL || 'qwen2.5-coder:14b';
+  const model = process.env.AI_LOCAL_MODEL || 'qwen3.5-4b-32k:latest';
   return { baseUrl, model };
 }
 
@@ -102,6 +102,7 @@ async function completeOllamaStructuredJson<T>({
         model,
         stream: false,
         format: 'json',
+        think: false,
         messages: attempts,
       }),
     });
