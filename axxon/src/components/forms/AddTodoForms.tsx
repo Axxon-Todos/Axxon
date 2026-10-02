@@ -97,7 +97,7 @@ export default function AddTodoForm({ boardId, onClose }: AddTodoFormProps) {
         </button>
       </div>
 
-      {error && <p className="text-sm text-rose-400">{(error as Error).message}</p>}
+      {error && <p className="text-sm text-[var(--app-danger)]">{(error as Error).message}</p>}
     </form>
   );
 }

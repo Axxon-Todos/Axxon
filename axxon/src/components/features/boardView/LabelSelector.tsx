@@ -98,7 +98,7 @@ export default function LabelSelector({
                   className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-white/10"
                 >
                   <div className="w-4 h-4 flex items-center justify-center">
-                    {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                    {isSelected && <Check className="w-4 h-4 text-[var(--app-highlight)]" />}
                   </div>
                   <LabelBadge label={label} size="sm" />
                 </div>
@@ -126,8 +126,8 @@ export default function LabelSelector({
             className="mt-1 flex cursor-pointer items-center gap-2 border-t px-3 py-3 hover:bg-white/10"
             style={{ borderColor: 'var(--app-border)' }}
           >
-            <Plus className="w-4 h-4 text-blue-600" />
-            <span className="text-sm text-blue-600">
+            <Plus className="w-4 h-4 text-[var(--app-highlight)]" />
+            <span className="text-sm text-[var(--app-highlight)]">
               Create <strong>&ldquo;{searchQuery.trim()}&rdquo;</strong>
             </span>
           </div>

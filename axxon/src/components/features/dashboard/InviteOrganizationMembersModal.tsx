@@ -174,7 +174,7 @@ export default function InviteOrganizationMembersModal({
           <p className="text-xs app-text-muted">Updating results...</p>
         ) : null}
 
-        {errorMessage ? <p className="text-sm text-rose-400">{errorMessage}</p> : null}
+        {errorMessage ? <p className="text-sm text-[var(--app-danger)]">{errorMessage}</p> : null}
 
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="glass-button">

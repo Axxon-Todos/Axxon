@@ -5,7 +5,7 @@ import { useState } from 'react'
 
 import type { CategoryBaseData } from '@/lib/types/categoryTypes'
 
-const DEFAULT_CATEGORY_COLOR = '#2563eb'
+const DEFAULT_CATEGORY_COLOR = '#737373'
 
 interface CategoryFormProps {
   category: CategoryBaseData

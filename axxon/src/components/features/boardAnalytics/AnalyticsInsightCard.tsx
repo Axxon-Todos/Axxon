@@ -58,7 +58,7 @@ export default function AnalyticsInsightCard({
   return (
     <article
       className={cn(
-        'rounded-[1.35rem] border p-4 shadow-[0_18px_44px_-30px_rgba(2,6,23,0.72)]',
+        'rounded-[1.35rem] border p-4 shadow-[0_18px_44px_-30px_rgba(0,0,0,0.72)]',
         styles.panel,
         className
       )}

@@ -40,12 +40,12 @@ export default function CreateBoardForm() {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Board name"
-        className="p-2 border rounded"
+        className="app-input"
       />
       <button
         type="submit"
         disabled={loading}
-        className="ml-2 px-4 py-2 bg-blue-600 text-white rounded"
+        className="app-button app-button-primary ml-2"
       >
         {loading ? 'Creating...' : 'Create Board'}
       </button>

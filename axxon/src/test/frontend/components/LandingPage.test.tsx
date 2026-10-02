@@ -1,33 +1,25 @@
-// Verifies the landing page exposes the refreshed AI-native positioning and hero operating-model framing.
+// Verifies the monochrome landing page retains its core product message and sign-in action.
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('next/dynamic', () => ({
-  default: () => () => <div data-testid="hero-scene" />,
-}));
-
 import LandingPage from '@/components/landing/LandingPage';
 
 describe('LandingPage', () => {
-  it('renders the new AI-native messaging and primary CTA', () => {
+  it('renders the agent workspace story and primary CTA', () => {
     render(<LandingPage />);
 
     expect(
       screen.getByRole('heading', {
-        name: 'Run AI agents through a real delivery system, not a pile of prompts.',
+        name: 'Give agent work a clear place to happen.',
       })
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Start with Google/i })).toHaveAttribute(
       'href',
       '/api/auth/google'
     );
-    expect(screen.getByText('AI-native agile platform for agent teams')).toBeInTheDocument();
-    expect(screen.getByText('Operating Model')).toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', {
-        name: 'Organizations frame the work. Boards dispatch it. Reviews close the loop.',
-      })
-    ).toBeInTheDocument();
+    expect(screen.getByText('THE WORKSPACE FOR AGENT TEAMS')).toBeInTheDocument();
+    expect(screen.getByText('01 / ORGANIZATION')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Clarity at every level.' })).toBeInTheDocument();
   });
 });

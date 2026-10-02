@@ -77,7 +77,7 @@ export default function EditOrganizationModal({
         </div>
 
         {updateMutation.isError ? (
-          <p className="text-sm text-rose-400">
+          <p className="text-sm text-[var(--app-danger)]">
             {updateMutation.error?.message || 'Failed to update organization'}
           </p>
         ) : null}

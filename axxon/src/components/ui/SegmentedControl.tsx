@@ -44,12 +44,8 @@ export default function SegmentedControl<T extends string>({
               <motion.span
                 layoutId={`${ariaLabel}-active`}
                 className="absolute inset-0 rounded-[0.88rem]"
-                style={{
-                  background:
-                    'linear-gradient(135deg, color-mix(in srgb, var(--app-accent) 92%, white 8%), color-mix(in srgb, var(--app-accent-strong) 72%, white 28%))',
-                  boxShadow: '0 18px 40px -24px color-mix(in srgb, var(--app-accent) 48%, transparent)',
-                }}
-                transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                style={{ background: 'var(--app-accent)' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 34 }}
               />
             ) : null}
             <span className={cn('relative z-10 inline-flex items-center gap-2', isActive ? 'text-[var(--app-accent-foreground)]' : '')}>

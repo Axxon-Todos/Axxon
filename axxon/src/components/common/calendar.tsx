@@ -190,8 +190,8 @@ export default function Calendar({
                 </div>
 
                 {hasOverdue ? (
-                  <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-rose-400">
-                    <span className="h-2 w-2 rounded-full bg-rose-400" />
+                  <div className="mt-3 flex items-center gap-2 text-[11px] font-medium text-[var(--app-danger)]">
+                    <span className="h-2 w-2 rounded-full bg-[var(--app-danger)]" />
                     Past due
                   </div>
                 ) : null}

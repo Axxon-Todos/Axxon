@@ -13,7 +13,7 @@ import type { SprintBaseData } from '@/lib/types/sprintTypes';
 
 import { SprintIconGlyph, sprintIconOptions } from './sprintIcons';
 
-const DEFAULT_SPRINT_COLOR = '#2563eb';
+const DEFAULT_SPRINT_COLOR = '#737373';
 
 type SprintEditorModalProps = {
   boardId: number;
@@ -262,7 +262,7 @@ export default function SprintEditorModal({
           </span>
         </div>
 
-        {errorMessage ? <p className="text-sm text-rose-400">{errorMessage}</p> : null}
+        {errorMessage ? <p className="text-sm text-[var(--app-danger)]">{errorMessage}</p> : null}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>

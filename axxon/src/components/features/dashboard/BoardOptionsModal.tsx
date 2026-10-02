@@ -72,7 +72,7 @@ export default function BoardOptionsModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={PANEL_TRANSITION}
-        className="absolute inset-0 bg-[rgba(2,6,23,0.72)] backdrop-blur-md"
+        className="absolute inset-0 bg-[rgba(0,0,0,0.72)] backdrop-blur-md"
         onClick={onClose}
       />
 

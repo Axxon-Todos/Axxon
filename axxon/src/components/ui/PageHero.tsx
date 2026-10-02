@@ -33,7 +33,6 @@ export default function PageHero({
                   className="mt-2 h-3.5 w-3.5 shrink-0 rounded-full"
                   style={{
                     backgroundColor: accentColor,
-                    boxShadow: `0 0 0 8px color-mix(in srgb, ${accentColor} 18%, transparent)`,
                   }}
                 />
               ) : null}

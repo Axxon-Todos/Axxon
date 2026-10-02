@@ -59,7 +59,7 @@ const deleteMutation = useMutation({
 if (numericBoardId === null || numericTodoId === null) {
   return (
     <div className="fixed inset-0 flex justify-center items-center">
-      <p className="text-red-600">Invalid board or todo ID.</p>
+      <p className="text-[var(--app-danger)]">Invalid board or todo ID.</p>
     </div>
   );
 }
@@ -124,7 +124,7 @@ if (numericBoardId === null || numericTodoId === null) {
             <button
               type="button"
               onClick={() => deleteMutation.mutate()}
-              className="text-sm text-red-600 hover:underline"
+              className="text-sm text-[var(--app-danger)] hover:underline"
               disabled={deleteMutation.isPending}
             >
               {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
@@ -139,7 +139,7 @@ if (numericBoardId === null || numericTodoId === null) {
               </button>
               <button
                 type="submit"
-                className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                className="app-button app-button-primary text-sm"
                 disabled={updateMutation.isPending}
               >
                 {updateMutation.isPending ? 'Saving...' : 'Save'}

@@ -340,7 +340,7 @@ export default function BoardWorkspace({
             transition={shouldReduceMotion ? { duration: 0.14 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
           >
             <BoardKanbanView
-              boardColor={board.color || '#2563eb'}
+              boardColor={board.color || '#737373'}
               categoryOrder={categoryOrder}
               categoryMap={categoryMap}
               categorizedTodos={categorizedTodos}

@@ -16,7 +16,7 @@ import type { TodoWithLabels } from '@/lib/types/todoTypes'
 const TODAY_KEY = dayjs().format('YYYY-MM-DD')
 
 function calendarCardStyle(color?: string) {
-  const accent = color || '#2563eb'
+  const accent = color || '#737373'
 
   return {
     borderColor: `color-mix(in srgb, ${accent} 28%, var(--app-border))`,
@@ -52,7 +52,7 @@ export default function BoardCalendarView({
         priority: todo.priority,
         categoryId: todo.category_id,
         categoryName: category?.name,
-        color: category?.color || board.color || '#2563eb',
+        color: category?.color || board.color || '#737373',
         isComplete: isTodoEffectivelyComplete(todo.is_complete, category?.is_done),
         sourceTodo: todo,
       }
@@ -107,7 +107,7 @@ export default function BoardCalendarView({
                 <div className="flex items-start gap-3">
                   <span
                     className="mt-1 h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: todo.color || '#2563eb' }}
+                    style={{ backgroundColor: todo.color || '#737373' }}
                   />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{todo.title}</p>

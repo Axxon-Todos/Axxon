@@ -425,7 +425,7 @@ function SidebarNavItem({
           className="h-2 w-2 rounded-full"
           style={{
             backgroundColor: "var(--app-accent)",
-            boxShadow: "0 0 16px var(--app-accent)",
+            boxShadow: "none",
             pointerEvents: "none",
           }}
         />

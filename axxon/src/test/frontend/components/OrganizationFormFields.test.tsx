@@ -8,7 +8,7 @@ import OrganizationFormFields from '@/components/features/dashboard/Organization
 function OrganizationFormFieldsHarness() {
   const [name, setName] = useState('Platform');
   const [description, setDescription] = useState('Core delivery org');
-  const [color, setColor] = useState('#6366f1');
+  const [color, setColor] = useState('#737373');
 
   return (
     <OrganizationFormFields
@@ -26,8 +26,8 @@ describe('OrganizationFormFields', () => {
   it('updates the preview from swatches and custom color input', () => {
     const { container } = render(<OrganizationFormFieldsHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Use accent #0891b2' }));
-    expect(screen.getAllByText('#0891B2')).not.toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Use accent #a3a3a3' }));
+    expect(screen.getAllByText('#A3A3A3')).not.toHaveLength(0);
 
     const customColorInput = container.querySelector('input[type="color"]');
 

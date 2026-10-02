@@ -32,7 +32,7 @@ export default function DroppableColumn({
   managementMode?: boolean
 }) {
   const { setNodeRef } = useDroppable({ id: categoryId })
-  const laneAccent = categoryColor || '#2563eb'
+  const laneAccent = categoryColor || '#737373'
 
   return (
     <section ref={setNodeRef} className="glass-panel group rounded-[1.75rem] p-5 sm:p-6">

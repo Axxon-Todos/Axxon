@@ -510,7 +510,7 @@ export default function TodoDrawer({
           </div>
         </section>
 
-        {errorMessage ? <p className="text-sm text-rose-400">{errorMessage}</p> : null}
+        {errorMessage ? <p className="text-sm text-[var(--app-danger)]">{errorMessage}</p> : null}
 
         <div className="sticky bottom-0 mt-auto border-t border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-bg)_82%,transparent)] py-4 backdrop-blur-xl">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -367,7 +367,7 @@ export default function BoardSettingsView({ boardId }: { boardId: string }) {
               </div>
             )}
 
-            {repositoryError ? <p className="mt-4 text-sm text-rose-400">{repositoryError}</p> : null}
+            {repositoryError ? <p className="mt-4 text-sm text-[var(--app-danger)]">{repositoryError}</p> : null}
 
             {isOwner ? (
               <div className="mt-6 flex justify-end">

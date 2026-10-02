@@ -46,7 +46,7 @@ export default function AddTodoForm({ boardId }: { boardId: number }) {
       <button type="submit" disabled={isLoading}>
         {isLoading ? 'Creating...' : 'Create Todo'}
       </button>
-      {error && <p className="text-red-500">{error.message}</p>}
+      {error && <p className="text-[var(--app-danger)]">{error.message}</p>}
     </form>
   );
 };
