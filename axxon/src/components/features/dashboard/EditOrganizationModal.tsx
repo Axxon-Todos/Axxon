@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
 import OrganizationFormFields from '@/components/features/dashboard/OrganizationFormFields';
 import { updateOrganizationById } from '@/lib/api/organizations/updateOrganization';
 import type { OrganizationSummary } from '@/lib/types/organizationTypes';
@@ -21,8 +22,12 @@ export default function EditOrganizationModal({
 }: EditOrganizationModalProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState(organization.name);
-  const [description, setDescription] = useState(organization.description ?? '');
-  const [color, setColor] = useState(organization.color || DEFAULT_BRAND_PRIMARY_HEX);
+  const [description, setDescription] = useState(
+    organization.description ?? '',
+  );
+  const [color, setColor] = useState(
+    organization.color || DEFAULT_BRAND_PRIMARY_HEX,
+  );
 
   const updateMutation = useMutation({
     mutationFn: () =>
@@ -51,8 +56,13 @@ export default function EditOrganizationModal({
   }
 
   return (
-    <Modal isOpen onClose={onClose} title="Edit Organization">
-      <form onSubmit={handleSubmit} className="space-y-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title="Edit organization"
+      description="Update how this organization appears across your workspace."
+    >
+      <form onSubmit={handleSubmit} className="space-y-5">
         <OrganizationFormFields
           autoFocus
           color={color}
@@ -63,24 +73,25 @@ export default function EditOrganizationModal({
           onNameChange={setName}
         />
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="glass-button">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!name.trim() || updateMutation.isPending}
-            className="glass-button glass-button-primary disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
-
         {updateMutation.isError ? (
-          <p className="text-sm text-[var(--app-danger)]">
+          <p role="alert" className="text-sm app-error-text">
             {updateMutation.error?.message || 'Failed to update organization'}
           </p>
         ) : null}
+
+        <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-[var(--app-border)] bg-[var(--app-panel)] px-5 py-4 sm:-mx-6 sm:flex-row sm:justify-end sm:px-6">
+          <Button onClick={onClose} className="w-full sm:w-auto">
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={!name.trim() || updateMutation.isPending}
+            className="w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            {updateMutation.isPending ? 'Saving...' : 'Save changes'}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

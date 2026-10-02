@@ -89,7 +89,7 @@ describe('OrganizationWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Organization' }));
 
-    expect(await screen.findByRole('heading', { name: 'Edit Organization' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Edit organization' })).toBeInTheDocument();
   });
 
   it('hides edit controls for non-owners while keeping board creation visible', async () => {

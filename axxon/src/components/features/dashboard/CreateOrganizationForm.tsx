@@ -44,7 +44,7 @@ export default function CreateOrganizationForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <OrganizationFormFields
         autoFocus
         color={color}
@@ -55,22 +55,23 @@ export default function CreateOrganizationForm({
         onNameChange={setName}
       />
 
-      <div className="flex justify-end gap-2">
-        <Button onClick={onClose}>Cancel</Button>
+      {createMutation.isError ? (
+        <p role="alert" className="text-sm app-error-text">
+          {createMutation.error?.message || 'Failed to create organization'}
+        </p>
+      ) : null}
+
+      <div className="sticky bottom-0 -mx-5 -mb-5 flex flex-col-reverse gap-2 border-t border-[var(--app-border)] bg-[var(--app-panel)] px-5 py-4 sm:-mx-6 sm:flex-row sm:justify-end sm:px-6">
+        <Button onClick={onClose} className="w-full sm:w-auto">Cancel</Button>
         <Button
           type="submit"
           variant="primary"
           disabled={!name.trim() || createMutation.isPending}
+          className="w-full disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         >
           {createMutation.isPending ? 'Creating...' : 'Create Organization'}
         </Button>
       </div>
-
-      {createMutation.isError ? (
-        <p className="text-sm app-error-text">
-          {createMutation.error?.message || 'Failed to create organization'}
-        </p>
-      ) : null}
     </form>
   );
 }

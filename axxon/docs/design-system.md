@@ -11,6 +11,7 @@ Run `pnpm dev-next` from `axxon/`, then open `/design-system`. The reference inc
 
 - `src/app/globals.css` owns semantic color tokens, flat surfaces, controls, and the landing composition.
 - `src/components/ui/Button.tsx`, `Surface.tsx`, `Badge.tsx`, `PageHero.tsx`, and `SegmentedControl.tsx` are the shared product primitives.
+- `src/components/ui/Modal.tsx` provides a Radix dialog with viewport-bounded scrolling, focus management, and brief entrance motion. Use it for product forms. `OrganizationFormFields.tsx` shares the compact name, description, and accent inputs across create and edit flows.
 - `src/lib/utils/brandColors.ts` supplies neutral default entity accents. Existing custom entity colors remain user data.
 - Use Radix primitives for keyboard and accessibility behavior, Tailwind for layout, and Framer Motion for short entrance and layout transitions. Honor reduced motion.
 - Prefer a page hero followed by plain sections with fine borders. Use a card only when it groups an interaction or data unit.
