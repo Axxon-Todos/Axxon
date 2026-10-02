@@ -1,6 +1,5 @@
-// Verifies dashboard shell sizing stays aligned with the widened sidebar constants and layout contract.
-import React from 'react';
-import { render, screen } from '@testing-library/react';
+// Verifies desktop rail sizing and a full-width mobile content surface.
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 function mockSidebarDependencies() {
@@ -52,56 +51,24 @@ afterEach(() => {
 });
 
 describe('dashboard shell sizing', () => {
-  it('exports the widened sidebar constants', async () => {
+  it('exports the compact rail dimensions', async () => {
     mockSidebarDependencies();
 
     const sidebarModule = await import('@/components/ui/sideBar');
 
-    expect(sidebarModule.SIDEBAR_EXPANDED_WIDTH).toBe(320);
-    expect(sidebarModule.SIDEBAR_COLLAPSED_WIDTH).toBe(84);
+    expect(sidebarModule.SIDEBAR_EXPANDED_WIDTH).toBe(272);
+    expect(sidebarModule.SIDEBAR_COLLAPSED_WIDTH).toBe(64);
   });
 
-  it('derives the main content sizing from the sidebar constants', async () => {
-    vi.doMock('framer-motion', () => {
-      const MotionMain = React.forwardRef<
-        HTMLElement,
-        React.HTMLAttributes<HTMLElement> & {
-          animate?: { marginLeft?: number; width?: string };
-        }
-      >(({ children, animate, ...props }, ref) => (
-        <main
-          ref={ref}
-          data-margin-left={String(animate?.marginLeft ?? '')}
-          data-width={String(animate?.width ?? '')}
-          {...props}
-        >
-          {children}
-        </main>
-      ));
-
-      MotionMain.displayName = 'MotionMain';
-
-      return {
-        motion: {
-          main: MotionMain,
-        },
-        useReducedMotion: () => true,
-      };
-    });
-
+  it('reserves rail space only at desktop width and updates it when collapsed', async () => {
     vi.doMock('@/components/ui/sideBar', () => ({
       __esModule: true,
-      default: () => <aside data-testid="sidebar" />,
-      SIDEBAR_COLLAPSED_WIDTH: 77,
-      SIDEBAR_EXPANDED_WIDTH: 410,
-      SIDEBAR_TRANSITION: { duration: 0 },
+      default: ({ setCollapsed }: { setCollapsed: (value: boolean) => void }) => (
+        <button type="button" onClick={() => setCollapsed(true)}>Collapse</button>
+      ),
+      SIDEBAR_COLLAPSED_WIDTH: 64,
+      SIDEBAR_EXPANDED_WIDTH: 272,
     }));
-
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: 1280,
-    });
 
     const { default: DashboardLayout } = await import('@/app/dashboard/layout');
 
@@ -113,7 +80,10 @@ describe('dashboard shell sizing', () => {
 
     const main = screen.getByRole('main');
 
-    expect(main).toHaveAttribute('data-margin-left', '410');
-    expect(main).toHaveAttribute('data-width', 'calc(100vw - 410px)');
+    expect(main.style.getPropertyValue('--sidebar-width')).toBe('272px');
+    expect(main).toHaveClass('w-full', 'lg:pl-[calc(var(--sidebar-width)+2rem)]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
+    expect(main.style.getPropertyValue('--sidebar-width')).toBe('64px');
   });
 });

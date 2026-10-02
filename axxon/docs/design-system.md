@@ -20,3 +20,7 @@ New screens should use CSS variables such as `var(--app-panel)`, `var(--app-bord
 ## Dashboard directory pattern
 
 The main dashboard pairs `OrganizationList` with `DashboardProjects` under `DashboardOverview`. The organization list uses Radix Scroll Area and Tooltip primitives, while project rows use Framer Motion entrance and selection transitions. Each board query is scoped to the selected organization. Reuse this search, selection, and direct-link pattern for future directories, keeping feature-specific rows under `src/components/features`.
+
+## Product sidebar pattern
+
+`src/components/ui/sideBar.tsx` owns the responsive shell navigation. It uses a 272px desktop panel, a 64px collapsed rail, and a Radix Dialog drawer below the desktop breakpoint. `src/app/dashboard/layout.tsx` reserves desktop space through `--sidebar-width`; mobile content remains full width below the fixed top bar. Keep top-level destinations compact and place org/board links in the single Radix Scroll Area between the header and utility footer. `SidebarOrganizationTree` owns org-specific rows, lazy board queries, and owner actions. Names truncate within their rows. Icon-only rail controls have tooltips, and all controls keep visible focus states. Use brief Framer Motion transitions and honor reduced motion.

@@ -98,6 +98,31 @@ a {
   text-decoration: none;
 }
 
+/* Keeps sidebar icon controls aligned and visibly focusable in both themes. */
+.sidebar-icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--app-muted);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.sidebar-icon-button:hover,
+.sidebar-icon-button:focus-visible {
+  background: var(--app-panel-soft);
+  color: var(--app-foreground);
+}
+
+.sidebar-icon-button:focus-visible,
+.sidebar-nav-row:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 2px;
+}
+
 button:not(:disabled) {
   cursor: pointer;
 }

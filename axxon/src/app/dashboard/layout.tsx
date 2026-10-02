@@ -1,13 +1,11 @@
-// Defines the authenticated dashboard shell and keeps the content area aligned with the collapsible sidebar.
+// Defines a responsive dashboard shell with space reserved for the desktop navigation rail.
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import type { CSSProperties, ReactNode } from "react";
+import { useState } from "react";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_EXPANDED_WIDTH,
-  SIDEBAR_TRANSITION,
 } from "@/components/ui/sideBar";
 
 export default function DashboardLayout({
@@ -16,31 +14,17 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
-  const shouldReduceMotion = useReducedMotion();
-  const transition = shouldReduceMotion ? { duration: 0 } : SIDEBAR_TRANSITION;
   const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
-  useEffect(() => {
-    if (window.innerWidth < 1024) {
-      setCollapsed(true);
-    }
-  }, []);
-
   return (
-    <div className="app-shell-bg min-h-screen overflow-x-hidden">
+    <div className="app-shell-bg min-h-dvh overflow-x-hidden">
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
-
-      <motion.main
-        initial={false}
-        animate={{
-          marginLeft: sidebarWidth,
-          width: `calc(100vw - ${sidebarWidth}px)`,
-        }}
-        transition={transition}
-        className="box-border min-h-screen min-w-0 max-w-full overflow-x-hidden overflow-y-auto px-4 pb-12 pt-6 sm:px-6 lg:px-8"
+      <main
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        className="box-border min-h-dvh min-w-0 w-full overflow-x-hidden px-4 pb-12 pt-20 transition-[padding-left] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none sm:px-6 lg:pl-[calc(var(--sidebar-width)+2rem)] lg:pr-8 lg:pt-6"
       >
         <div className="mx-auto flex min-h-[calc(100vh-3rem)] flex-col gap-6">{children}</div>
-      </motion.main>
+      </main>
     </div>
   );
 }

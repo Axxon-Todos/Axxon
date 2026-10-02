@@ -129,5 +129,8 @@ describe('SidebarOrganizationTree', () => {
 
     expect(await screen.findByRole('link', { name: 'Prototype Board' })).toBeInTheDocument();
     expect(mockedFetchBoards).toHaveBeenCalledWith('4');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Platform' }));
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Sprint Ops' })).not.toBeInTheDocument());
   });
 });

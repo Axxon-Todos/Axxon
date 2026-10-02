@@ -1,6 +1,6 @@
-// Verifies the top sidebar nav rows render at full width and keep AI as the sole active top-level destination on AI routes.
+// Verifies compact sidebar navigation and accessible mobile drawer behavior.
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { mockedUsePathname, mockedUseRouter } = vi.hoisted(() => ({
@@ -66,5 +66,19 @@ describe('Sidebar', () => {
     expect(organizationAiLink).toHaveClass('w-full');
     expect(organizationsLink).not.toHaveAttribute('aria-current');
     expect(organizationAiLink).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('opens and closes the mobile navigation drawer', async () => {
+    mockedUsePathname.mockReturnValue('/dashboard');
+    mockedUseRouter.mockReturnValue({ push: vi.fn(), refresh: vi.fn() });
+
+    render(<Sidebar collapsed={false} setCollapsed={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open navigation' }));
+
+    const drawer = await screen.findByRole('dialog', { name: 'Navigation' });
+    expect(within(drawer).getByText('Sidebar org tree')).toBeInTheDocument();
+
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close navigation' }));
+    expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument();
   });
 });

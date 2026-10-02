@@ -23,7 +23,7 @@ import {
 
 const ITEM_EASE = [0.16, 1, 0.3, 1] as const;
 
-export default function SidebarOrganizationTree() {
+export default function SidebarOrganizationTree({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const shouldReduceMotion = useReducedMotion();
   const { organizationId: activeOrganizationId } = useOrganizationRouteParams();
@@ -63,8 +63,7 @@ export default function SidebarOrganizationTree() {
           .map((organization) => String(organization.id))
           .filter(
             (organizationId) =>
-              organizationId === activeOrganizationId ||
-              expandedOrganizations[organizationId]
+              (expandedOrganizations[organizationId] ?? organizationId === activeOrganizationId)
           )
       ),
     [activeOrganizationId, expandedOrganizations, organizations]
@@ -86,7 +85,7 @@ export default function SidebarOrganizationTree() {
   const itemTransition = shouldReduceMotion
     ? { duration: 0 }
     : { duration: 0.24, ease: ITEM_EASE };
-  const statusClassName = 'glass-panel rounded-2xl px-4 py-3 text-sm app-text-muted';
+  const statusClassName = 'px-3 py-2 text-xs app-text-muted';
 
   if (isLoading) {
     return <div className={statusClassName}>Loading organizations...</div>;
@@ -99,14 +98,14 @@ export default function SidebarOrganizationTree() {
   if (organizations.length === 0) {
     return (
       <div className={statusClassName}>
-        No organizations yet. Create one to start organizing boards around a team boundary.
+        No organizations yet.
       </div>
     );
   }
 
   return (
     <>
-      <div className="space-y-2">
+      <div className="space-y-0.5">
         {organizations.map((organization, index) => {
           const organizationId = String(organization.id);
           const organizationHref = buildOrganizationPath(organization.id);
@@ -121,86 +120,55 @@ export default function SidebarOrganizationTree() {
           return (
             <motion.section
               key={organization.id}
-              initial={
-                shouldReduceMotion ? false : { opacity: 0, y: 10, scale: 0.985 }
-              }
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{
                 ...itemTransition,
                 delay: shouldReduceMotion ? 0 : index * 0.035,
               }}
-              className="group glass-panel overflow-hidden rounded-[1.5rem]"
-              style={
-                isOrganizationActive
-                  ? {
-                      borderColor:
-                        'color-mix(in srgb, var(--app-accent) 28%, var(--app-border))',
-                      background:
-                        'color-mix(in srgb, var(--app-accent) 12%, var(--app-panel-strong))',
-                    }
-                  : undefined
-              }
+              className="min-w-0"
             >
-              <div className="flex items-center gap-2 p-2">
+              <div className="flex min-w-0 items-center gap-0.5 rounded-lg transition-colors hover:bg-[var(--app-panel-soft)]">
                 <Link
                   href={organizationHref}
-                  aria-current={isOrganizationActive ? 'page' : undefined}
+                  aria-current={pathname === organizationHref ? 'page' : undefined}
+                  onClick={onNavigate}
                   className={clsx(
-                    'flex min-w-0 flex-1 items-center gap-3 rounded-[1.15rem] px-3 py-3 transition-[background-color,color]',
-                    isOrganizationActive &&
-                      'bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)]'
+                    'flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg pl-3 text-sm transition-colors',
+                    isOrganizationActive ? 'font-medium text-[var(--app-foreground)]' : 'app-text-muted hover:text-[var(--app-foreground)]'
                   )}
                 >
                   <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: organizationAccent,
-                      boxShadow: `0 0 0 6px color-mix(in srgb, ${organizationAccent} 18%, transparent)`,
-                    }}
+                    className="h-2 w-2 shrink-0 rounded-[3px]"
+                    style={{ backgroundColor: organizationAccent }}
                   />
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">
-                      {organization.name}
-                    </span>
-                    <span className="mt-1 block text-xs app-text-muted">
-                      {organization.accessible_board_count} boards in scope
-                    </span>
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{organization.name}</span>
                 </Link>
-
-                <div className="flex h-10 w-10 items-center justify-center">
-                  {organization.current_user_role === 'owner' ? (
-                    <button
-                      type="button"
-                      aria-label={`Edit ${organization.name}`}
-                      onClick={() => setEditingOrganization(organization)}
-                      className="app-hover-reveal glass-button !h-10 !w-10 !rounded-[1rem] !p-0"
-                    >
-                      <PencilLine className="h-4 w-4" />
-                    </button>
-                  ) : null}
-                </div>
-
                 <button
                   type="button"
                   onClick={() =>
                     setExpandedOrganizations((current) => ({
                       ...current,
-                      [organizationId]: !(current[organizationId] ?? false),
+                      [organizationId]: !(current[organizationId] ?? isOrganizationActive),
                     }))
                   }
-                  className="glass-button !h-10 !w-10 !rounded-[1rem] !p-0"
+                  className="sidebar-icon-button !h-8 !w-7 shrink-0"
                   aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${organization.name}`}
+                  aria-expanded={isExpanded}
                 >
                   <motion.span
                     animate={{ rotate: isExpanded ? 180 : 0 }}
                     transition={itemTransition}
                     className="flex items-center justify-center"
                   >
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="h-3.5 w-3.5" />
                   </motion.span>
                 </button>
+                {organization.current_user_role === 'owner' && (
+                  <button type="button" aria-label={`Edit ${organization.name}`} onClick={() => setEditingOrganization(organization)} className="sidebar-icon-button !h-8 !w-7 shrink-0 text-[var(--app-muted)]">
+                    <PencilLine className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               <AnimatePresence initial={false}>
@@ -213,8 +181,8 @@ export default function SidebarOrganizationTree() {
                     transition={itemTransition}
                     className="overflow-hidden"
                   >
-                    <div className="px-3 pb-3">
-                      <div className="ml-4 space-y-1 border-l border-[var(--app-border)] pl-4">
+                    <div className="ml-[18px] border-l border-[var(--app-border)] pl-2">
+                      <div className="space-y-0.5 py-0.5">
                         {isBoardsLoading ? (
                           <p className="px-3 py-2 text-xs app-text-muted">
                             Loading boards...
@@ -242,21 +210,16 @@ export default function SidebarOrganizationTree() {
                                 key={board.id}
                                 href={boardHref}
                                 aria-current={isBoardActive ? 'page' : undefined}
+                                onClick={onNavigate}
                                 className={clsx(
-                                  'flex items-center gap-3 rounded-[1rem] px-3 py-2.5 text-sm transition-[background-color,color]',
+                                  'flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] transition-colors',
                                   isBoardActive
-                                    ? 'bg-[color-mix(in_srgb,var(--app-accent)_10%,transparent)] text-[var(--app-foreground)]'
-                                    : 'app-text-muted hover:bg-[color-mix(in_srgb,var(--app-panel-strong)_84%,transparent)] hover:text-[var(--app-foreground)]'
+                                    ? 'bg-[var(--app-panel-soft)] font-medium text-[var(--app-foreground)]'
+                                    : 'app-text-muted hover:bg-[var(--app-panel-soft)] hover:text-[var(--app-foreground)]'
                                 )}
                               >
-                                <span className="relative flex h-5 w-5 shrink-0 items-center justify-center">
-                                  <FolderKanban className="h-3.5 w-3.5" />
-                                  <span
-                                    className="absolute -bottom-0.5 -right-0.5 h-1.5 w-1.5 rounded-full"
-                                    style={{ backgroundColor: boardAccent }}
-                                  />
-                                </span>
-                                <span className="truncate">
+                                <FolderKanban className="h-3.5 w-3.5 shrink-0" style={{ color: boardAccent }} />
+                                <span className="min-w-0 flex-1 truncate">
                                   {board.name || 'Untitled Board'}
                                 </span>
                               </Link>
