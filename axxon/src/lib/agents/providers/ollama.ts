@@ -325,6 +325,32 @@ const PLANNING_ARTIFACT_JSON_SHAPE = `{
   "notes": []
 }`;
 
+// Builds provider messages for the planning-analysis stage.
+export function buildPlanningAnalysisMessages(
+  run: AgentRun,
+  messages: AgentProviderMessage[],
+  allowedTools: AgentToolDefinition[]
+) {
+  return [
+    { role: 'system', content: `${PLANNING_ANALYSIS_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ANALYSIS_JSON_SHAPE}` },
+    { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
+  ];
+}
+
+// Builds provider messages for the final plan-artifact stage.
+export function buildPlanningArtifactMessages(
+  run: AgentRun,
+  messages: AgentProviderMessage[],
+  allowedTools: AgentToolDefinition[],
+  qualityFeedback?: AgentPlanningQuality
+) {
+  return [
+    { role: 'system', content: `${PLANNING_ARTIFACT_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ARTIFACT_JSON_SHAPE}` },
+    { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
+    ...(qualityFeedback ? [{ role: 'user', content: buildPlanQualityFeedback(qualityFeedback, { prompt: run.prompt, context: run.planningContext }) }] : []),
+  ];
+}
+
 // Runs the analysis stage that extracts context and returns the deterministic planning decision.
 export async function analyzePlanningTurnWithOllama(
   run: AgentRun,
@@ -332,10 +358,7 @@ export async function analyzePlanningTurnWithOllama(
   allowedTools: AgentToolDefinition[]
 ): Promise<AgentPlanningTurnAnalysis> {
   return completeOllamaStructuredJson<AgentPlanningTurnAnalysis>({
-    messages: [
-      { role: 'system', content: `${PLANNING_ANALYSIS_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ANALYSIS_JSON_SHAPE}` },
-      { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
-    ],
+    messages: buildPlanningAnalysisMessages(run, messages, allowedTools),
     schema: agentPlanningTurnAnalysisSchema,
     failureMessage: 'Failed to analyze the planning turn',
     schemaHint: PLANNING_ANALYSIS_JSON_SHAPE,
@@ -352,11 +375,7 @@ export async function generatePlanWithOllama(
   qualityFeedback?: AgentPlanningQuality
 ): Promise<AgentPlanArtifact> {
   return completeOllamaStructuredJson<AgentPlanArtifact>({
-    messages: [
-      { role: 'system', content: `${PLANNING_ARTIFACT_SYSTEM_PROMPT}\n\nRequired JSON shape:\n${PLANNING_ARTIFACT_JSON_SHAPE}` },
-      { role: 'user', content: buildPlanningPayload(run, messages, allowedTools) },
-      ...(qualityFeedback ? [{ role: 'user', content: buildPlanQualityFeedback(qualityFeedback, { prompt: run.prompt, context: run.planningContext }) }] : []),
-    ],
+    messages: buildPlanningArtifactMessages(run, messages, allowedTools, qualityFeedback),
     schema: agentPlanArtifactSchema,
     failureMessage: 'Failed to generate the planning artifact',
     schemaHint: PLANNING_ARTIFACT_JSON_SHAPE,
