@@ -28,6 +28,7 @@ export type InviteOrganizationMembersResponse = {
 export type OrganizationSummary = OrganizationBaseData & {
   member_count: number;
   accessible_board_count: number;
+  accessible_project_count?: number;
   repo_count: number;
   current_user_role: OrganizationMemberRole;
 };

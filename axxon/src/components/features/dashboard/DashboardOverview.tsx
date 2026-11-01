@@ -4,11 +4,11 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Building2, FolderKanban, GitBranch, Plus } from 'lucide-react';
+import { Building2, Boxes, GitBranch, Plus } from 'lucide-react';
 
-import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
 import CreateOrganizationForm from '@/components/features/dashboard/CreateOrganizationForm';
-import DashboardProjects from '@/components/features/dashboard/DashboardProjects';
+import CreateProjectForm from '@/components/features/projects/CreateProjectForm';
+import ProjectDirectory from '@/components/features/projects/ProjectDirectory';
 import OrganizationList from '@/components/features/dashboard/OrganizationList';
 import Button from '@/components/ui/Button';
 import GoogleLoginButton from '@/components/ui/GoogleLoginButton';
@@ -22,7 +22,7 @@ import { getUserId } from '@/lib/api/users/getUserId';
 export default function DashboardOverview() {
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<number | null>(null);
   const [isCreateOrganizationOpen, setIsCreateOrganizationOpen] = useState(false);
-  const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const reducedMotion = useReducedMotion();
 
   const { data: userId, isLoading: isUserLoading } = useQuery({
@@ -57,7 +57,7 @@ export default function DashboardOverview() {
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId)
     ?? organizations[0]
     ?? null;
-  const totalBoards = organizations.reduce((total, organization) => total + organization.accessible_board_count, 0);
+  const totalProjects = organizations.reduce((total, organization) => total + (organization.accessible_project_count ?? 0), 0);
   const totalRepositories = organizations.reduce((total, organization) => total + organization.repo_count, 0);
 
   return (
@@ -66,7 +66,7 @@ export default function DashboardOverview() {
         <PageHero
           kicker="Your workspace"
           title="Organizations & projects"
-          description="Choose an organization to see its boards and continue where your team is working."
+          description="Choose an organization to design systems, review architecture, and coordinate implementation-ready work."
           actions={<Button variant="primary" onClick={() => setIsCreateOrganizationOpen(true)}><Plus className="h-4 w-4" /> Create organization</Button>}
         >
           <div className="grid border-t border-[var(--app-border)] pt-5 sm:grid-cols-3">
@@ -75,8 +75,8 @@ export default function DashboardOverview() {
               <div><p className="text-2xl font-semibold tabular-nums">{isOrganizationsLoading ? '—' : organizations.length}</p><p className="text-xs app-text-muted">Organizations</p></div>
             </div>
             <div className="flex items-center gap-4 border-t border-[var(--app-border)] py-3 sm:border-l sm:border-t-0 sm:px-6">
-              <FolderKanban className="h-5 w-5 text-[var(--app-muted)]" />
-              <div><p className="text-2xl font-semibold tabular-nums">{isOrganizationsLoading ? '—' : totalBoards}</p><p className="text-xs app-text-muted">Accessible boards</p></div>
+              <Boxes className="h-5 w-5 text-[var(--app-muted)]" />
+              <div><p className="text-2xl font-semibold tabular-nums">{isOrganizationsLoading ? '—' : totalProjects}</p><p className="text-xs app-text-muted">Architecture projects</p></div>
             </div>
             <div className="flex items-center gap-4 border-t border-[var(--app-border)] py-3 sm:border-l sm:border-t-0 sm:pl-6">
               <GitBranch className="h-5 w-5 text-[var(--app-muted)]" />
@@ -86,7 +86,7 @@ export default function DashboardOverview() {
         </PageHero>
 
         <motion.section
-          aria-label="Organization and board directory"
+          aria-label="Organization and architecture project directory"
           initial={reducedMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: reducedMotion ? 0 : 0.45, ease: [0.16, 1, 0.3, 1] }}
@@ -110,10 +110,10 @@ export default function DashboardOverview() {
               </div>
             ) : (
               <AnimatePresence mode="wait" initial={false}>
-                <DashboardProjects
+                <ProjectDirectory
                   key={selectedOrganization?.id ?? 'none'}
-                  organization={selectedOrganization}
-                  onCreateBoard={() => setIsCreateBoardOpen(true)}
+                  organizationId={String(selectedOrganization?.id ?? '')}
+                  onCreate={() => setIsCreateProjectOpen(true)}
                 />
               </AnimatePresence>
             )}
@@ -125,8 +125,8 @@ export default function DashboardOverview() {
         <CreateOrganizationForm onClose={() => setIsCreateOrganizationOpen(false)} />
       </Modal>
       {selectedOrganization ? (
-        <Modal isOpen={isCreateBoardOpen} onClose={() => setIsCreateBoardOpen(false)} title="Create board">
-          <CreateBoardForm organizationId={String(selectedOrganization.id)} onClose={() => setIsCreateBoardOpen(false)} />
+        <Modal isOpen={isCreateProjectOpen} onClose={() => setIsCreateProjectOpen(false)} title="Create architecture project">
+          <CreateProjectForm organizationId={String(selectedOrganization.id)} onClose={(projectId) => { setIsCreateProjectOpen(false); if (projectId) window.location.assign(`/dashboard/orgs/${selectedOrganization.id}/projects/${projectId}`); }} />
         </Modal>
       ) : null}
     </>

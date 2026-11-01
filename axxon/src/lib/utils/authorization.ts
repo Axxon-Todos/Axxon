@@ -2,6 +2,7 @@ import { Board } from '@/lib/models/board';
 import { BoardMembers } from '@/lib/models/boardMembers';
 import { OrganizationMembers } from '@/lib/models/organizationMembers';
 import { Organizations } from '@/lib/models/organizations';
+import { Projects } from '@/lib/models/projects';
 import {
   ForbiddenError,
   NotFoundError,
@@ -46,6 +47,37 @@ export async function requireOrganizationOwner(
   }
 
   return organization;
+}
+
+// Requires organization membership for a project-scoped resource and returns the project record.
+export async function requireProjectMember(
+  organizationId: number,
+  projectId: number,
+  userId: number
+) {
+  await requireOrganizationMember(organizationId, userId);
+  const project = await Projects.getByIdInOrganization(projectId, organizationId);
+
+  if (!project) {
+    throw new NotFoundError('Project not found');
+  }
+
+  return project;
+}
+
+// Requires the project creator for operations that change project-level settings.
+export async function requireProjectOwner(
+  organizationId: number,
+  projectId: number,
+  userId: number
+) {
+  const project = await requireProjectMember(organizationId, projectId, userId);
+
+  if (project.created_by !== userId) {
+    throw new ForbiddenError('Only the project owner can perform this action');
+  }
+
+  return project;
 }
 
 export async function requireBoardMember(boardId: number, userId: number) {

@@ -7,18 +7,17 @@ import { usePathname } from 'next/navigation';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import clsx from 'clsx';
-import { ChevronDown, FolderKanban, PencilLine } from 'lucide-react';
+import { Boxes, ChevronDown, PencilLine } from 'lucide-react';
 
 import EditOrganizationModal from '@/components/features/dashboard/EditOrganizationModal';
 import { useOrganizationRouteParams } from '@/hooks/useOrganizationRouteParams';
-import { fetchBoards } from '@/lib/api/boards/getBoards';
+import { fetchProjects } from '@/lib/api/projects/getProjects';
 import { fetchOrganizations } from '@/lib/api/organizations/getOrganizations';
-import type { BoardBaseData } from '@/lib/types/boardTypes';
 import type { OrganizationSummary } from '@/lib/types/organizationTypes';
 import { resolveAccentColor } from '@/lib/utils/brandColors';
 import {
-  buildOrganizationBoardPath,
   buildOrganizationPath,
+  buildOrganizationProjectPath,
 } from '@/lib/utils/routes';
 
 const ITEM_EASE = [0.16, 1, 0.3, 1] as const;
@@ -69,13 +68,13 @@ export default function SidebarOrganizationTree({ onNavigate }: { onNavigate?: (
     [activeOrganizationId, expandedOrganizations, organizations]
   );
 
-  const boardQueries = useQueries({
+  const projectQueries = useQueries({
     queries: organizations.map((organization) => {
       const organizationId = String(organization.id);
 
       return {
-        queryKey: ['boards', organizationId],
-        queryFn: () => fetchBoards(organizationId),
+        queryKey: ['projects', organizationId],
+        queryFn: () => fetchProjects(organizationId),
         enabled: expandedOrganizationIds.has(organizationId),
         staleTime: 5 * 60 * 1000,
       };
@@ -112,9 +111,9 @@ export default function SidebarOrganizationTree({ onNavigate }: { onNavigate?: (
           const isOrganizationActive =
             pathname === organizationHref || pathname.startsWith(`${organizationHref}/`);
           const isExpanded = expandedOrganizations[organizationId] ?? isOrganizationActive;
-          const boards = (boardQueries[index]?.data ?? []) as BoardBaseData[];
-          const isBoardsLoading = boardQueries[index]?.isLoading ?? false;
-          const hasBoardsError = Boolean(boardQueries[index]?.error);
+          const projects = projectQueries[index]?.data ?? [];
+          const isProjectsLoading = projectQueries[index]?.isLoading ?? false;
+          const hasProjectsError = Boolean(projectQueries[index]?.error);
           const organizationAccent = resolveAccentColor(organization.color);
 
           return (
@@ -174,7 +173,7 @@ export default function SidebarOrganizationTree({ onNavigate }: { onNavigate?: (
               <AnimatePresence initial={false}>
                 {isExpanded ? (
                   <motion.div
-                    key={`organization-boards-${organization.id}`}
+                    key={`organization-projects-${organization.id}`}
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -183,44 +182,43 @@ export default function SidebarOrganizationTree({ onNavigate }: { onNavigate?: (
                   >
                     <div className="ml-[18px] border-l border-[var(--app-border)] pl-2">
                       <div className="space-y-0.5 py-0.5">
-                        {isBoardsLoading ? (
+                        {isProjectsLoading ? (
                           <p className="px-3 py-2 text-xs app-text-muted">
-                            Loading boards...
+                            Loading projects...
                           </p>
-                        ) : hasBoardsError ? (
+                        ) : hasProjectsError ? (
                           <p className="px-3 py-2 text-xs app-text-muted">
-                            Unable to load boards.
+                            Unable to load projects.
                           </p>
-                        ) : boards.length === 0 ? (
+                        ) : projects.length === 0 ? (
                           <p className="px-3 py-2 text-xs app-text-muted">
-                            No boards yet.
+                            No projects yet.
                           </p>
                         ) : (
-                          boards.map((board) => {
-                            const boardHref = buildOrganizationBoardPath(
+                          projects.map((project) => {
+                            const projectHref = buildOrganizationProjectPath(
                               organization.id,
-                              board.id
+                              project.id
                             );
-                            const isBoardActive =
-                              pathname === boardHref || pathname.startsWith(`${boardHref}/`);
-                            const boardAccent = resolveAccentColor(board.color);
+                            const isProjectActive =
+                              pathname === projectHref || pathname.startsWith(`${projectHref}/`);
 
                             return (
                               <Link
-                                key={board.id}
-                                href={boardHref}
-                                aria-current={isBoardActive ? 'page' : undefined}
+                                key={project.id}
+                                href={projectHref}
+                                aria-current={isProjectActive ? 'page' : undefined}
                                 onClick={onNavigate}
                                 className={clsx(
                                   'flex h-8 min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] transition-colors',
-                                  isBoardActive
+                                  isProjectActive
                                     ? 'bg-[var(--app-panel-soft)] font-medium text-[var(--app-foreground)]'
                                     : 'app-text-muted hover:bg-[var(--app-panel-soft)] hover:text-[var(--app-foreground)]'
                                 )}
                               >
-                                <FolderKanban className="h-3.5 w-3.5 shrink-0" style={{ color: boardAccent }} />
+                                <Boxes className="h-3.5 w-3.5 shrink-0" />
                                 <span className="min-w-0 flex-1 truncate">
-                                  {board.name || 'Untitled Board'}
+                                  {project.name || 'Untitled Project'}
                                 </span>
                               </Link>
                             );

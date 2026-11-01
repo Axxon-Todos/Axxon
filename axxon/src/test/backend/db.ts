@@ -1,6 +1,13 @@
 import db from '@/lib/db/db';
 
 export const TEST_TABLES = [
+  'architecture_view_nodes',
+  'architecture_views',
+  'architecture_relationships',
+  'architecture_components',
+  'architecture_drafts',
+  'architecture_revisions',
+  'projects',
   'agent_tool_calls',
   'agent_outbox_events',
   'agent_jobs',

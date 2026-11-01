@@ -257,6 +257,9 @@ export type AgentRun = {
   id: number;
   organizationId: number;
   boardId: number;
+  projectId?: number | null;
+  architectureIntent?: string | null;
+  targetContext?: Record<string, unknown> | null;
   createdBy: number;
   runType: AgentRunType;
   title: string;

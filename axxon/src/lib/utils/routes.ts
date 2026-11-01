@@ -42,6 +42,17 @@ export function buildOrganizationAiPath(organizationId: string | number) {
   return `${buildOrganizationPath(organizationId)}/ai`;
 }
 
+export function buildOrganizationProjectsPath(organizationId: string | number) {
+  return `${buildOrganizationPath(organizationId)}/projects`;
+}
+
+export function buildOrganizationProjectPath(
+  organizationId: string | number,
+  projectId: string | number
+) {
+  return `${buildOrganizationProjectsPath(organizationId)}/${projectId}`;
+}
+
 export function buildOrganizationBoardAnalyticsPath(
   organizationId: string | number,
   boardId: string | number
@@ -85,6 +96,18 @@ export function buildOrganizationBoardApiPath(
   suffix = ''
 ) {
   return `${buildOrganizationBoardsApiPath(organizationId)}/${boardId}${suffix}`;
+}
+
+export function buildOrganizationProjectsApiPath(organizationId: string | number) {
+  return `${buildOrganizationApiPath(organizationId)}/projects`;
+}
+
+export function buildOrganizationProjectApiPath(
+  organizationId: string | number,
+  projectId: string | number,
+  suffix = ''
+) {
+  return `${buildOrganizationProjectsApiPath(organizationId)}/${projectId}${suffix}`;
 }
 
 export function buildOrganizationMembersApiPath(

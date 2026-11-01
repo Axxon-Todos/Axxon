@@ -23,7 +23,10 @@ type DbExecutor = Knex | Knex.Transaction;
 type AgentRunRow = {
   id: number;
   organization_id: number;
-  board_id: number;
+  board_id: number | null;
+  project_id: number | null;
+  architecture_intent: string | null;
+  target_context_json: Record<string, unknown> | string | null;
   created_by: number;
   run_type: AgentRunType;
   title: string;
@@ -75,7 +78,10 @@ function mapRun(row: AgentRunRow): AgentRun {
   return {
     id: row.id,
     organizationId: row.organization_id,
-    boardId: row.board_id,
+    boardId: row.board_id ?? 0,
+    projectId: row.project_id ?? null,
+    architectureIntent: row.architecture_intent,
+    targetContext: parseJson(row.target_context_json, null),
     createdBy: row.created_by,
     runType: row.run_type ?? 'planning',
     title: row.title,
@@ -135,12 +141,15 @@ function mapMessage(row: AgentRunMessageRow): AgentRunMessage {
 
 export class AgentRepository {
   static async createRun(
-    input: { organizationId: number; boardId: number; createdBy: number; runType: AgentRunType; title: string; prompt: string },
+    input: { organizationId: number; boardId: number | null; projectId?: number | null; architectureIntent?: string | null; targetContext?: Record<string, unknown> | null; createdBy: number; runType: AgentRunType; title: string; prompt: string },
     trx: DbExecutor = db
   ) {
     const [row] = await trx('agent_runs').insert({
       organization_id: input.organizationId,
       board_id: input.boardId,
+      project_id: input.projectId ?? null,
+      architecture_intent: input.architectureIntent ?? null,
+      target_context_json: input.targetContext ?? null,
       created_by: input.createdBy,
       run_type: input.runType,
       title: input.title,
@@ -171,6 +180,21 @@ export class AgentRepository {
     const rows = await db('agent_runs').where({ organization_id: organizationId, board_id: boardId })
       .orderBy('updated_at', 'desc').orderBy('id', 'desc');
     return rows.map((row) => mapRun(row as AgentRunRow));
+  }
+
+  // Lists project-scoped runs while leaving board-run queries unchanged for dormant legacy workspaces.
+  static async listProjectRuns(organizationId: number, projectId: number) {
+    const rows = await db('agent_runs').where({ organization_id: organizationId, project_id: projectId })
+      .orderBy('updated_at', 'desc').orderBy('id', 'desc');
+    return rows.map((row) => mapRun(row as AgentRunRow));
+  }
+
+  // Creates a project-scoped run using the same durable queue and state-machine runtime as board runs.
+  static async createProjectRun(
+    input: { organizationId: number; projectId: number; createdBy: number; architectureIntent: string; targetContext?: Record<string, unknown> | null; title: string; prompt: string },
+    trx: DbExecutor = db
+  ) {
+    return this.createRun({ ...input, boardId: null, runType: 'planning' }, trx);
   }
 
   static async updateRun(

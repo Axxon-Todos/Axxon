@@ -11,6 +11,7 @@ import type { OrganizationMemberRole } from '@/lib/types/organizationMemberTypes
 type RawOrganizationSummary = OrganizationBaseData & {
   member_count: string | number;
   accessible_board_count: string | number;
+  accessible_project_count?: string | number;
   repo_count: string | number;
   current_user_role: OrganizationMemberRole;
 };
@@ -22,6 +23,7 @@ function normalizeOrganizationSummary(
     ...organization,
     member_count: Number(organization.member_count ?? 0),
     accessible_board_count: Number(organization.accessible_board_count ?? 0),
+    accessible_project_count: Number(organization.accessible_project_count ?? 0),
     repo_count: Number(organization.repo_count ?? 0),
     current_user_role: organization.current_user_role,
   };
@@ -80,6 +82,10 @@ export class Organizations {
           .whereRaw('repositories.organization_id = organizations.id')
           .andWhere('repositories.is_active', true)
           .as('repo_count')
+        ,knex('projects')
+          .countDistinct('id')
+          .whereRaw('projects.organization_id = organizations.id')
+          .as('accessible_project_count')
       )
       .orderBy('organizations.created_at', 'desc');
 
@@ -141,6 +147,10 @@ export class Organizations {
           .whereRaw('repositories.organization_id = organizations.id')
           .andWhere('repositories.is_active', true)
           .as('repo_count')
+        ,knex('projects')
+          .countDistinct('id')
+          .whereRaw('projects.organization_id = organizations.id')
+          .as('accessible_project_count')
       )
       .first();
 

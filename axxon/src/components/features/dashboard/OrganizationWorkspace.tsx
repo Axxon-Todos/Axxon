@@ -6,11 +6,11 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { FolderGit2, Sparkles, Users2 } from 'lucide-react';
 
-import BoardList from '@/components/features/dashboard/BoardList';
-import CreateBoardForm from '@/components/features/dashboard/CreateBoardForm';
 import EditOrganizationModal from '@/components/features/dashboard/EditOrganizationModal';
 import InviteOrganizationMembersModal from '@/components/features/dashboard/InviteOrganizationMembersModal';
 import OrganizationGitHubPanel from '@/components/features/dashboard/OrganizationGitHubPanel';
+import ProjectDirectory from '@/components/features/projects/ProjectDirectory';
+import CreateProjectForm from '@/components/features/projects/CreateProjectForm';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
@@ -19,7 +19,7 @@ import Surface from '@/components/ui/Surface';
 import { fetchOrganization } from '@/lib/api/organizations/getOrganization';
 import { fetchOrganizationMembers } from '@/lib/api/organizations/getOrganizationMembers';
 import { resolveAccentColor } from '@/lib/utils/brandColors';
-import { buildOrganizationAiPath } from '@/lib/utils/routes';
+import { buildOrganizationProjectsPath } from '@/lib/utils/routes';
 
 import type { OrganizationMemberRecord } from '@/lib/types/organizationMemberTypes';
 
@@ -28,9 +28,9 @@ export default function OrganizationWorkspace({
 }: {
   organizationId: string;
 }) {
-  const [isCreateBoardModalOpen, setIsCreateBoardModalOpen] = useState(false);
   const [isEditOrganizationModalOpen, setIsEditOrganizationModalOpen] = useState(false);
   const [isInviteMembersModalOpen, setIsInviteMembersModalOpen] = useState(false);
+  const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
 
   const { data: organization, isLoading: isOrganizationLoading } = useQuery({
     queryKey: ['organization', organizationId],
@@ -65,20 +65,20 @@ export default function OrganizationWorkspace({
           title={organization.name}
           description={
             organization.description ||
-            'Top-level workspace for coordinating members, board execution surfaces, connected repositories, and future agent history.'
+            'Top-level workspace for designing software systems, collaborating around architecture, and connecting approved plans to implementation.'
           }
           accentColor={resolveAccentColor(organization.color)}
           actions={
             <>
               <Link
-                href={buildOrganizationAiPath(organizationId)}
+                href={buildOrganizationProjectsPath(organizationId)}
                 className="app-button app-button-primary"
               >
                 <Sparkles className="h-4 w-4" />
-                Open AI Workspace
+                Open Projects
               </Link>
-              <Button variant="primary" onClick={() => setIsCreateBoardModalOpen(true)}>
-                Create Board
+              <Button variant="primary" onClick={() => setIsCreateProjectModalOpen(true)}>
+                Create Project
               </Button>
               {isOwner ? (
                 <Button onClick={() => setIsEditOrganizationModalOpen(true)}>
@@ -91,7 +91,7 @@ export default function OrganizationWorkspace({
             <>
               <Badge>
                 <FolderGit2 className="h-3.5 w-3.5" />
-                {organization.accessible_board_count} boards in scope
+                Architecture projects
               </Badge>
               <Badge>
                 <Users2 className="h-3.5 w-3.5" />
@@ -101,13 +101,7 @@ export default function OrganizationWorkspace({
           }
         />
 
-        <Surface variant="strong" className="rounded-[2rem] p-6 sm:p-8">
-          <div className="mb-5">
-            <p className="app-kicker">Projects</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight">Boards in this organization</h2>
-          </div>
-          <BoardList organizationId={organizationId} />
-        </Surface>
+        <ProjectDirectory organizationId={organizationId} onCreate={() => setIsCreateProjectModalOpen(true)} />
 
         <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <OrganizationGitHubPanel organizationId={organizationId} isOwner={isOwner} />
@@ -156,17 +150,6 @@ export default function OrganizationWorkspace({
         </section>
       </div>
 
-      <Modal
-        isOpen={isCreateBoardModalOpen}
-        onClose={() => setIsCreateBoardModalOpen(false)}
-        title="Create New Board"
-      >
-        <CreateBoardForm
-          organizationId={organizationId}
-          onClose={() => setIsCreateBoardModalOpen(false)}
-        />
-      </Modal>
-
       {isEditOrganizationModalOpen ? (
         <EditOrganizationModal
           organization={organization}
@@ -180,6 +163,17 @@ export default function OrganizationWorkspace({
           onClose={() => setIsInviteMembersModalOpen(false)}
         />
       ) : null}
+
+      <Modal
+        isOpen={isCreateProjectModalOpen}
+        onClose={() => setIsCreateProjectModalOpen(false)}
+        title="Create architecture project"
+      >
+        <CreateProjectForm
+          organizationId={organizationId}
+          onClose={() => setIsCreateProjectModalOpen(false)}
+        />
+      </Modal>
     </>
   );
 }
