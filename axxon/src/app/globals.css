@@ -316,6 +316,9 @@ select {
 .architecture-node-palette-option:hover, .architecture-node-palette-option:focus-visible { border-color: var(--app-border-strong); background: var(--app-panel-soft); transform: translateX(2px); outline: none; }
 
 .architecture-flow .architecture-node-type { margin: 0; color: var(--app-muted); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; }
+.architecture-flow .architecture-node-collapse { border: 1px solid var(--app-border-strong); border-radius: 999px; color: var(--app-muted); font-size: 0.62rem; line-height: 1.2; padding: 0.18rem 0.35rem; transition: background-color 160ms ease, color 160ms ease; }
+.architecture-flow .architecture-node-collapse:hover, .architecture-flow .architecture-node-collapse:focus-visible { background: var(--app-panel-soft); color: var(--app-foreground); outline: none; }
+.architecture-flow .architecture-node-parent { margin: 0.4rem 0 0; color: var(--app-muted); font-size: 0.62rem; }
 .architecture-flow .architecture-node-label { margin: 0.35rem 0 0; font-size: 0.82rem; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
 .architecture-flow .architecture-node-name-input { width: 100%; margin-top: 0.25rem; border: 1px solid var(--app-border-strong); border-radius: 0.45rem; background: var(--app-panel); color: var(--app-foreground-strong); padding: 0.3rem 0.4rem; font-size: 0.82rem; font-weight: 650; outline: none; }
 .architecture-flow .architecture-node-name-input:focus { border-color: var(--app-foreground); box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-foreground) 18%, transparent); }

@@ -1,6 +1,6 @@
 // Verifies focused graph projections, relationship inference, and smart connection geometry.
 import { describe, expect, it } from 'vitest';
-import { getConnectionPositions, inferArchitectureRelationshipType, projectArchitectureGraph } from '@/lib/utils/architectureGraph';
+import { getArchitectureChildren, getArchitectureDescendantIds, getConnectionPositions, inferArchitectureRelationshipType, projectArchitectureGraph } from '@/lib/utils/architectureGraph';
 import type { ArchitectureComponent, ArchitectureGraph } from '@/lib/types/architectureTypes';
 
 const component = (id: string, type: ArchitectureComponent['type']): ArchitectureComponent => ({ id, project_id: 1, type, name: id, description: null, parent_id: null, responsibilities: [], technologies: [], requirements: [], constraints: [], metadata: {}, created_at: '', updated_at: '' });
@@ -34,5 +34,14 @@ describe('architecture graph utilities', () => {
   it('chooses vertical and horizontal connection sides from geometry', () => {
     expect(getConnectionPositions({ x: 0, y: 0 }, { x: 300, y: 0 })).toEqual({ sourcePosition: 'right', targetPosition: 'left' });
     expect(getConnectionPositions({ x: 0, y: 0 }, { x: 0, y: 300 })).toEqual({ sourcePosition: 'bottom', targetPosition: 'top' });
+  });
+
+  it('keeps hierarchy helpers stable while collapsing descendants by ID', () => {
+    const root = component('root', 'backend_domain');
+    const child = { ...component('child', 'service'), parent_id: 'root' };
+    const grandchild = { ...component('grandchild', 'module'), parent_id: 'child' };
+    const components = [root, child, grandchild];
+    expect(getArchitectureChildren(components, 'root').map((entry) => entry.id)).toEqual(['child']);
+    expect(getArchitectureDescendantIds(components, 'root')).toEqual(new Set(['child', 'grandchild']));
   });
 });

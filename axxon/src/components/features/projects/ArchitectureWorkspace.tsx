@@ -19,9 +19,10 @@ import { useArchitectureCollaboration } from '@/hooks/useArchitectureCollaborati
 import { useProjectRealtime } from '@/hooks/useProjectRealtime';
 import { useProjectPresence } from '@/hooks/useProjectPresence';
 import { useProjectSelection } from '@/hooks/useProjectSelection';
+import { useProjectCollaborationState } from '@/hooks/useProjectCollaborationState';
 import type { AgentRun } from '@/lib/types/agentTypes';
 import { architectureComponentCatalog, architectureComponentTypes, type ArchitectureComponent, type ArchitectureComponentType, type ArchitectureDraftInput, type ArchitectureRelationshipType, type ArchitectureViewKey } from '@/lib/types/architectureTypes';
-import { getConnectionPositions, inferArchitectureRelationshipType, projectArchitectureGraph } from '@/lib/utils/architectureGraph';
+import { getArchitectureDescendantIds, getConnectionPositions, inferArchitectureRelationshipType, projectArchitectureGraph } from '@/lib/utils/architectureGraph';
 import { cn } from '@/lib/utils/cn';
 
 const viewLabels: Record<ArchitectureViewKey, string> = {
@@ -31,22 +32,24 @@ const viewLabels: Record<ArchitectureViewKey, string> = {
 const componentTypeLabels: Record<ArchitectureComponentType, string> = Object.fromEntries(architectureComponentCatalog.map((entry) => [entry.type, entry.label])) as Record<ArchitectureComponentType, string>;
 
 type WorkspaceRailTab = 'inspect' | 'agent' | 'review' | 'collaboration' | 'history';
-type ArchitectureNodeData = { label: string; type: string; editing?: boolean; context?: boolean; onRename?: (name: string) => void };
+type ArchitectureNodeData = { label: string; type: string; parentId: string | null; childCount: number; collapsed: boolean; editing?: boolean; context?: boolean; collaborators?: number[]; onRename?: (name: string) => void; onToggleCollapse?: () => void };
 type ArchitectureEdgeData = { label: string; relationshipType: string };
 type ArchitectureEdge = Edge<ArchitectureEdgeData, 'dataFlow'>;
 
-function buildNodes(components: ArchitectureComponent[], viewNodes: { component_id: string; position_x: number; position_y: number; hidden: boolean; width?: number; height?: number }[], contextIds: Set<string>, editingNodeId: string | null, onRename: (id: string, name: string) => void, newNodeId: string | null, newNodePosition: { x: number; y: number }): Node<ArchitectureNodeData>[] {
+function buildNodes(components: ArchitectureComponent[], viewNodes: { component_id: string; position_x: number; position_y: number; hidden: boolean; width?: number; height?: number }[], contextIds: Set<string>, collapsedIds: Set<string>, collaboratorsByComponent: Map<string, number[]>, editingNodeId: string | null, onRename: (id: string, name: string) => void, onToggleCollapse: (id: string) => void, newNodeId: string | null, newNodePosition: { x: number; y: number }): Node<ArchitectureNodeData>[] {
   const positions = new Map(viewNodes.map((node) => [node.component_id, node]));
   return components.map((component, index) => {
     const position = positions.get(component.id) || (component.id === newNodeId ? { position_x: newNodePosition.x, position_y: newNodePosition.y, hidden: false, width: undefined, height: undefined } : { position_x: 80 + (index % 4) * 220, position_y: 80 + Math.floor(index / 4) * 150, hidden: false, width: undefined, height: undefined });
-    return { id: component.id, position: { x: position.position_x, y: position.position_y }, width: position.width, height: position.height, hidden: position.hidden, data: { label: component.name, type: component.type, context: contextIds.has(component.id), editing: editingNodeId === component.id, onRename: (name: string) => onRename(component.id, name) } satisfies ArchitectureNodeData, type: 'architecture' } satisfies Node<ArchitectureNodeData>;
+    const childCount = components.filter((candidate) => candidate.parent_id === component.id).length;
+    const hiddenByAncestor = [...collapsedIds].some((collapsedId) => getArchitectureDescendantIds(components, collapsedId).has(component.id));
+    return { id: component.id, position: { x: position.position_x, y: position.position_y }, width: position.width, height: position.height, hidden: position.hidden || hiddenByAncestor, data: { label: component.name, type: component.type, parentId: component.parent_id, childCount, collapsed: collapsedIds.has(component.id), collaborators: collaboratorsByComponent.get(component.id) || [], context: contextIds.has(component.id), editing: editingNodeId === component.id, onRename: (name: string) => onRename(component.id, name), onToggleCollapse: () => onToggleCollapse(component.id) } satisfies ArchitectureNodeData, type: 'architecture' } satisfies Node<ArchitectureNodeData>;
   });
 }
 
 // Provides readable, resizable architecture nodes without forcing users into a fixed card width.
 function ArchitectureNode({ data, selected }: NodeProps<Node<ArchitectureNodeData>>) {
   const handleClass = '!border-[var(--app-panel)] !bg-[var(--app-foreground)] architecture-node-handle';
-  return <div className={cn('architecture-node', data.context && 'architecture-node-context')}><NodeResizer isVisible={selected} minWidth={150} minHeight={64} handleClassName="architecture-node-resizer" />{([['top', Position.Top], ['right', Position.Right], ['bottom', Position.Bottom], ['left', Position.Left]] as const).map(([id, position]) => <span key={`handles-${id}`}><Handle id={`${id}-target`} type="target" position={position} className={handleClass} /><Handle id={`${id}-source`} type="source" position={position} className={handleClass} /></span>)}<p className="architecture-node-type">{data.type.replaceAll('_', ' ')}{data.context ? <span className="architecture-node-context-label">Context</span> : null}</p>{data.editing ? <input autoFocus value={data.label} onChange={(event) => data.onRename?.(event.target.value)} onBlur={() => data.onRename?.(data.label.trim() || data.label)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} onClick={(event) => event.stopPropagation()} className="architecture-node-name-input" aria-label="Rename component" /> : <p className="architecture-node-label">{data.label}</p>}</div>;
+  return <div className={cn('architecture-node', data.context && 'architecture-node-context')}><NodeResizer isVisible={selected} minWidth={150} minHeight={64} handleClassName="architecture-node-resizer" />{([['top', Position.Top], ['right', Position.Right], ['bottom', Position.Bottom], ['left', Position.Left]] as const).map(([id, position]) => <span key={`handles-${id}`}><Handle id={`${id}-target`} type="target" position={position} className={handleClass} /><Handle id={`${id}-source`} type="source" position={position} className={handleClass} /></span>)}{data.collaborators?.length ? <div className="architecture-node-collaborators" aria-label={`${data.collaborators.length} collaborators viewing this component`}>{data.collaborators.map((userId) => <span key={userId} title={`User ${userId}`}>{String(userId).slice(-2)}</span>)}</div> : null}<div className="flex items-start justify-between gap-2"><p className="architecture-node-type">{data.type.replaceAll('_', ' ')}{data.context ? <span className="architecture-node-context-label">Context</span> : null}</p>{data.childCount ? <button type="button" aria-label={`${data.collapsed ? 'Expand' : 'Collapse'} ${data.label} subsystem`} aria-expanded={!data.collapsed} onClick={(event) => { event.stopPropagation(); data.onToggleCollapse?.(); }} className="architecture-node-collapse">{data.collapsed ? '+' : '−'} {data.childCount}</button> : null}</div>{data.editing ? <input autoFocus value={data.label} onChange={(event) => data.onRename?.(event.target.value)} onBlur={() => data.onRename?.(data.label.trim() || data.label)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} onClick={(event) => event.stopPropagation()} className="architecture-node-name-input" aria-label="Rename component" /> : <p className="architecture-node-label">{data.label}</p>}{data.parentId ? <p className="architecture-node-parent">Subsystem member</p> : null}</div>;
 }
 
 function flowSpeed(relationshipType: string) {
@@ -61,13 +64,13 @@ function handleId(position: string, kind: 'source' | 'target') {
 }
 
 // Renders relationships as directional system traffic instead of static connector lines.
-function DataFlowEdge({ id, sourceX, sourceY, targetX, targetY, targetPosition, sourcePosition, data }: EdgeProps<ArchitectureEdge>) {
+function DataFlowEdge({ id, sourceX, sourceY, targetX, targetY, targetPosition, sourcePosition, data, selected }: EdgeProps<ArchitectureEdge>) {
   const [path, labelX, labelY] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition, borderRadius: 18, offset: 22 });
   const relationshipType = data?.relationshipType || 'depends_on';
   const speed = flowSpeed(relationshipType);
   const motionPath = path.replaceAll('"', '&quot;');
   return <>
-    <BaseEdge id={id} path={path} markerEnd={MarkerType.ArrowClosed} className="architecture-flow-edge" />
+    <BaseEdge id={id} path={path} markerEnd={MarkerType.ArrowClosed} className={cn('architecture-flow-edge', selected && 'architecture-flow-edge-selected')} />
     <path d={path} fill="none" stroke="transparent" strokeWidth="12" className="react-flow__edge-interaction" />
     {relationshipType !== 'depends_on' ? <>
       <circle r="3" className="architecture-flow-packet architecture-flow-packet-primary"><animateMotion dur={`${speed}s`} repeatCount="indefinite" path={motionPath} /></circle>
@@ -98,9 +101,10 @@ function operationDetails(operation: Record<string, unknown>, graph: { component
 
 export default function ArchitectureWorkspace({ organizationId, projectId }: { organizationId: string; projectId: string }) {
   const queryClient = useQueryClient();
-  const { socketRef, ready: socketReady } = useSocket(null, projectId);
-  useProjectRealtime(organizationId, projectId, socketRef, socketReady);
-  const collaboration = useArchitectureCollaboration(organizationId, projectId, socketRef, socketReady);
+  const { socketRef, projectReady } = useSocket(null, projectId);
+  useProjectRealtime(organizationId, projectId, socketRef, projectReady);
+  const collaboration = useArchitectureCollaboration(organizationId, projectId, socketRef, projectReady);
+  const collaborators = useProjectCollaborationState(socketRef, projectReady);
   const [activeView, setActiveView] = useState<ArchitectureViewKey>('overview');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedRelationshipId, setSelectedRelationshipId] = useState<string | null>(null);
@@ -113,6 +117,7 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
   const [nodePaletteQuery, setNodePaletteQuery] = useState('');
   const [nodeCreationPosition, setNodeCreationPosition] = useState({ x: 120, y: 120 });
   const [newNodeId, setNewNodeId] = useState<string | null>(null);
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const [pendingRelationshipId, setPendingRelationshipId] = useState<string | null>(null);
   const [quickActionsPosition, setQuickActionsPosition] = useState({ left: 16, top: 16 });
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
@@ -120,8 +125,8 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
   const canvasRef = useRef<HTMLDivElement>(null);
   const { data, isLoading, isError } = useQuery({ queryKey: ['project-architecture', organizationId, projectId], queryFn: () => fetchProjectArchitecture(organizationId, projectId) });
   const graph = data?.graph;
-  useProjectPresence(socketRef, socketReady, { componentId: selectedId, relationshipId: selectedRelationshipId, viewKey: activeView, status: 'active' });
-  useProjectSelection(socketRef, socketReady, { componentId: selectedId, relationshipId: selectedRelationshipId, viewKey: activeView });
+  useProjectPresence(socketRef, projectReady, { componentId: selectedId, relationshipId: selectedRelationshipId, viewKey: activeView, status: 'active' });
+  useProjectSelection(socketRef, projectReady, { componentId: selectedId, relationshipId: selectedRelationshipId, viewKey: activeView });
   const runsQuery = useQuery({
     queryKey: ['project-agent-runs', organizationId, projectId],
     queryFn: () => fetchProjectAgentRuns(organizationId, projectId),
@@ -130,23 +135,32 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
   const [draftNodes, setDraftNodes] = useState<Node<ArchitectureNodeData>[] | null>(null);
   const activeViewData = graph?.views.find((view) => view.key === activeView) || graph?.views[0];
   const projection = useMemo(() => graph ? projectArchitectureGraph(graph, activeView) : null, [activeView, graph]);
+  const collaboratorsByComponent = useMemo(() => {
+    const grouped = new Map<string, number[]>();
+    collaborators.filter((collaborator) => collaborator.status === 'active' && collaborator.viewKey === activeView && collaborator.componentId).forEach((collaborator) => {
+      const componentId = collaborator.componentId as string;
+      grouped.set(componentId, [...(grouped.get(componentId) || []), collaborator.userId]);
+    });
+    return grouped;
+  }, [activeView, collaborators]);
   const renameComponent = useCallback((id: string, name: string) => {
     queryClient.setQueryData(['project-architecture', organizationId, projectId], (current: typeof data) => current ? { ...current, graph: { ...current.graph, components: current.graph.components.map((component) => component.id === id ? { ...component, name, updated_at: new Date().toISOString() } : component) } } : current);
     setDraftDirty(true);
     setDraftNodes((current) => current ? current.map((node) => node.id === id ? { ...node, data: { ...node.data, label: name } } : node) : current);
   }, [organizationId, projectId, queryClient]);
-  const nodes = useMemo(() => graph && activeViewData && projection ? buildNodes(projection.components, activeViewData.nodes, projection.contextIds, editingNodeId, renameComponent, newNodeId, nodeCreationPosition) : [], [activeViewData, editingNodeId, graph, newNodeId, nodeCreationPosition, projection, renameComponent]);
+  const toggleCollapsed = useCallback((id: string) => setCollapsedIds((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }), []);
+  const nodes = useMemo(() => graph && activeViewData && projection ? buildNodes(projection.components, activeViewData.nodes, projection.contextIds, collapsedIds, collaboratorsByComponent, editingNodeId, renameComponent, toggleCollapsed, newNodeId, nodeCreationPosition) : [], [activeViewData, collapsedIds, collaboratorsByComponent, editingNodeId, graph, newNodeId, nodeCreationPosition, projection, renameComponent, toggleCollapsed]);
   const edges = useMemo<ArchitectureEdge[]>(() => {
     if (!graph || !projection) return [];
     const nodeMap = new Map(nodes.map((node) => [node.id, node]));
-    return projection.relationships.map((relationship) => {
+    return projection.relationships.filter((relationship) => !nodeMap.get(relationship.source_component_id)?.hidden && !nodeMap.get(relationship.target_component_id)?.hidden).map((relationship) => {
       const source = nodeMap.get(relationship.source_component_id);
       const target = nodeMap.get(relationship.target_component_id);
       const positions = source && target ? getConnectionPositions(source.position, target.position) : { sourcePosition: Position.Right, targetPosition: Position.Left };
       const metadata = relationship.metadata || {};
-      return { id: relationship.id, source: relationship.source_component_id, target: relationship.target_component_id, sourceHandle: typeof metadata.sourceHandle === 'string' ? metadata.sourceHandle : handleId(positions.sourcePosition, 'source'), targetHandle: typeof metadata.targetHandle === 'string' ? metadata.targetHandle : handleId(positions.targetPosition, 'target'), sourcePosition: positions.sourcePosition, targetPosition: positions.targetPosition, type: 'dataFlow', data: { label: relationship.type.replaceAll('_', ' '), relationshipType: relationship.type } };
+      return { id: relationship.id, source: relationship.source_component_id, target: relationship.target_component_id, selected: selectedRelationshipId === relationship.id, sourceHandle: typeof metadata.sourceHandle === 'string' ? metadata.sourceHandle : handleId(positions.sourcePosition, 'source'), targetHandle: typeof metadata.targetHandle === 'string' ? metadata.targetHandle : handleId(positions.targetPosition, 'target'), sourcePosition: positions.sourcePosition, targetPosition: positions.targetPosition, type: 'dataFlow', data: { label: relationship.type.replaceAll('_', ' '), relationshipType: relationship.type } };
     });
-  }, [graph, nodes, projection]);
+  }, [graph, nodes, projection, selectedRelationshipId]);
   const selected = graph?.components.find((component) => component.id === selectedId) || null;
   const pendingRelationship = graph?.relationships.find((relationship) => relationship.id === pendingRelationshipId) || null;
   const filteredCatalog = architectureComponentCatalog.filter((entry) => `${entry.label} ${entry.description} ${entry.category}`.toLowerCase().includes(nodePaletteQuery.toLowerCase().trim()));
@@ -191,7 +205,7 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
     setDraftNodes((current) => applyNodeChanges(changes, current || nodes));
     if (changes.some((change) => change.type === 'position' || change.type === 'dimensions')) setDraftDirty(true);
   };
-  const updateSelected = (changes: Partial<Pick<ArchitectureComponent, 'name' | 'description' | 'type' | 'responsibilities' | 'technologies' | 'requirements' | 'constraints'>>) => {
+  const updateSelected = (changes: Partial<Pick<ArchitectureComponent, 'name' | 'description' | 'type' | 'parent_id' | 'responsibilities' | 'technologies' | 'requirements' | 'constraints'>>) => {
     if (!selectedId) return;
     queryClient.setQueryData(['project-architecture', organizationId, projectId], (current: typeof data) => current ? { ...current, graph: { ...current.graph, components: current.graph.components.map((component) => component.id === selectedId ? { ...component, ...changes, updated_at: new Date().toISOString() } : component) } } : current);
     setDraftDirty(true);
@@ -246,7 +260,7 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <Surface variant="strong" className="flex min-h-[620px] min-w-0 flex-col overflow-hidden rounded-[1.5rem]">
           <div role="tablist" aria-label="Architecture views" className="flex gap-2 overflow-x-auto border-b border-[var(--app-border)] p-3">{(Object.keys(viewLabels) as ArchitectureViewKey[]).map((key) => <button key={key} role="tab" aria-selected={activeView === key} type="button" onClick={() => { setActiveView(key); setDraftNodes(null); }} className={cn('shrink-0 rounded-xl px-3 py-2 text-sm transition-colors', activeView === key ? 'bg-[var(--app-foreground)] text-[var(--app-panel)]' : 'app-text-muted hover:bg-[var(--app-panel-soft)]')}>{viewLabels[key]}</button>)}<span className="ml-auto hidden shrink-0 items-center gap-2 text-xs app-text-muted sm:flex"><Sparkles className="h-3.5 w-3.5" /> Agent workspace</span></div>
-          <div ref={canvasRef} className="architecture-flow relative min-h-0 flex-1"><ReactFlow nodes={displayedNodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={connectComponents} connectionLineType={ConnectionLineType.SmoothStep} onNodeClick={(_, node) => { setSelectedId(node.id); setEditingNodeId(null); setRailTab('inspect'); }} onNodeDoubleClick={(_, node) => { setSelectedId(node.id); setEditingNodeId(node.id); setRailTab('inspect'); }} onPaneClick={(event) => { if (event.detail === 2 && canvasRef.current) { const bounds = canvasRef.current.getBoundingClientRect(); const x = event.clientX - bounds.left; const y = event.clientY - bounds.top; setQuickActionsPosition({ left: x > bounds.width - 300 ? x - 282 : x + 16, top: y > bounds.height - 240 ? y - 230 : y + 16 }); setNodeCreationPosition({ x: Math.max(32, x - 90), y: Math.max(32, y - 45) }); setQuickActionsOpen(true); } }} fitView proOptions={{ hideAttribution: true }}><Background color="var(--app-border)" gap={24} /><Controls /><MiniMap /></ReactFlow><div className="architecture-flow-legend" aria-label="Architecture flow legend"><span><i className="architecture-flow-legend-dot" />Live data flow</span><span><i className="architecture-flow-legend-line" />Dependency</span></div>{quickActionsOpen ? <div style={{ left: quickActionsPosition.left, top: quickActionsPosition.top }} className="absolute z-10 w-64 rounded-2xl border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] p-4 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="app-kicker">Canvas actions</p><h2 className="mt-1 text-base font-semibold">What would you like to do?</h2></div><button type="button" onClick={() => setQuickActionsOpen(false)} className="app-text-muted" aria-label="Close canvas actions">×</button></div><div className="mt-4 grid gap-2"><Button size="sm" className="justify-start" onClick={() => { setNodePaletteOpen(true); setQuickActionsOpen(false); }}><Plus className="h-4 w-4" /> Add typed component</Button><Button size="sm" className="justify-start" onClick={() => { setRailTab('agent'); setQuickActionsOpen(false); }}><Sparkles className="h-4 w-4" /> Ask the architecture agent</Button><Button size="sm" className="justify-start" onClick={() => { setRailTab('history'); setQuickActionsOpen(false); }}><History className="h-4 w-4" /> Open revision history</Button></div></div> : null}{nodePaletteOpen ? <div className="architecture-node-palette absolute left-4 top-4 z-20 w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] p-4 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="app-kicker">Create from catalog</p><h2 className="mt-1 text-base font-semibold">Choose a system building block</h2></div><button type="button" onClick={() => setNodePaletteOpen(false)} className="app-text-muted" aria-label="Close component catalog"><X className="h-4 w-4" /></button></div><div className="relative mt-4"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 app-text-muted" /><input autoFocus value={nodePaletteQuery} onChange={(event) => setNodePaletteQuery(event.target.value)} placeholder="Search services, data, security..." className="app-input w-full rounded-xl py-2 pl-9 pr-3 text-sm" aria-label="Search component types" /></div><div className="mt-3 max-h-72 space-y-1 overflow-y-auto">{filteredCatalog.map((entry) => <button key={entry.type} type="button" onClick={() => addComponent(entry.type)} className="architecture-node-palette-option w-full rounded-xl p-3 text-left"><span className="block text-sm font-medium">{entry.label}</span><span className="mt-1 block text-xs app-text-muted">{entry.description}</span></button>)}{!filteredCatalog.length ? <p className="p-3 text-sm app-text-muted">No matching component types.</p> : null}</div><p className="mt-3 text-xs app-text-muted">The node is created immediately, then you can rename it inline.</p></div> : null}</div>
+          <div ref={canvasRef} className="architecture-flow relative min-h-0 flex-1"><ReactFlow nodes={displayedNodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={onNodesChange} onConnect={connectComponents} connectionLineType={ConnectionLineType.SmoothStep} onNodeClick={(_, node) => { setSelectedId(node.id); setSelectedRelationshipId(null); setEditingNodeId(null); setRailTab('inspect'); }} onNodeDoubleClick={(_, node) => { setSelectedId(node.id); setSelectedRelationshipId(null); setEditingNodeId(node.id); setRailTab('inspect'); }} onEdgeClick={(_, edge) => { setSelectedId(null); setSelectedRelationshipId(edge.id); setRailTab('inspect'); }} onPaneClick={(event) => { if (event.detail === 2 && canvasRef.current) { const bounds = canvasRef.current.getBoundingClientRect(); const x = event.clientX - bounds.left; const y = event.clientY - bounds.top; setQuickActionsPosition({ left: x > bounds.width - 300 ? x - 282 : x + 16, top: y > bounds.height - 240 ? y - 230 : y + 16 }); setNodeCreationPosition({ x: Math.max(32, x - 90), y: Math.max(32, y - 45) }); setQuickActionsOpen(true); } }} fitView proOptions={{ hideAttribution: true }}><Background color="var(--app-border)" gap={24} /><Controls /><MiniMap /></ReactFlow><div className="architecture-flow-legend" aria-label="Architecture flow legend"><span><i className="architecture-flow-legend-dot" />Live data flow</span><span><i className="architecture-flow-legend-line" />Dependency</span></div>{quickActionsOpen ? <div style={{ left: quickActionsPosition.left, top: quickActionsPosition.top }} className="absolute z-10 w-64 rounded-2xl border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] p-4 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="app-kicker">Canvas actions</p><h2 className="mt-1 text-base font-semibold">What would you like to do?</h2></div><button type="button" onClick={() => setQuickActionsOpen(false)} className="app-text-muted" aria-label="Close canvas actions">×</button></div><div className="mt-4 grid gap-2"><Button size="sm" className="justify-start" onClick={() => { setNodePaletteOpen(true); setQuickActionsOpen(false); }}><Plus className="h-4 w-4" /> Add typed component</Button><Button size="sm" className="justify-start" onClick={() => { setRailTab('agent'); setQuickActionsOpen(false); }}><Sparkles className="h-4 w-4" /> Ask the architecture agent</Button><Button size="sm" className="justify-start" onClick={() => { setRailTab('history'); setQuickActionsOpen(false); }}><History className="h-4 w-4" /> Open revision history</Button></div></div> : null}{nodePaletteOpen ? <div className="architecture-node-palette absolute left-4 top-4 z-20 w-[min(24rem,calc(100%-2rem))] rounded-2xl border border-[var(--app-border-strong)] bg-[var(--app-panel-strong)] p-4 shadow-2xl"><div className="flex items-start justify-between gap-3"><div><p className="app-kicker">Create from catalog</p><h2 className="mt-1 text-base font-semibold">Choose a system building block</h2></div><button type="button" onClick={() => setNodePaletteOpen(false)} className="app-text-muted" aria-label="Close component catalog"><X className="h-4 w-4" /></button></div><div className="relative mt-4"><Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 app-text-muted" /><input autoFocus value={nodePaletteQuery} onChange={(event) => setNodePaletteQuery(event.target.value)} placeholder="Search services, data, security..." className="app-input w-full rounded-xl py-2 pl-9 pr-3 text-sm" aria-label="Search component types" /></div><div className="mt-3 max-h-72 space-y-1 overflow-y-auto">{filteredCatalog.map((entry) => <button key={entry.type} type="button" onClick={() => addComponent(entry.type)} className="architecture-node-palette-option w-full rounded-xl p-3 text-left"><span className="block text-sm font-medium">{entry.label}</span><span className="mt-1 block text-xs app-text-muted">{entry.description}</span></button>)}{!filteredCatalog.length ? <p className="p-3 text-sm app-text-muted">No matching component types.</p> : null}</div><p className="mt-3 text-xs app-text-muted">The node is created immediately, then you can rename it inline.</p></div> : null}</div>
         </Surface>
         <div className="sticky top-4 flex min-h-0 flex-col gap-3 self-start xl:max-h-[calc(100dvh-7rem)]">
         <nav aria-label="Workspace details" className="app-surface-strong flex gap-1 overflow-x-auto rounded-[1.25rem] p-1.5">

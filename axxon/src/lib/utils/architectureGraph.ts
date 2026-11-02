@@ -19,13 +19,46 @@ export function projectArchitectureGraph(graph: ArchitectureGraph, viewKey: Arch
       if (primaryIds.has(relationship.target_component_id)) contextIds.add(relationship.source_component_id);
     }
   }
+  // Keep ancestry visible so focused views do not detach a subsystem from its owner.
   const visibleIds = new Set([...primaryIds, ...contextIds]);
+  for (const component of graph.components) {
+    let parentId = component.parent_id;
+    const visitedParents = new Set<string>();
+    while (parentId) {
+      if (visitedParents.has(parentId)) break;
+      visitedParents.add(parentId);
+      visibleIds.add(parentId);
+      parentId = graph.components.find((candidate) => candidate.id === parentId)?.parent_id ?? null;
+    }
+  }
   return {
     primaryIds,
     contextIds,
     components: graph.components.filter((component) => visibleIds.has(component.id)),
     relationships: graph.relationships.filter((relationship) => visibleIds.has(relationship.source_component_id) && visibleIds.has(relationship.target_component_id)),
   };
+}
+
+// Returns the immediate children of a component without changing canonical IDs.
+export function getArchitectureChildren(components: ArchitectureComponent[], parentId: string | null) {
+  return components.filter((component) => component.parent_id === parentId);
+}
+
+// Returns every descendant below a component, used to collapse a subsystem safely.
+export function getArchitectureDescendantIds(components: ArchitectureComponent[], parentId: string) {
+  const descendants = new Set<string>();
+  const pending = [parentId];
+  while (pending.length) {
+    const current = pending.pop();
+    if (!current) continue;
+    for (const child of components) {
+      if (child.parent_id === current && !descendants.has(child.id)) {
+        descendants.add(child.id);
+        pending.push(child.id);
+      }
+    }
+  }
+  return descendants;
 }
 
 // Suggests a relationship while preserving a generic dependency fallback for ambiguous pairs.
