@@ -1,5 +1,6 @@
 // Creates and lists project-scoped architecture runs on the shared durable agent runtime.
 import db from '@/lib/db/db';
+import type { Knex } from 'knex';
 import { AgentRepository } from '@/lib/agents/infrastructure/repository';
 import { architectureAgentIntents, type ArchitectureAgentIntent, type ArchitectureAgentTarget } from './contracts';
 import { requireProjectMember } from '@/lib/utils/authorization';
@@ -21,12 +22,13 @@ export async function createArchitectureAgentRun(input: {
   prompt: string;
   intent?: string;
   target?: ArchitectureAgentTarget | null;
+  transaction?: Knex.Transaction;
 }) {
   await requireProjectMember(input.organizationId, input.projectId, input.userId);
   const prompt = input.prompt.trim();
   if (!prompt) throw new BadRequestError('Architecture agent prompt is required');
   const intent = normalizeIntent(input.intent);
-  const run = await db.transaction(async (trx) => {
+  const persist = async (trx: Knex.Transaction) => {
     const created = await AgentRepository.createProjectRun({
       organizationId: input.organizationId,
       projectId: input.projectId,
@@ -40,7 +42,8 @@ export async function createArchitectureAgentRun(input: {
     await AgentRepository.addMessage(created.id, 'user', prompt, { intent, target: input.target || null }, trx);
     await AgentRepository.enqueueJob(created.id, 'prepare', trx);
     return created;
-  });
+  };
+  const run = input.transaction ? await persist(input.transaction) : await db.transaction(persist);
   return run;
 }
 

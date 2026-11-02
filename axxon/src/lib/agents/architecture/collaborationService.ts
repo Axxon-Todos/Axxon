@@ -1,5 +1,6 @@
 // Coordinates authorized architecture discussions, realtime event persistence, and @Axxon runs.
 import db from '@/lib/db/db';
+import type { Knex } from 'knex';
 import { createArchitectureAgentRun } from './runService';
 import { ArchitectureCollaboration } from '@/lib/models/architectureCollaboration';
 import { publishProjectUpdate } from '@/lib/wsServer';
@@ -31,6 +32,28 @@ async function assertContextAnchors(projectId: number, revisionId?: number | nul
   if (proposalRunId && !(await db('agent_runs').where({ id: proposalRunId, project_id: projectId }).first())) throw new NotFoundError('Architecture agent run not found');
 }
 
+// Creates the optional scoped architecture run using the caller's transaction.
+async function createMentionedRun(input: {
+  organizationId: number;
+  projectId: number;
+  userId: number;
+  body: string;
+  mentions: string[];
+  target: { componentId?: string; relationshipId?: string; revisionId?: number; commentThreadId: number };
+  trx: Knex.Transaction;
+}) {
+  if (!input.mentions.some((mention) => mention.toLowerCase() === 'axxon')) return null;
+  return createArchitectureAgentRun({
+    organizationId: input.organizationId,
+    projectId: input.projectId,
+    userId: input.userId,
+    intent: 'propose_change',
+    prompt: input.body.replace(/@Axxon/gi, '').trim() || 'Review this architecture discussion and recommend the next change.',
+    target: input.target,
+    transaction: input.trx,
+  });
+}
+
 // Lists authorized project discussions for a workspace.
 export async function listArchitectureThreads(input: { organizationId: number; projectId: number; userId: number; status?: string }) {
   await requireProjectMember(input.organizationId, input.projectId, input.userId);
@@ -48,18 +71,13 @@ export async function createArchitectureThread(input: { organizationId: number; 
   const result = await db.transaction(async (trx) => {
     const thread = await ArchitectureCollaboration.createThread({ projectId: input.projectId, componentId: input.componentId, relationshipId: input.relationshipId, revisionId: input.revisionId, proposalRunId: input.proposalRunId, createdBy: input.userId }, trx);
     const comment = await ArchitectureCollaboration.addComment(thread.id, input.userId, body, mentions, 'human', trx);
-    const event = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'thread.created', { thread, comment }, trx);
-    return { thread: { ...thread, comments: [comment] }, event };
+    const events = [await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'thread.created', { thread, comment }, trx)];
+    const run = await createMentionedRun({ organizationId: input.organizationId, projectId: input.projectId, userId: input.userId, body, mentions, target: { componentId: input.componentId || undefined, relationshipId: input.relationshipId || undefined, revisionId: input.revisionId || undefined, commentThreadId: thread.id }, trx });
+    if (run) events.push(await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'agent.run.created', { threadId: thread.id, runId: run.id }, trx));
+    return { thread: { ...thread, comments: [comment] }, events, run };
   });
-  await publishCollaboration(input.projectId, result.event);
-  const run = mentions.some((mention) => mention.toLowerCase() === 'axxon')
-    ? await createArchitectureAgentRun({ organizationId: input.organizationId, projectId: input.projectId, userId: input.userId, intent: 'propose_change', prompt: body.replace(/@Axxon/gi, '').trim() || 'Review this architecture discussion and recommend the next change.', target: { componentId: input.componentId || undefined, relationshipId: input.relationshipId || undefined, revisionId: input.revisionId || undefined, commentThreadId: result.thread.id } })
-    : null;
-  if (run) {
-    const event = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'agent.run.created', { threadId: result.thread.id, runId: run.id });
-    await publishCollaboration(input.projectId, event);
-  }
-  return { ...result.thread, agentRun: run };
+  for (const event of result.events) await publishCollaboration(input.projectId, event);
+  return { ...result.thread, agentRun: result.run };
 }
 
 // Appends a reply and starts a scoped Axxon run when the reply mentions the agent.
@@ -67,31 +85,29 @@ export async function addArchitectureComment(input: { organizationId: number; pr
   await requireProjectMember(input.organizationId, input.projectId, input.userId);
   const body = input.body.trim();
   if (!body || body.length > 4000) throw new BadRequestError('Comment must be between 1 and 4000 characters');
-  const thread = await ArchitectureCollaboration.getThread(input.projectId, input.threadId);
-  if (!thread) throw new NotFoundError('Comment thread not found');
   const mentions = extractArchitectureMentions(body);
   const result = await db.transaction(async (trx) => {
+    const thread = await ArchitectureCollaboration.getThread(input.projectId, input.threadId, trx);
+    if (!thread) throw new NotFoundError('Comment thread not found');
     const comment = await ArchitectureCollaboration.addComment(thread.id, input.userId, body, mentions, 'human', trx);
-    const event = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'comment.created', { threadId: thread.id, comment }, trx);
-    return { comment, event };
+    const events = [await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'comment.created', { threadId: thread.id, comment }, trx)];
+    const run = await createMentionedRun({ organizationId: input.organizationId, projectId: input.projectId, userId: input.userId, body, mentions, target: { componentId: thread.component_id || undefined, relationshipId: thread.relationship_id || undefined, revisionId: thread.revision_id || undefined, commentThreadId: thread.id }, trx });
+    if (run) events.push(await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'agent.run.created', { threadId: thread.id, runId: run.id }, trx));
+    return { comment, events, run };
   });
-  await publishCollaboration(input.projectId, result.event);
-  const run = mentions.some((mention) => mention.toLowerCase() === 'axxon')
-    ? await createArchitectureAgentRun({ organizationId: input.organizationId, projectId: input.projectId, userId: input.userId, intent: 'propose_change', prompt: body.replace(/@Axxon/gi, '').trim() || 'Review this architecture discussion and recommend the next change.', target: { componentId: thread.component_id || undefined, relationshipId: thread.relationship_id || undefined, revisionId: thread.revision_id || undefined, commentThreadId: thread.id } })
-    : null;
-  if (run) {
-    const event = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, 'agent.run.created', { threadId: thread.id, runId: run.id });
-    await publishCollaboration(input.projectId, event);
-  }
-  return { comment: result.comment, agentRun: run };
+  for (const event of result.events) await publishCollaboration(input.projectId, event);
+  return { comment: result.comment, agentRun: result.run };
 }
 
 // Resolves or reopens a thread while retaining its full historical discussion.
 export async function resolveArchitectureThread(input: { organizationId: number; projectId: number; threadId: number; userId: number; resolved: boolean }) {
   await requireProjectMember(input.organizationId, input.projectId, input.userId);
-  const thread = await ArchitectureCollaboration.setResolved(input.projectId, input.threadId, input.resolved, input.userId);
-  if (!thread) throw new NotFoundError('Comment thread not found');
-  const event = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, input.resolved ? 'thread.resolved' : 'thread.reopened', { threadId: thread.id, thread });
+  const { thread, event } = await db.transaction(async (trx) => {
+    const updatedThread = await ArchitectureCollaboration.setResolved(input.projectId, input.threadId, input.resolved, input.userId, trx);
+    if (!updatedThread) throw new NotFoundError('Comment thread not found');
+    const auditEvent = await ArchitectureCollaboration.appendEvent(input.projectId, input.userId, input.resolved ? 'thread.resolved' : 'thread.reopened', { threadId: updatedThread.id, thread: updatedThread }, trx);
+    return { thread: updatedThread, event: auditEvent };
+  });
   await publishCollaboration(input.projectId, event);
   return thread;
 }

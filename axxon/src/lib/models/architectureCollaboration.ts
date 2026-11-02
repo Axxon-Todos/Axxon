@@ -28,10 +28,10 @@ export class ArchitectureCollaboration {
   }
 
   // Loads one thread after enforcing project ownership at the service boundary.
-  static async getThread(projectId: number, threadId: number) {
-    const thread = await db('architecture_comment_threads').where({ id: threadId, project_id: projectId }).first();
+  static async getThread(projectId: number, threadId: number, trx: Knex | Knex.Transaction = db) {
+    const thread = await trx('architecture_comment_threads').where({ id: threadId, project_id: projectId }).first();
     if (!thread) return undefined;
-    const comments = await db('architecture_comments').where({ thread_id: threadId }).orderBy('created_at', 'asc');
+    const comments = await trx('architecture_comments').where({ thread_id: threadId }).orderBy('created_at', 'asc');
     return mapThread(thread, comments as ArchitectureComment[]);
   }
 
@@ -51,14 +51,14 @@ export class ArchitectureCollaboration {
 
   // Appends a human or agent comment and updates the thread timestamp atomically.
   static async addComment(threadId: number, authorId: number, body: string, mentions: string[], authorType: 'human' | 'agent' = 'human', trx: Knex | Knex.Transaction = db) {
-    const [comment] = await trx('architecture_comments').insert({ thread_id: threadId, author_id: authorId, author_type: authorType, body, mentions }).returning('*');
+    const [comment] = await trx('architecture_comments').insert({ thread_id: threadId, author_id: authorId, author_type: authorType, body, mentions: JSON.stringify(mentions) }).returning('*');
     await trx('architecture_comment_threads').where({ id: threadId }).update({ updated_at: trx.fn.now() });
     return comment as ArchitectureComment;
   }
 
   // Changes thread resolution without deleting historical discussion content.
-  static async setResolved(projectId: number, threadId: number, resolved: boolean, userId: number) {
-    const [thread] = await db('architecture_comment_threads').where({ id: threadId, project_id: projectId }).update({ status: resolved ? 'resolved' : 'open', resolved_by: resolved ? userId : null, resolved_at: resolved ? db.fn.now() : null, updated_at: db.fn.now() }).returning('*');
+  static async setResolved(projectId: number, threadId: number, resolved: boolean, userId: number, trx: Knex | Knex.Transaction = db) {
+    const [thread] = await trx('architecture_comment_threads').where({ id: threadId, project_id: projectId }).update({ status: resolved ? 'resolved' : 'open', resolved_by: resolved ? userId : null, resolved_at: resolved ? trx.fn.now() : null, updated_at: trx.fn.now() }).returning('*');
     return thread ? mapThread(thread) : undefined;
   }
 
