@@ -130,6 +130,7 @@ export type AgentPlanArtifact = {
     summary: string;
     assumptions: string[];
     risks: string[];
+    technicalDecisions?: Array<{ area: string; choice: string; rationale: string }>;
   };
   quality?: AgentPlanningQuality;
 };

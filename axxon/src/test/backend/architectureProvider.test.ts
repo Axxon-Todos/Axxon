@@ -1,6 +1,7 @@
 // Verifies architecture-provider note recovery and strict operation validation.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateArchitectureProposalWithOllama } from '@/lib/agents/architecture/provider';
+import { buildArchitecturePrompt, generateArchitectureProposalWithOllama, validateArchitectureBootstrapQuality } from '@/lib/agents/architecture/provider';
+import { applyArchitectureOperations } from '@/lib/agents/architecture/operations';
 import type { AgentRun } from '@/lib/agents/domain';
 import type { ArchitectureAgentContextPackage } from '@/lib/agents/architecture/contracts';
 import type { ArchitectureGraph } from '@/lib/types/architectureTypes';
@@ -47,6 +48,9 @@ const context = {
   reviewerFeedback: [],
 } satisfies ArchitectureAgentContextPackage;
 
+const bootstrapRun = { ...run, architectureIntent: 'bootstrap', prompt: 'Build a Rust agent telemetry ingestion system with an OpenTelemetry collector, durable event storage, WebSocket updates, and a Next.js dashboard for evals, tool calls, traces, latency, cost, and failures.' } as unknown as AgentRun;
+const bootstrapContext = { ...context, graph: { components: [], relationships: [], views: [] } } satisfies ArchitectureAgentContextPackage;
+
 describe('architecture Ollama provider', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -82,5 +86,42 @@ describe('architecture Ollama provider', () => {
     }));
 
     await expect(generateArchitectureProposalWithOllama(run, context)).rejects.toThrow();
+  });
+
+  it('gives bootstrap generations explicit coverage and standard-default instructions', () => {
+    const prompt = buildArchitecturePrompt(bootstrapRun, bootstrapContext);
+
+    expect(prompt).toContain('application, data, ingestion, infrastructure, security, and observability');
+    expect(prompt).toContain('technology decisions');
+    expect(prompt).toContain('responsibilities');
+    expect(prompt).toContain('Standard assumption:');
+  });
+
+  it('replaces a valid but generic bootstrap graph with the deterministic quality fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ message: { content: JSON.stringify({
+        summary: 'A basic architecture.',
+        assumptions: ['The system uses standard infrastructure.'],
+        risks: [],
+        operations: [
+          { type: 'add_component', component: { id: 'frontend', type: 'application', name: 'Frontend', description: null, parent_id: null, responsibilities: ['Render workflows'], technologies: ['React'], requirements: [], constraints: [], metadata: {} } },
+          { type: 'add_component', component: { id: 'api', type: 'service', name: 'API', description: null, parent_id: null, responsibilities: ['Handle requests'], technologies: ['Node.js'], requirements: [], constraints: [], metadata: {} } },
+          { type: 'add_component', component: { id: 'db', type: 'database', name: 'Database', description: null, parent_id: null, responsibilities: ['Persist records'], technologies: ['PostgreSQL'], requirements: [], constraints: [], metadata: {} } },
+          { type: 'add_relationship', relationship: { id: 'frontend-api', source_component_id: 'frontend', target_component_id: 'api', type: 'calls', label: null, metadata: {} } },
+          { type: 'add_relationship', relationship: { id: 'api-db', source_component_id: 'api', target_component_id: 'db', type: 'writes_to', label: null, metadata: {} } },
+        ],
+      }) } }),
+    }));
+
+    const proposal = await generateArchitectureProposalWithOllama(bootstrapRun, bootstrapContext);
+    const generatedGraph = applyArchitectureOperations(bootstrapContext.graph, proposal.operations, 9);
+
+    expect(generatedGraph.components).toHaveLength(10);
+    expect(proposal.assumptions.filter((assumption) => assumption.startsWith('Standard assumption:'))).toHaveLength(5);
+    expect(proposal.operations).toHaveLength(21);
+    expect(proposal.technicalDecisions).toHaveLength(6);
+    expect(generatedGraph.components.map((component) => component.name)).toEqual(expect.arrayContaining(['Ingestion Queue', 'Ingestion Worker', 'Observability Stack', 'Raw Ingestion Storage']));
+    expect(() => validateArchitectureBootstrapQuality(generatedGraph, proposal.assumptions, proposal.technicalDecisions)).not.toThrow();
   });
 });
