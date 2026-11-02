@@ -13,7 +13,7 @@ function parseSnapshot(value: ArchitectureGraph | string): ArchitectureGraph {
 
 // Restores graph tables from a revision snapshot inside the caller's transaction.
 async function restoreSnapshot(trx: Knex.Transaction, projectId: number, snapshot: ArchitectureGraph) {
-  const viewRows = await trx('architecture_views').where({ project_id: projectId }).select('id', 'key');
+  let viewRows = await trx('architecture_views').where({ project_id: projectId }).select('id', 'key');
   await trx('architecture_view_nodes').whereIn('view_id', viewRows.map((view) => view.id)).del();
   await trx('architecture_relationships').where({ project_id: projectId }).del();
   await trx('architecture_components').where({ project_id: projectId }).del();
@@ -22,6 +22,17 @@ async function restoreSnapshot(trx: Knex.Transaction, projectId: number, snapsho
   }
   if (snapshot.relationships.length) {
     await trx('architecture_relationships').insert(snapshot.relationships.map((relationship) => ({ ...relationship, project_id: projectId })));
+  }
+  // Older initial revisions have no view snapshot; preserve the project's view catalog in that case.
+  if (snapshot.views.length) {
+    const snapshotKeys = snapshot.views.map((view) => view.key);
+    await trx('architecture_views').where({ project_id: projectId }).whereNotIn('key', snapshotKeys).del();
+    for (const view of snapshot.views) {
+      await trx('architecture_views').where({ project_id: projectId, key: view.key }).update({ name: view.name, description: view.description, filter_json: view.filter_json, updated_at: trx.fn.now() });
+      const existing = await trx('architecture_views').where({ project_id: projectId, key: view.key }).first();
+      if (!existing) await trx('architecture_views').insert({ project_id: projectId, key: view.key, name: view.name, description: view.description, filter_json: view.filter_json });
+    }
+    viewRows = await trx('architecture_views').where({ project_id: projectId }).select('id', 'key');
   }
   for (const view of snapshot.views) {
     const row = viewRows.find((candidate) => candidate.key === view.key);

@@ -19,6 +19,12 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
+// Removes persistence-only fields so timestamps do not appear as architecture changes.
+function semanticEntity<T extends { id: string }>(entity: T) {
+  const { id, project_id: _projectId, created_at: _createdAt, updated_at: _updatedAt, ...content } = entity as T & { project_id?: unknown; created_at?: unknown; updated_at?: unknown };
+  return { id, ...content };
+}
+
 // Returns IDs whose serialized entity content differs between two snapshots.
 function diffEntities<T extends { id: string }>(before: T[], after: T[]) {
   const beforeById = new Map(before.map((entity) => [entity.id, entity]));
@@ -29,7 +35,7 @@ function diffEntities<T extends { id: string }>(before: T[], after: T[]) {
 
   for (const [id, entity] of afterById) {
     if (!beforeById.has(id)) added.push(id);
-    else if (stableJson(beforeById.get(id)) !== stableJson(entity)) changed.push(id);
+    else if (stableJson(semanticEntity(beforeById.get(id)!)) !== stableJson(semanticEntity(entity))) changed.push(id);
   }
   for (const id of beforeById.keys()) if (!afterById.has(id)) removed.push(id);
 

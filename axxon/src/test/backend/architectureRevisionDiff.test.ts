@@ -21,4 +21,10 @@ describe('architecture revision diff', () => {
       affectedComponents: ['a', 'b', 'c'],
     });
   });
+
+  it('ignores persistence timestamps when graph content is unchanged', () => {
+    const before = graph([component('a')], []);
+    const after = graph([{ ...component('a'), created_at: 'later', updated_at: 'later' }], []);
+    expect(diffArchitectureGraphs(before, after).changedComponents).toEqual([]);
+  });
 });
