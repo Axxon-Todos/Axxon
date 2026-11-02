@@ -8,6 +8,9 @@ export type ArchitectureRevisionDiff = {
   addedRelationships: string[];
   removedRelationships: string[];
   changedRelationships: string[];
+  addedViews: string[];
+  removedViews: string[];
+  changedViews: string[];
   affectedComponents: string[];
 };
 
@@ -46,6 +49,12 @@ function diffEntities<T extends { id: string }>(before: T[], after: T[]) {
 export function diffArchitectureGraphs(before: ArchitectureGraph, after: ArchitectureGraph): ArchitectureRevisionDiff {
   const components = diffEntities(before.components, after.components);
   const relationships = diffEntities(before.relationships, after.relationships);
+  const beforeViews = new Map(before.views.map((view) => [view.key, view]));
+  const afterViews = new Map(after.views.map((view) => [view.key, view]));
+  const addedViews = [...afterViews.keys()].filter((key) => !beforeViews.has(key)).sort();
+  const removedViews = [...beforeViews.keys()].filter((key) => !afterViews.has(key)).sort();
+  const changedViews = [...afterViews.keys()].filter((key) => beforeViews.has(key)
+    && stableJson(beforeViews.get(key)) !== stableJson(afterViews.get(key))).sort();
   const affectedComponents = new Set<string>([
     ...components.added,
     ...components.removed,
@@ -59,6 +68,12 @@ export function diffArchitectureGraphs(before: ArchitectureGraph, after: Archite
     }
   }
 
+  for (const key of [...addedViews, ...removedViews, ...changedViews]) {
+    for (const node of [...(beforeViews.get(key)?.nodes ?? []), ...(afterViews.get(key)?.nodes ?? [])]) {
+      affectedComponents.add(node.component_id);
+    }
+  }
+
   return {
     addedComponents: components.added,
     removedComponents: components.removed,
@@ -66,6 +81,9 @@ export function diffArchitectureGraphs(before: ArchitectureGraph, after: Archite
     addedRelationships: relationships.added,
     removedRelationships: relationships.removed,
     changedRelationships: relationships.changed,
+    addedViews,
+    removedViews,
+    changedViews,
     affectedComponents: [...affectedComponents].sort(),
   };
 }

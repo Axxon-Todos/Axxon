@@ -18,6 +18,9 @@ describe('architecture revision diff', () => {
       addedRelationships: ['r2'],
       removedRelationships: ['r'],
       changedRelationships: [],
+      addedViews: [],
+      removedViews: [],
+      changedViews: [],
       affectedComponents: ['a', 'b', 'c'],
     });
   });
@@ -26,5 +29,13 @@ describe('architecture revision diff', () => {
     const before = graph([component('a')], []);
     const after = graph([{ ...component('a'), created_at: 'later', updated_at: 'later' }], []);
     expect(diffArchitectureGraphs(before, after).changedComponents).toEqual([]);
+  });
+
+  it('reports view layout and filter changes as impacted components', () => {
+    const before = { ...graph([component('a')], []), views: [{ id: 1, project_id: 1, key: 'overview' as const, name: 'Overview', description: 'Before', filter_json: {}, nodes: [{ component_id: 'a', position_x: 0, position_y: 0, hidden: false }] }] };
+    const after = { ...before, views: [{ ...before.views[0], description: 'After', nodes: [{ ...before.views[0].nodes[0], position_x: 100 }] }] };
+    const diff = diffArchitectureGraphs(before, after);
+    expect(diff.changedViews).toEqual(['overview']);
+    expect(diff.affectedComponents).toEqual(['a']);
   });
 });
