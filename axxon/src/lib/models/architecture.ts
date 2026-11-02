@@ -108,7 +108,8 @@ export class Architecture {
     return knex('architecture_revisions').where({ project_id: projectId }).orderBy('version', 'desc') as unknown as Promise<ArchitectureRevision[]>;
   }
 
-  private static async getGraphWithTransaction(projectId: number, trx: Knex.Transaction): Promise<ArchitectureGraph> {
+  // Reads the canonical graph through the caller's transaction so validation and mutation share one snapshot.
+  static async getGraphWithTransaction(projectId: number, trx: Knex.Transaction): Promise<ArchitectureGraph> {
     const [components, relationships, views] = await Promise.all([
       trx('architecture_components').where({ project_id: projectId }).orderBy('created_at', 'asc'),
       trx('architecture_relationships').where({ project_id: projectId }).orderBy('created_at', 'asc'),

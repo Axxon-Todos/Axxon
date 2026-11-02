@@ -43,7 +43,5 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.dropTableIfExists('architecture_collaboration_events');
-  await knex.schema.dropTableIfExists('architecture_comments');
-  await knex.schema.dropTableIfExists('architecture_comment_threads');
+  throw new Error('Migration 032 is irreversible: it owns durable architecture collaboration history. Restore from a database backup instead.');
 }

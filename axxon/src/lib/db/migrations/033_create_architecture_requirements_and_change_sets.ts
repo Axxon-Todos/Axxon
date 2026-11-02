@@ -54,7 +54,5 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.dropTableIfExists('architecture_change_sets');
-  await knex.schema.dropTableIfExists('architecture_requirement_links');
-  await knex.schema.dropTableIfExists('architecture_requirements');
+  throw new Error('Migration 033 is irreversible: it owns architecture requirements and review history. Restore from a database backup instead.');
 }

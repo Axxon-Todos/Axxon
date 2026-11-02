@@ -52,7 +52,7 @@ export async function approveArchitectureProposal(input: { organizationId: numbe
       const nextState = assertAgentTransition(lockedRun.state, 'architecture.applied');
       const changeSet = await ArchitectureChangeSets.getByRun(run.id, trx);
       if (!changeSet) throw new BadRequestError('Architecture change set is missing for this proposal');
-      const currentGraph = await ArchitectureChangeSets.assertCurrent(changeSet, input.projectId);
+      const currentGraph = await ArchitectureChangeSets.assertCurrent(changeSet, input.projectId, trx);
       const changeSetProposal = { ...proposal, baseRevisionId: Number(changeSet.base_revision_id), operations: changeSet.operations_json } as ArchitectureChangeProposal;
       if (JSON.stringify(changeSet.operations_json) !== JSON.stringify(proposal.operations)) throw new BadRequestError('Architecture proposal content no longer matches its immutable change set');
       if (!currentGraph) throw new BadRequestError('Architecture proposal is stale');

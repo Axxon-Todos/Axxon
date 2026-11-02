@@ -1,9 +1,11 @@
 // Builds immutable architecture change-set previews, semantic diffs, and deterministic impact findings.
 import { createHash } from 'node:crypto';
 import db from '@/lib/db/db';
+import type { Knex } from 'knex';
 import { Architecture } from '@/lib/models/architecture';
 import { ArchitectureRequirements } from '@/lib/models/architectureRequirements';
 import type { ArchitectureGraph } from '@/lib/types/architectureTypes';
+import { validateArchitectureDraft } from '@/lib/utils/architectureValidation';
 import type { ArchitectureChangeProposal, ArchitectureImpactFinding, ArchitectureSemanticDiff } from './contracts';
 import { applyArchitectureOperations } from './operations';
 
@@ -108,12 +110,14 @@ export class ArchitectureChangeSets {
     return row;
   }
 
-  // Verifies both revision identity and draft content before a proposal can mutate the graph.
-  static async assertCurrent(changeSet: any, projectId: number) {
-    const revisions = await Architecture.listRevisions(projectId);
-    const currentRevision = revisions.find((revision) => revision.id === Number(changeSet.base_revision_id));
-    const graph = await Architecture.getGraph(projectId);
+  // Locks the draft before verifying revision identity, graph hash, and proposal graph validity in one transaction.
+  static async assertCurrent(changeSet: any, projectId: number, trx: Knex.Transaction) {
+    const draft = await trx('architecture_drafts').where({ project_id: projectId }).forUpdate().first();
+    if (!draft || Number(draft.base_revision_id) !== Number(changeSet.base_revision_id)) throw new Error('Architecture proposal is stale; refresh it against the latest draft before approval');
+    const currentRevision = await trx('architecture_revisions').where({ id: changeSet.base_revision_id, project_id: projectId }).first();
+    const graph = await Architecture.getGraphWithTransaction(projectId, trx);
     if (!currentRevision || architectureContentHash(graph) !== changeSet.base_content_hash) throw new Error('Architecture proposal is stale; refresh it against the latest draft before approval');
+    validateArchitectureDraft({ base_revision_id: Number(changeSet.base_revision_id), components: changeSet.proposed_graph_json.components, relationships: changeSet.proposed_graph_json.relationships, views: changeSet.proposed_graph_json.views });
     return graph;
   }
 }

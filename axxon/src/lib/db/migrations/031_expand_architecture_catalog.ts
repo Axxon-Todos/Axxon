@@ -23,9 +23,5 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex('architecture_views').whereIn('key', ['frontend', 'security', 'observability']).del();
-  await knex.raw('ALTER TABLE architecture_components DROP CONSTRAINT IF EXISTS architecture_components_type_check');
-  await knex.raw("ALTER TABLE architecture_components ADD CONSTRAINT architecture_components_type_check CHECK (type IN ('application', 'frontend', 'service', 'module', 'api', 'database', 'cache', 'queue', 'external_service', 'cloud_resource', 'security_control', 'monitoring'))");
-  await knex.raw('ALTER TABLE architecture_views DROP CONSTRAINT IF EXISTS architecture_views_key_check');
-  await knex.raw("ALTER TABLE architecture_views ADD CONSTRAINT architecture_views_key_check CHECK (key IN ('overview', 'backend', 'api_auth', 'data', 'infrastructure'))");
+  throw new Error('Migration 031 is irreversible: it adds architecture vocabulary and seeded views that may contain user data. Restore from a database backup instead.');
 }
