@@ -236,7 +236,15 @@ function buildBootstrapFallback(run: AgentRun, context: ArchitectureAgentContext
     { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: ids.api, target_component_id: ids.network, type: 'secured_by', label: 'Private service boundary', metadata: {} } },
     { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: dataId, target_component_id: ids.network, type: 'secured_by', label: 'Private data boundary', metadata: {} } },
   ];
-  const filteredAdditions = additions.filter((operation) => operation.type !== 'add_component' || !context.graph.components.some((component) => component.id === (operation.component as { id: string }).id));
+  const filteredAdditions = additions.filter((operation) => {
+    if (operation.type !== 'add_component') return true;
+    const component = operation.component as { id: string; type: string };
+    if (context.graph.components.some((entry) => entry.id === component.id)) return false;
+    if (component.type === 'application' && existingByType.has('application')) return false;
+    if (component.type === 'service' && existingByType.has('service')) return false;
+    if (component.type === 'database' && existingByType.has('database')) return false;
+    return true;
+  });
   const remapped = [...updates, ...filteredAdditions] as Array<Record<string, unknown>>;
   return remapped.map((operation) => {
     if (operation.type !== 'add_relationship' || !operation.relationship || typeof operation.relationship !== 'object') return operation;
