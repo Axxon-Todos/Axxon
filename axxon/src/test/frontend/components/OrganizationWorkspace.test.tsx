@@ -1,4 +1,4 @@
-// Verifies the organization workspace keeps owner-only controls tied to the org summary role while rendering member management data.
+// Verifies the organization workspace keeps owner-only controls tied to the org summary role while rendering project and member data.
 import React from 'react';
 import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,12 +17,6 @@ vi.mock('@/lib/api/organizations/getOrganization', () => ({
 
 vi.mock('@/lib/api/organizations/getOrganizationMembers', () => ({
   fetchOrganizationMembers: mockedFetchOrganizationMembers,
-}));
-
-vi.mock('@/components/features/dashboard/BoardList', () => ({
-  default: ({ organizationId }: { organizationId: string }) => (
-    <div data-testid="board-list">Board list for {organizationId}</div>
-  ),
 }));
 
 vi.mock('@/components/features/dashboard/OrganizationGitHubPanel', () => ({
@@ -55,6 +49,7 @@ describe('OrganizationWorkspace', () => {
       created_at: '2025-01-01T00:00:00.000Z',
       updated_at: '2025-01-01T00:00:00.000Z',
       accessible_board_count: 2,
+      accessible_project_count: 2,
       member_count: 2,
       repo_count: 0,
       current_user_role: 'owner',
@@ -77,13 +72,13 @@ describe('OrganizationWorkspace', () => {
     renderWithProviders(<OrganizationWorkspace organizationId="3" />);
 
     expect(await screen.findByText('Platform')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Board' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Project' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Organization' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Invite Members' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create Board' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
 
-    expect(await screen.findByRole('heading', { name: 'Create New Board' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Create architecture project' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
 
@@ -92,7 +87,7 @@ describe('OrganizationWorkspace', () => {
     expect(await screen.findByRole('heading', { name: 'Edit organization' })).toBeInTheDocument();
   });
 
-  it('hides edit controls for non-owners while keeping board creation visible', async () => {
+  it('hides edit controls for non-owners while keeping project creation visible', async () => {
     mockedFetchOrganization.mockResolvedValue({
       id: 3,
       name: 'Platform',
@@ -102,6 +97,7 @@ describe('OrganizationWorkspace', () => {
       created_at: '2025-01-01T00:00:00.000Z',
       updated_at: '2025-01-01T00:00:00.000Z',
       accessible_board_count: 2,
+      accessible_project_count: 2,
       member_count: 2,
       repo_count: 0,
       current_user_role: 'member',
@@ -121,7 +117,7 @@ describe('OrganizationWorkspace', () => {
     renderWithProviders(<OrganizationWorkspace organizationId="3" />);
 
     expect(await screen.findByText('Platform')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Board' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Project' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Organization' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Invite Members' })).not.toBeInTheDocument();
   });
