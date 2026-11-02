@@ -5,6 +5,7 @@ import {
   getConfiguredClientOrigins,
   getPostgresConnectionConfig,
   getPostgresFallbackHost,
+  getPostgresPoolConfig,
   getRedisUrl,
 } from '@/lib/env/connectionConfig';
 
@@ -16,6 +17,9 @@ const CONNECTION_ENV_KEYS = [
   'PG_PASS',
   'PG_DB',
   'PG_HOST_FALLBACK',
+  'PG_POOL_MIN',
+  'PG_POOL_MAX',
+  'PG_POOL_IDLE_TIMEOUT_MS',
   'REDIS_URL',
   'CLIENT_URL',
   'NEXT_PUBLIC_HOSTNAME',
@@ -66,6 +70,24 @@ describe('connectionConfig', () => {
       user: 'axxon',
       password: 'secret',
       database: 'axxon_prod',
+    });
+  });
+
+  it('returns bounded Postgres pool settings with development-safe defaults', () => {
+    expect(getPostgresPoolConfig()).toEqual({
+      min: 0,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+    });
+
+    process.env.PG_POOL_MIN = '4';
+    process.env.PG_POOL_MAX = '2';
+    process.env.PG_POOL_IDLE_TIMEOUT_MS = '12000';
+
+    expect(getPostgresPoolConfig()).toEqual({
+      min: 4,
+      max: 4,
+      idleTimeoutMillis: 12_000,
     });
   });
 

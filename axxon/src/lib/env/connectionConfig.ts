@@ -6,9 +6,20 @@ import { loadRuntimeEnv } from './loadRuntimeEnv';
 loadRuntimeEnv();
 
 const DEFAULT_POSTGRES_PORT = 5432;
+const DEFAULT_POSTGRES_POOL_MIN = 0;
+const DEFAULT_POSTGRES_POOL_MAX = 10;
+const DEFAULT_POSTGRES_POOL_IDLE_TIMEOUT_MS = 30_000;
 const DEFAULT_REDIS_URL = 'redis://localhost:6379';
 const DEFAULT_CLIENT_ORIGINS = ['http://127.0.0.1:3000', 'http://localhost:3000'];
 type PostgresConnectionConfig = string | Knex.PgConnectionConfig;
+
+// Converts a non-negative integer environment value into a bounded pool setting.
+function getPoolInteger(name: string, fallback: number) {
+  const configuredValue = process.env[name]?.trim();
+  const parsedValue = configuredValue ? Number(configuredValue) : Number.NaN;
+
+  return Number.isInteger(parsedValue) && parsedValue >= 0 ? parsedValue : fallback;
+}
 
 type PostgresConnectionOverrides = {
   connectionString?: string | null;
@@ -44,6 +55,21 @@ export function getPostgresConnectionConfig(
     user: overrides.user ?? process.env.PG_USER,
     password: overrides.password ?? process.env.PG_PASS,
     database: overrides.database ?? process.env.PG_DB,
+  };
+}
+
+// Returns bounded pool settings so each runtime owns a small, reusable connection pool.
+export function getPostgresPoolConfig() {
+  const min = getPoolInteger('PG_POOL_MIN', DEFAULT_POSTGRES_POOL_MIN);
+  const max = Math.max(min, getPoolInteger('PG_POOL_MAX', DEFAULT_POSTGRES_POOL_MAX));
+
+  return {
+    min,
+    max,
+    idleTimeoutMillis: getPoolInteger(
+      'PG_POOL_IDLE_TIMEOUT_MS',
+      DEFAULT_POSTGRES_POOL_IDLE_TIMEOUT_MS
+    ),
   };
 }
 
