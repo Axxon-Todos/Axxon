@@ -230,7 +230,7 @@ export default function ArchitectureWorkspace({ organizationId, projectId }: { o
   const persistedGraph = persistedChangeSet?.proposed_graph_json as typeof graph;
   const reviewProposal = reviewRun?.planArtifact?.architectureProposal;
   const reviewIsStale = Boolean(reviewRun && reviewProposal && (
-    reviewDetailQuery.isLoading || reviewDetailQuery.isError || !persistedChangeSet || !persistedGraph ||
+    draftDirty || architectureConflict || reviewDetailQuery.isLoading || reviewDetailQuery.isError || !persistedChangeSet || !persistedGraph ||
     Number(persistedChangeSet.base_revision_id) !== reviewProposal.baseRevisionId ||
     Number(data?.revisions[0]?.id) !== reviewProposal.baseRevisionId ||
     JSON.stringify(persistedChangeSet.operations_json) !== JSON.stringify(reviewProposal.operations)
