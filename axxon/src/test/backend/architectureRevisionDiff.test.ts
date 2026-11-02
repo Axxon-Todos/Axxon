@@ -38,4 +38,17 @@ describe('architecture revision diff', () => {
     expect(diff.changedViews).toEqual(['overview']);
     expect(diff.affectedComponents).toEqual(['a']);
   });
+
+  it('does not treat the initial empty view snapshot as added catalog views', () => {
+    const after = { ...graph([component('a')], []), views: [{ id: 1, project_id: 1, key: 'overview' as const, name: 'Overview', description: 'Overview', filter_json: {}, nodes: [] }] };
+    const diff = diffArchitectureGraphs({ components: [], relationships: [], views: [] }, after);
+    expect(diff.addedViews).toEqual([]);
+    expect(diff.changedViews).toEqual([]);
+  });
+
+  it('ignores persistence fields when comparing views', () => {
+    const before = { ...graph([], []), views: [{ id: 1, project_id: 1, key: 'overview' as const, name: 'Overview', description: 'Overview', filter_json: {}, nodes: [] }] };
+    const after = { ...before, views: [{ ...before.views[0], id: 99, updated_at: 'later' }] };
+    expect(diffArchitectureGraphs(before, after).changedViews).toEqual([]);
+  });
 });

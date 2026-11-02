@@ -28,6 +28,12 @@ function semanticEntity<T extends { id: string }>(entity: T) {
   return { id, ...content };
 }
 
+// Removes persistence-only fields from a view while retaining layout and filter semantics.
+function semanticView(view: ArchitectureGraph['views'][number]) {
+  const { id: _id, project_id: _projectId, created_at: _createdAt, updated_at: _updatedAt, ...content } = view as typeof view & { created_at?: unknown; updated_at?: unknown };
+  return content;
+}
+
 // Returns IDs whose serialized entity content differs between two snapshots.
 function diffEntities<T extends { id: string }>(before: T[], after: T[]) {
   const beforeById = new Map(before.map((entity) => [entity.id, entity]));
@@ -49,12 +55,14 @@ function diffEntities<T extends { id: string }>(before: T[], after: T[]) {
 export function diffArchitectureGraphs(before: ArchitectureGraph, after: ArchitectureGraph): ArchitectureRevisionDiff {
   const components = diffEntities(before.components, after.components);
   const relationships = diffEntities(before.relationships, after.relationships);
-  const beforeViews = new Map(before.views.map((view) => [view.key, view]));
-  const afterViews = new Map(after.views.map((view) => [view.key, view]));
+  // Revision 1 predates the default view catalog, so an empty view snapshot is an unknown baseline.
+  const compareViews = before.views.length > 0 && after.views.length > 0;
+  const beforeViews = new Map((compareViews ? before.views : []).map((view) => [view.key, view]));
+  const afterViews = new Map((compareViews ? after.views : []).map((view) => [view.key, view]));
   const addedViews = [...afterViews.keys()].filter((key) => !beforeViews.has(key)).sort();
   const removedViews = [...beforeViews.keys()].filter((key) => !afterViews.has(key)).sort();
   const changedViews = [...afterViews.keys()].filter((key) => beforeViews.has(key)
-    && stableJson(beforeViews.get(key)) !== stableJson(afterViews.get(key))).sort();
+    && stableJson(semanticView(beforeViews.get(key)!)) !== stableJson(semanticView(afterViews.get(key)!))).sort();
   const affectedComponents = new Set<string>([
     ...components.added,
     ...components.removed,
