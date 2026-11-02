@@ -21,7 +21,9 @@ export function projectArchitectureGraph(graph: ArchitectureGraph, viewKey: Arch
   }
   // Keep ancestry visible so focused views do not detach a subsystem from its owner.
   const visibleIds = new Set([...primaryIds, ...contextIds]);
-  for (const component of graph.components) {
+  for (const componentId of primaryIds) {
+    const component = graph.components.find((entry) => entry.id === componentId);
+    if (!component) continue;
     let parentId = component.parent_id;
     const visitedParents = new Set<string>();
     while (parentId) {

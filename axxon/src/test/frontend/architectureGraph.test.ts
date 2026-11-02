@@ -26,6 +26,16 @@ describe('architecture graph utilities', () => {
     expect(projectArchitectureGraph(graph, 'observability').primaryIds).toEqual(new Set(['metrics']));
   });
 
+  it('does not pull unrelated hierarchy roots into a focused view', () => {
+    const focusedChild = { ...component('focused-child', 'service'), parent_id: 'focused-root' };
+    const focusedRoot = component('focused-root', 'backend_domain');
+    const unrelatedChild = { ...component('unrelated-child', 'frontend'), parent_id: 'unrelated-root' };
+    const unrelatedRoot = component('unrelated-root', 'frontend');
+    const projection = projectArchitectureGraph({ ...graph, components: [focusedChild, focusedRoot, unrelatedChild, unrelatedRoot] }, 'backend');
+
+    expect(projection.components.map((entry) => entry.id)).toEqual(['focused-child', 'focused-root']);
+  });
+
   it('infers useful relationship types for common pairs', () => {
     expect(inferArchitectureRelationshipType(component('service', 'service'), component('db', 'database'))).toBe('writes_to');
     expect(inferArchitectureRelationshipType(component('ui', 'frontend'), component('api', 'api'))).toBe('calls');

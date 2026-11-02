@@ -7,6 +7,7 @@ export function useSocket(boardId: string | null, projectId: string | null = nul
   const currentBoardRef = useRef<string | null>(null);
   const currentProjectRef = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [projectReady, setProjectReady] = useState(false);
 
   // Create socket once
   useEffect(() => {
@@ -19,14 +20,21 @@ export function useSocket(boardId: string | null, projectId: string | null = nul
 
       socket.on("connect", () => {
         console.log(`Socket connected: ${socket.id}`);
+        setReady(true);
+        setProjectReady(false);
 
         // Rejoin the active board after reconnects.
         if (currentBoardRef.current) {
           socket.emit("joinBoard", currentBoardRef.current);
         }
         if (currentProjectRef.current) {
-          socket.emit("joinProject", currentProjectRef.current);
+          socket.emit("joinProject", currentProjectRef.current, (result: { ok?: boolean }) => setProjectReady(result?.ok === true));
         }
+      });
+
+      socket.on("disconnect", () => {
+        setReady(false);
+        setProjectReady(false);
       });
 
       socket.on("connect_error", (error) => {
@@ -41,7 +49,6 @@ export function useSocket(boardId: string | null, projectId: string | null = nul
       });
 
       socketRef.current = socket;
-      setReady(true);
     }
 
     return () => {
@@ -51,6 +58,7 @@ export function useSocket(boardId: string | null, projectId: string | null = nul
       currentBoardRef.current = null;
       currentProjectRef.current = null;
       setReady(false);
+      setProjectReady(false);
     };
   }, []);
 
@@ -87,12 +95,12 @@ export function useSocket(boardId: string | null, projectId: string | null = nul
     const socket = socketRef.current;
     if (!socket) return;
     if (currentProjectRef.current && currentProjectRef.current !== projectId) socket.emit('leaveProject');
-    if (projectId && currentProjectRef.current !== projectId) socket.emit('joinProject', projectId);
+    if (currentProjectRef.current !== projectId) setProjectReady(false);
+    if (projectId && currentProjectRef.current !== projectId && socket.connected) {
+      socket.emit('joinProject', projectId, (result: { ok?: boolean }) => setProjectReady(result?.ok === true));
+    }
     currentProjectRef.current = projectId;
-    return () => {
-      if (currentProjectRef.current === projectId && projectId) socket.emit('leaveProject');
-    };
-  }, [projectId, ready]);
+  }, [projectId]);
 
-  return { socketRef, ready };
+  return { socketRef, ready, projectReady };
 }

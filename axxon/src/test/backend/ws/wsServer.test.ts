@@ -1,4 +1,5 @@
 import http from 'node:http';
+import Redis from 'ioredis';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Server } from 'socket.io';
@@ -9,12 +10,16 @@ import {
   createWsServer,
   publishBoardUpdate,
 } from '@/lib/wsServer';
+import { Projects } from '@/lib/models/projects';
+import { getRedisUrl } from '@/lib/env/connectionConfig';
 import { signSessionToken } from '@/lib/utils/auth';
 
 import { resetDatabase } from '../db';
 import {
   addBoardMember,
+  addOrganizationMember,
   createBoardRecord,
+  createOrganizationRecord,
   createUser,
 } from '../factories';
 
@@ -22,10 +27,11 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitForCondition(assertion: () => boolean, timeoutMs = 2_000) {
+// Waits for asynchronous websocket state to become observable in the test process.
+async function waitForCondition(assertion: () => boolean | Promise<boolean>, timeoutMs = 2_000) {
   const start = Date.now();
 
-  while (!assertion()) {
+  while (!(await assertion())) {
     if (Date.now() - start >= timeoutMs) {
       throw new Error('Condition was not met before timeout');
     }
@@ -37,6 +43,7 @@ describe('wsServer', () => {
   let server: http.Server;
   let ioServer: Server;
   let port: number;
+  const servers: http.Server[] = [];
   const clients: ClientSocket[] = [];
 
   beforeEach(async () => {
@@ -44,6 +51,7 @@ describe('wsServer', () => {
 
     server = http.createServer();
     ioServer = createWsServer(server);
+    servers.push(server);
 
     await new Promise<void>((resolve) => {
       server.listen(0, () => resolve());
@@ -64,24 +72,19 @@ describe('wsServer', () => {
     clients.length = 0;
 
     await closeWsInfrastructure();
-    if (server?.listening) {
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => {
-          if (error) {
-            reject(error);
-            return;
-          }
-
-          resolve();
-        });
+    await Promise.all(servers.filter((candidate) => candidate.listening).map((candidate) => new Promise<void>((resolve, reject) => {
+      candidate.close((error) => {
+        if (error) reject(error);
+        else resolve();
       });
-    }
+    })));
+    servers.length = 0;
   });
 
-  async function connectClient(cookie?: string) {
+  async function connectClient(cookie?: string, targetPort = port) {
     return new Promise<ClientSocket>((resolve, reject) => {
       const extraHeaders = cookie ? { cookie } : undefined;
-      const client = createClient(`http://127.0.0.1:${port}`, {
+      const client = createClient(`http://127.0.0.1:${targetPort}`, {
         transports: ['websocket'],
         reconnection: false,
         withCredentials: true,
@@ -246,6 +249,143 @@ describe('wsServer', () => {
     await expect(eventPromise).resolves.toEqual({
       payload: { id: 10 },
     });
+  });
+
+  it('shares project presence snapshots and socket cleanup across websocket instances', async () => {
+    const owner = await createUser({ email: 'project-owner@example.com' });
+    const member = await createUser({ email: 'project-member@example.com' });
+    const organization = await createOrganizationRecord({ createdBy: owner.id });
+    await addOrganizationMember(organization.id, member.id);
+    const project = await Projects.create({
+      organization_id: organization.id,
+      name: 'Shared presence project',
+      description: null,
+      created_by: owner.id,
+    });
+
+    const secondServer = http.createServer();
+    createWsServer(secondServer);
+    servers.push(secondServer);
+    await new Promise<void>((resolve) => secondServer.listen(0, () => resolve()));
+    const secondAddress = secondServer.address();
+    if (!secondAddress || typeof secondAddress === 'string') throw new Error('Failed to start second websocket test server');
+
+    const cookie = await createAuthCookie(member.id);
+    const firstClient = await connectClient(cookie);
+    const firstSocketId = firstClient.id;
+    const firstJoin = new Promise<{ ok: boolean }>((resolve) => firstClient.emit('joinProject', String(project.id), resolve));
+    await expect(firstJoin).resolves.toEqual({ ok: true });
+
+    firstClient.emit('project:presence', {
+      componentId: 'api',
+      viewKey: 'backend',
+      status: 'active',
+    });
+
+    const secondClient = await connectClient(cookie, secondAddress.port);
+    const snapshotPromise = new Promise<Array<Record<string, unknown>>>((resolve) => {
+      secondClient.once('project:presence:snapshot', resolve);
+    });
+    const secondJoin = new Promise<{ ok: boolean }>((resolve) => secondClient.emit('joinProject', String(project.id), resolve));
+    await expect(secondJoin).resolves.toEqual({ ok: true });
+    await expect(snapshotPromise).resolves.toEqual([
+      expect.objectContaining({
+        socketId: firstClient.id,
+        userId: member.id,
+        componentId: 'api',
+        status: 'active',
+      }),
+    ]);
+
+    const cleanupPromise = new Promise<Record<string, unknown>>((resolve) => {
+      secondClient.once('project:presence:updated', resolve);
+    });
+    firstClient.disconnect();
+    await expect(cleanupPromise).resolves.toEqual(expect.objectContaining({
+      socketId: firstSocketId,
+      status: 'idle',
+    }));
+
+    const thirdClient = await connectClient(cookie, secondAddress.port);
+    const cleanedSnapshot = new Promise<Array<Record<string, unknown>>>((resolve) => {
+      thirdClient.once('project:presence:snapshot', resolve);
+    });
+    const thirdJoin = new Promise<{ ok: boolean }>((resolve) => thirdClient.emit('joinProject', String(project.id), resolve));
+    await expect(thirdJoin).resolves.toEqual({ ok: true });
+    await expect(cleanedSnapshot).resolves.toEqual([]);
+  });
+
+  it('prunes stale Redis presence entries before sending a snapshot', async () => {
+    const owner = await createUser({ email: 'stale-owner@example.com' });
+    const member = await createUser({ email: 'stale-member@example.com' });
+    const organization = await createOrganizationRecord({ createdBy: owner.id });
+    await addOrganizationMember(organization.id, member.id);
+    const project = await Projects.create({
+      organization_id: organization.id,
+      name: 'Stale presence project',
+      description: null,
+      created_by: owner.id,
+    });
+    const redis = new Redis(getRedisUrl());
+    const key = `project:presence:${project.id}`;
+
+    try {
+      await redis.hset(key, 'stale-socket', JSON.stringify({
+        socketId: 'stale-socket',
+        userId: member.id,
+        status: 'active',
+        lastSeenAt: Date.now() - 31_000,
+      }));
+
+      const client = await connectClient(await createAuthCookie(member.id));
+      const snapshotPromise = new Promise<Array<Record<string, unknown>>>((resolve) => {
+        client.once('project:presence:snapshot', resolve);
+      });
+      const joinPromise = new Promise<{ ok: boolean }>((resolve) => client.emit('joinProject', String(project.id), resolve));
+
+      await expect(joinPromise).resolves.toEqual({ ok: true });
+      await expect(snapshotPromise).resolves.toEqual([]);
+      await expect(redis.hget(key, 'stale-socket')).resolves.toBeNull();
+    } finally {
+      await redis.del(key);
+      await redis.quit();
+    }
+  });
+
+  it('keeps presence writes on the new project when a room switch is in flight', async () => {
+    const owner = await createUser({ email: 'switch-owner@example.com' });
+    const member = await createUser({ email: 'switch-member@example.com' });
+    const organization = await createOrganizationRecord({ createdBy: owner.id });
+    await addOrganizationMember(organization.id, member.id);
+    const firstProject = await Projects.create({
+      organization_id: organization.id,
+      name: 'First switch project',
+      description: null,
+      created_by: owner.id,
+    });
+    const secondProject = await Projects.create({
+      organization_id: organization.id,
+      name: 'Second switch project',
+      description: null,
+      created_by: owner.id,
+    });
+    const redis = new Redis(getRedisUrl());
+
+    try {
+      const client = await connectClient(await createAuthCookie(member.id));
+      await expect(new Promise<{ ok: boolean }>((resolve) => client.emit('joinProject', String(firstProject.id), resolve))).resolves.toEqual({ ok: true });
+
+      const switchPromise = new Promise<{ ok: boolean }>((resolve) => client.emit('joinProject', String(secondProject.id), resolve));
+      client.emit('project:presence', { componentId: 'new-project', status: 'active' });
+
+      await expect(switchPromise).resolves.toEqual({ ok: true });
+      await waitForCondition(async () => Boolean(await redis.hget(`project:presence:${secondProject.id}`, client.id ?? '')));
+      await expect(redis.hget(`project:presence:${firstProject.id}`, client.id ?? '')).resolves.toBeNull();
+      await expect(redis.ttl(`project:presence:${secondProject.id}`)).resolves.toBeGreaterThan(0);
+    } finally {
+      await redis.del(`project:presence:${firstProject.id}`, `project:presence:${secondProject.id}`);
+      await redis.quit();
+    }
   });
 
   function createWsRoomSnapshot(boardId: number) {

@@ -20,7 +20,7 @@ vi.mock('@/hooks/useOrganizationRouteParams', () => ({
 }));
 
 vi.mock('@/hooks/useSocket', () => ({
-  useSocket: () => null,
+  useSocket: () => ({ socketRef: { current: null }, ready: false, projectReady: false }),
 }));
 
 vi.mock('@/hooks/useBoardRealtime', () => ({

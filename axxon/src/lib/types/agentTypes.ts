@@ -1,4 +1,5 @@
 // Defines shared frontend agent-run types for the planning workspace and org-scoped API clients.
+import type { ArchitectureOperation } from '@/lib/agents/architecture/contracts';
 export type AgentRunType = 'planning' | 'coding' | 'planning_execution';
 
 export type AgentRunState =
@@ -125,7 +126,7 @@ export type AgentPlanArtifact = {
   architectureProposal?: {
     intent: string;
     baseRevisionId: number;
-    operations: Array<Record<string, unknown>>;
+    operations: ArchitectureOperation[];
     summary: string;
     assumptions: string[];
     risks: string[];

@@ -19,7 +19,6 @@ let sub: Redis | null = null;
 let isSubscribed = false;
 let isRedisForwarderRegistered = false;
 const activeIoServers = new Set<Server>();
-const projectPresence = new Map<string, Map<number, Record<string, unknown>>>();
 const unauthorizedHandshakeAttempts = new Map<
   string,
   {
@@ -32,6 +31,8 @@ const SOCKET_HANDSHAKE_WINDOW_MS = 60_000;
 const SOCKET_HANDSHAKE_BLOCK_MS = 60_000;
 const SOCKET_HANDSHAKE_MAX_FAILURES = 10;
 const SOCKET_MAX_HTTP_BUFFER_SIZE_BYTES = 1_000_000;
+const PROJECT_PRESENCE_TTL_SECONDS = 30;
+const PROJECT_PRESENCE_HEARTBEAT_MS = 10_000;
 
 function getAllowedSocketOrigins() {
   return getConfiguredClientOrigins();
@@ -110,6 +111,50 @@ function getSubscriber() {
   }
 
   return sub;
+}
+
+// Returns the Redis hash key that stores the active socket presence for a project.
+function getProjectPresenceKey(projectId: string) {
+  return `project:presence:${projectId}`;
+}
+
+// Reads the shared project presence snapshot from Redis and restores its object values.
+async function getProjectPresenceSnapshot(projectId: string) {
+  const key = getProjectPresenceKey(projectId);
+  const entries = await getPublisher().hgetall(key);
+  const staleSocketIds: string[] = [];
+  const cutoff = Date.now() - PROJECT_PRESENCE_TTL_SECONDS * 1_000;
+  const snapshot = Object.entries(entries).flatMap(([socketId, entry]) => {
+    try {
+      const presence = JSON.parse(entry);
+      const lastSeenAt = Number(presence?.lastSeenAt);
+      if (!presence || typeof presence !== 'object' || !Number.isFinite(lastSeenAt) || lastSeenAt < cutoff) {
+        staleSocketIds.push(socketId);
+        return [];
+      }
+      return [presence as Record<string, unknown>];
+    } catch {
+      staleSocketIds.push(socketId);
+      return [];
+    }
+  });
+
+  if (staleSocketIds.length > 0) {
+    await getPublisher().hdel(key, ...staleSocketIds);
+  }
+
+  return snapshot;
+}
+
+// Removes one socket's shared presence and returns its last published value for cleanup.
+async function removeProjectPresence(projectId: string, socketId: string) {
+  const key = getProjectPresenceKey(projectId);
+  const existing = await getPublisher().hget(key, socketId);
+  if (existing) {
+    await getPublisher().hdel(key, socketId);
+  }
+
+  return existing ? JSON.parse(existing) as Record<string, unknown> : null;
 }
 
 function emitRedisScopedMessage(channel: string, message: string) {
@@ -223,6 +268,51 @@ export function createWsServer(server: http.Server) {
 
     let currentBoard: string | null = null;
     let currentProject: string | null = null;
+    let projectOperation = Promise.resolve();
+    let projectJoinVersion = 0;
+
+    // Serializes project room transitions and presence writes for one socket.
+    const enqueueProjectOperation = (operation: () => Promise<void> | void) => {
+      const next = projectOperation.then(operation, operation);
+      projectOperation = next.then(() => undefined, () => undefined);
+      return next;
+    };
+
+    // Refreshes this socket's Redis presence lease while it remains in a project room.
+    const refreshProjectPresence = async (projectId: string) => {
+      const key = getProjectPresenceKey(projectId);
+      const existing = await getPublisher().hget(key, socket.id);
+      if (!existing) return;
+
+      try {
+        const presence = JSON.parse(existing) as Record<string, unknown>;
+        presence.lastSeenAt = Date.now();
+        await getPublisher().hset(key, socket.id, JSON.stringify(presence));
+        await getPublisher().expire(key, PROJECT_PRESENCE_TTL_SECONDS);
+      } catch {
+        await getPublisher().hdel(key, socket.id);
+      }
+    };
+
+    // Removes this socket's shared presence and tells every project-room subscriber that it left.
+    const clearProjectPresence = async (projectId: string | null) => {
+      if (!projectId) return;
+      const existing = await removeProjectPresence(projectId, socket.id);
+      if (!existing) return;
+      await publishProjectUpdate(projectId, {
+        type: 'project:presence:updated',
+        payload: { ...existing, componentId: null, relationshipId: null, status: 'idle' },
+      }).catch((error) => console.error('[WS_PROJECT_PRESENCE_CLEANUP_ERROR]', error));
+    };
+
+    const presenceHeartbeat = setInterval(() => {
+      const projectId = currentProject;
+      if (!projectId) return;
+      void enqueueProjectOperation(() => refreshProjectPresence(projectId)).catch((error) => {
+        console.error('[WS_PROJECT_PRESENCE_HEARTBEAT_ERROR]', error);
+      });
+    }, PROJECT_PRESENCE_HEARTBEAT_MS);
+    presenceHeartbeat.unref?.();
 
     // Join a board room (only if different from current)
     socket.on("joinBoard", async (boardId: string) => {
@@ -273,57 +363,92 @@ export function createWsServer(server: http.Server) {
       }
     });
 
-    socket.on("joinProject", async (projectId: string) => {
-      try {
-        const numericProjectId = Number(projectId);
-        const project = await Projects.getById(numericProjectId);
-        if (!Number.isFinite(numericProjectId) || !project) {
-          socket.emit('socket:error', { error: 'Forbidden' });
-          return;
+    socket.on("joinProject", (projectId: string, acknowledge?: (result: { ok: boolean }) => void) => {
+      const joinVersion = ++projectJoinVersion;
+      void enqueueProjectOperation(async () => {
+        try {
+          const numericProjectId = Number(projectId);
+          const project = await Projects.getById(numericProjectId);
+          if (!Number.isFinite(numericProjectId) || !project) {
+            socket.emit('socket:error', { error: 'Forbidden' });
+            acknowledge?.({ ok: false });
+            return;
+          }
+          await requireProjectMember(project.organization_id, numericProjectId, Number(socket.data.userId));
+          if (joinVersion !== projectJoinVersion) {
+            acknowledge?.({ ok: false });
+            return;
+          }
+          const nextProject = String(numericProjectId);
+          if (currentProject === nextProject) {
+            acknowledge?.({ ok: true });
+            return;
+          }
+          const previousProject = currentProject;
+          currentProject = null;
+          if (previousProject) {
+            socket.leave(`project:${previousProject}`);
+            await clearProjectPresence(previousProject);
+          }
+          if (joinVersion !== projectJoinVersion) {
+            acknowledge?.({ ok: false });
+            return;
+          }
+          socket.join(`project:${nextProject}`);
+          currentProject = nextProject;
+          const snapshot = await getProjectPresenceSnapshot(nextProject);
+          if (joinVersion !== projectJoinVersion || currentProject !== nextProject) {
+            acknowledge?.({ ok: false });
+            return;
+          }
+          socket.emit('project:presence:snapshot', snapshot);
+          acknowledge?.({ ok: true });
+        } catch (error) {
+          console.error(`Socket ${socket.id} failed to join project ${projectId}:`, error);
+          socket.emit('socket:error', { error: 'Failed to join project' });
+          acknowledge?.({ ok: false });
         }
-        await requireProjectMember(project.organization_id, numericProjectId, Number(socket.data.userId));
-        if (currentProject === String(numericProjectId)) return;
-        if (currentProject) socket.leave(`project:${currentProject}`);
-        socket.join(`project:${numericProjectId}`);
-        currentProject = String(numericProjectId);
-        const members = projectPresence.get(currentProject) || new Map<number, Record<string, unknown>>();
-        projectPresence.set(currentProject, members);
-        socket.emit('project:presence:snapshot', [...members.values()]);
-      } catch (error) {
-        console.error(`Socket ${socket.id} failed to join project ${projectId}:`, error);
-        socket.emit('socket:error', { error: 'Failed to join project' });
-      }
+      }).catch((error) => console.error('[WS_PROJECT_JOIN_ERROR]', error));
     });
 
     socket.on("leaveProject", () => {
-      if (currentProject) {
-        const members = projectPresence.get(currentProject);
-        members?.delete(Number(socket.data.userId));
-        if (members?.size === 0) projectPresence.delete(currentProject);
-      }
-      if (currentProject) socket.leave(`project:${currentProject}`);
-      currentProject = null;
+      projectJoinVersion += 1;
+      void enqueueProjectOperation(async () => {
+        const leavingProject = currentProject;
+        currentProject = null;
+        if (leavingProject) socket.leave(`project:${leavingProject}`);
+        await clearProjectPresence(leavingProject);
+      }).catch((error) => console.error('[WS_PROJECT_PRESENCE_CLEANUP_ERROR]', error));
     });
 
-    socket.on('project:presence', async (presence: Record<string, unknown>) => {
-      if (!currentProject) return;
-      const safePresence = {
-        userId: Number(socket.data.userId),
-        componentId: typeof presence?.componentId === 'string' ? presence.componentId : null,
-        relationshipId: typeof presence?.relationshipId === 'string' ? presence.relationshipId : null,
-        viewKey: typeof presence?.viewKey === 'string' ? presence.viewKey : null,
-        status: presence?.status === 'idle' ? 'idle' : 'active',
-      };
-      const members = projectPresence.get(currentProject) || new Map<number, Record<string, unknown>>();
-      if (safePresence.status === 'idle') members.delete(safePresence.userId);
-      else members.set(safePresence.userId, safePresence);
-      projectPresence.set(currentProject, members);
-      await publishProjectUpdate(currentProject, { type: 'project:presence:updated', payload: safePresence }).catch((error) => console.error('[WS_PROJECT_PRESENCE_ERROR]', error));
+    socket.on('project:presence', (presence: Record<string, unknown>) => {
+      void enqueueProjectOperation(async () => {
+        const projectId = currentProject;
+        if (!projectId) return;
+        const safePresence = {
+          socketId: socket.id,
+          userId: Number(socket.data.userId),
+          componentId: typeof presence?.componentId === 'string' ? presence.componentId : null,
+          relationshipId: typeof presence?.relationshipId === 'string' ? presence.relationshipId : null,
+          viewKey: typeof presence?.viewKey === 'string' ? presence.viewKey : null,
+          status: presence?.status === 'idle' ? 'idle' : 'active',
+          lastSeenAt: Date.now(),
+        };
+        const presenceKey = getProjectPresenceKey(projectId);
+        if (safePresence.status === 'idle') {
+          await getPublisher().hdel(presenceKey, socket.id);
+        } else {
+          await getPublisher().hset(presenceKey, socket.id, JSON.stringify(safePresence));
+          await getPublisher().expire(presenceKey, PROJECT_PRESENCE_TTL_SECONDS);
+        }
+        await publishProjectUpdate(projectId, { type: 'project:presence:updated', payload: safePresence }).catch((error) => console.error('[WS_PROJECT_PRESENCE_ERROR]', error));
+      }).catch((error) => console.error('[WS_PROJECT_PRESENCE_ERROR]', error));
     });
 
     socket.on('project:selection', async (selection: Record<string, unknown>) => {
       if (!currentProject) return;
       const payload = {
+        socketId: socket.id,
         userId: Number(socket.data.userId),
         componentId: typeof selection?.componentId === 'string' ? selection.componentId : null,
         relationshipId: typeof selection?.relationshipId === 'string' ? selection.relationshipId : null,
@@ -334,11 +459,13 @@ export function createWsServer(server: http.Server) {
 
     // Handle disconnects
     socket.on("disconnect", () => {
-      if (currentProject) {
-        const members = projectPresence.get(currentProject);
-        members?.delete(Number(socket.data.userId));
-        if (members?.size === 0) projectPresence.delete(currentProject);
-      }
+      clearInterval(presenceHeartbeat);
+      projectJoinVersion += 1;
+      void enqueueProjectOperation(async () => {
+        const leavingProject = currentProject;
+        currentProject = null;
+        await clearProjectPresence(leavingProject);
+      }).catch((error) => console.error('[WS_PROJECT_PRESENCE_CLEANUP_ERROR]', error));
       console.log(`Client disconnected: ${socket.id}`);
     });
   });

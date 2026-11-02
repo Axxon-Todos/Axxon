@@ -1,6 +1,6 @@
 // Verifies the shared socket hook handles board membership changes and idle AI-workspace connections.
 import React, { StrictMode } from 'react';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type EventHandler = (...args: any[]) => void;
@@ -10,6 +10,7 @@ function createMockSocket() {
 
   return {
     id: 'socket-1',
+    connected: true,
     io: {
       opts: {
         reconnection: true,
@@ -88,6 +89,28 @@ describe('useSocket', () => {
     socket.trigger('connect');
 
     expect(socket.emit).toHaveBeenCalledWith('joinBoard', 'board-99');
+  });
+
+  it('does not report a project room as ready until the join acknowledgement succeeds', () => {
+    const socket = createMockSocket();
+    mockedIo.mockReturnValue(socket);
+
+    const { result } = renderHook(() => useSocket(null, 'project-7'));
+    expect(result.current.projectReady).toBe(false);
+
+    socket.trigger('connect');
+    const joinCall = socket.emit.mock.calls.find(([event]) => event === 'joinProject');
+    expect(joinCall?.[1]).toBe('project-7');
+    expect(typeof joinCall?.[2]).toBe('function');
+
+    act(() => (joinCall?.[2] as (result: { ok: boolean }) => void)({ ok: true }));
+    expect(result.current.projectReady).toBe(true);
+
+    act(() => socket.trigger('disconnect'));
+    expect(result.current.projectReady).toBe(false);
+
+    act(() => socket.trigger('connect'));
+    expect(socket.emit.mock.calls.filter(([event]) => event === 'joinProject').length).toBeGreaterThanOrEqual(2);
   });
 
   it('connects without joining a board room when no board id is active', () => {

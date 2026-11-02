@@ -10,6 +10,13 @@ export async function fetchProjectAgentRuns(organizationId: string, projectId: s
   return response.json() as Promise<AgentRun[]>;
 }
 
+// Fetches the immutable change set used to render an architecture review preview.
+export async function fetchProjectAgentRunDetail(organizationId: string, projectId: string, runId: number) {
+  const response = await apiFetch(`${buildOrganizationProjectApiPath(organizationId, projectId, '/agent-runs')}/${runId}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error('Failed to fetch project agent run detail');
+  return response.json() as Promise<{ run: AgentRun; changeSet: { base_revision_id: number; operations_json: unknown; proposed_graph_json: unknown } | null }>;
+}
+
 export async function createProjectAgentRun(organizationId: string, projectId: string, prompt: string) {
   const response = await apiFetch(buildOrganizationProjectApiPath(organizationId, projectId, '/agent-runs'), {
     method: 'POST',
