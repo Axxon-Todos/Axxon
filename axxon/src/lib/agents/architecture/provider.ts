@@ -202,9 +202,18 @@ export function validateArchitectureBootstrapQuality(graph: ArchitectureAgentCon
 
 // Supplies a deterministic, reviewable bootstrap graph when model output is absent or too generic.
 function buildBootstrapFallback(run: AgentRun, context: ArchitectureAgentContextPackage) {
-  if (run.architectureIntent !== 'bootstrap' || context.graph.components.length > 0) return [];
+  if (run.architectureIntent !== 'bootstrap') return [];
+  const existingByType = new Map(context.graph.components.map((component) => [component.type, component]));
   const ids = Object.fromEntries(['application', 'api', 'data', 'ingestion', 'runtime', 'security', 'observability', 'rawData', 'network'].map((key) => [key, randomUUID()]));
-  return [
+  const updates = context.graph.components.flatMap((component) => {
+    const technologies = component.technologies.length > 0 ? component.technologies : component.type === 'database' ? ['PostgreSQL'] : component.type === 'application' ? ['TypeScript', 'React'] : ['TypeScript', 'Node.js'];
+    const responsibilities = component.responsibilities.length > 0 ? component.responsibilities : [`Own the ${component.name.toLowerCase()} responsibility and expose a clear operational boundary.`];
+    return [{ type: 'update_component', componentId: component.id, changes: { technologies, responsibilities } }];
+  });
+  const applicationId = existingByType.get('application')?.id || ids.application;
+  const apiId = existingByType.get('service')?.id || existingByType.get('api')?.id || ids.api;
+  const dataId = existingByType.get('database')?.id || ids.data;
+  const additions = [
     { type: 'add_component', component: { id: ids.application, type: 'application', name: 'User Application', description: `User-facing application for ${run.prompt.slice(0, 180)}`, parent_id: null, responsibilities: ['Present the primary user workflow and collect validated input.'], technologies: ['TypeScript', 'React'], requirements: [], constraints: [], metadata: {} } },
     { type: 'add_component', component: { id: ids.api, type: 'service', name: 'Application API', description: 'Owns application workflows and exposes validated interfaces.', parent_id: null, responsibilities: ['Authenticate requests and coordinate domain workflows.'], technologies: ['TypeScript', 'Node.js'], requirements: [], constraints: [], metadata: {} } },
     { type: 'add_component', component: { id: ids.data, type: 'database', name: 'Transactional Data Store', description: 'Persists the application data owned by the system.', parent_id: null, responsibilities: ['Own durable records, migrations, indexes, and recovery.'], technologies: ['PostgreSQL'], requirements: [], constraints: [], metadata: {} } },
@@ -225,8 +234,15 @@ function buildBootstrapFallback(run: AgentRun, context: ArchitectureAgentContext
     { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: ids.api, target_component_id: ids.observability, type: 'monitored_by', label: 'Telemetry and alerts', metadata: {} } },
     { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: ids.ingestion, target_component_id: ids.rawData, type: 'writes_to', label: 'Raw payload archive', metadata: {} } },
     { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: ids.api, target_component_id: ids.network, type: 'secured_by', label: 'Private service boundary', metadata: {} } },
-    { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: ids.data, target_component_id: ids.network, type: 'secured_by', label: 'Private data boundary', metadata: {} } },
+    { type: 'add_relationship', relationship: { id: randomUUID(), source_component_id: dataId, target_component_id: ids.network, type: 'secured_by', label: 'Private data boundary', metadata: {} } },
   ];
+  const filteredAdditions = additions.filter((operation) => operation.type !== 'add_component' || !context.graph.components.some((component) => component.id === (operation.component as { id: string }).id));
+  const remapped = [...updates, ...filteredAdditions] as Array<Record<string, unknown>>;
+  return remapped.map((operation) => {
+    if (operation.type !== 'add_relationship' || !operation.relationship || typeof operation.relationship !== 'object') return operation;
+    const relationship = operation.relationship as Record<string, unknown>;
+    return { ...operation, relationship: { ...relationship, source_component_id: relationship.source_component_id === ids.application ? applicationId : relationship.source_component_id === ids.api ? apiId : relationship.source_component_id, target_component_id: relationship.target_component_id === ids.application ? applicationId : relationship.target_component_id === ids.api ? apiId : relationship.target_component_id === ids.data ? dataId : relationship.target_component_id } };
+  });
 }
 
 export function buildArchitecturePrompt(run: AgentRun, context: ArchitectureAgentContextPackage) {
@@ -268,8 +284,8 @@ export async function generateArchitectureProposalWithOllama(run: AgentRun, cont
     parsed = proposalSchema.parse({ ...generated, assumptions: normalizedAssumptions || bootstrapStandardAssumptions, risks: normalizedRisks || [], operations: fallbackOperations });
   }
   let proposal: ArchitectureChangeProposal = { intent: (run.architectureIntent || 'propose_change') as ArchitectureChangeProposal['intent'], baseRevisionId: context.revisionId, operations: parsed.operations as ArchitectureOperation[], summary: parsed.summary, assumptions: parsed.assumptions, risks: parsed.risks, technicalDecisions: parsed.technicalDecisions };
-  const isEmptyBootstrap = run.architectureIntent === 'bootstrap' && context.graph.components.length === 0;
-  if (isEmptyBootstrap) {
+  const isBootstrap = run.architectureIntent === 'bootstrap';
+  if (isBootstrap) {
     proposal = { ...proposal, assumptions: withStandardArchitectureBootstrapAssumptions(proposal.assumptions) };
     try {
       const generatedGraph = applyArchitectureOperations(context.graph, proposal.operations, context.projectId);
@@ -282,7 +298,7 @@ export async function generateArchitectureProposalWithOllama(run: AgentRun, cont
     }
   }
   validateArchitectureProposal(context.graph, proposal, context.projectId);
-  if (isEmptyBootstrap) validateArchitectureBootstrapQuality(applyArchitectureOperations(context.graph, proposal.operations, context.projectId), proposal.assumptions, proposal.technicalDecisions);
+  if (isBootstrap) validateArchitectureBootstrapQuality(applyArchitectureOperations(context.graph, proposal.operations, context.projectId), proposal.assumptions, proposal.technicalDecisions);
   return proposal;
 }
 
