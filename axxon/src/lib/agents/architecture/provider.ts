@@ -20,10 +20,36 @@ const operationSchema = z.discriminatedUnion('type', [
 ]);
 const proposalSchema = z.object({ summary: z.string().min(1).max(1200), assumptions: z.array(z.string()).max(25), risks: z.array(z.string()).max(25), operations: z.array(operationSchema).min(1).max(40) });
 
+const NOTE_PRIMARY_KEYS = new Set(['text', 'title', 'description', 'label']);
+const NOTE_DETAIL_KEYS = new Set(['rationale', 'reason', 'impact', 'mitigation', 'detail', 'category', 'likelihood']);
+
 function parseJson(content: string) {
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
   return JSON.parse(start >= 0 && end > start ? content.slice(start, end + 1) : content) as unknown;
+}
+
+// Converts structured provider notes into concise schema-compatible strings without weakening operation validation.
+function normalizeArchitectureNotes(value: unknown) {
+  if (!Array.isArray(value)) return value;
+
+  return value.map((entry) => {
+    if (typeof entry === 'string') return entry.trim();
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+
+    const primary: string[] = [];
+    const details: string[] = [];
+    for (const [key, rawValue] of Object.entries(entry as Record<string, unknown>)) {
+      if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'boolean') continue;
+      const text = String(rawValue).replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      if (NOTE_PRIMARY_KEYS.has(key)) primary.push(text);
+      else if (NOTE_DETAIL_KEYS.has(key)) details.push(`${key[0].toUpperCase()}${key.slice(1)}: ${text}`);
+    }
+
+    const normalized = [...primary, ...details].join(' — ').trim();
+    return normalized ? normalized.slice(0, 240).trim() : entry;
+  });
 }
 
 // Normalizes common model aliases while keeping the final proposal schema strict.
@@ -142,14 +168,16 @@ export async function generateArchitectureProposalWithOllama(run: AgentRun, cont
   const body = await response.json() as { message?: { content?: string } };
   const generated = parseJson(body.message?.content?.trim() || '') as Record<string, unknown>;
   const normalizedOperations = normalizeOperations(generated.operations);
+  const normalizedAssumptions = normalizeArchitectureNotes(generated.assumptions);
+  const normalizedRisks = normalizeArchitectureNotes(generated.risks);
   const fallbackOperations = buildBootstrapFallback(run, context);
   let parsed;
   try {
     const operations = Array.isArray(normalizedOperations) && normalizedOperations.length > 0 ? normalizedOperations : fallbackOperations;
-    parsed = proposalSchema.parse({ ...generated, operations });
+    parsed = proposalSchema.parse({ ...generated, assumptions: normalizedAssumptions, risks: normalizedRisks, operations });
   } catch (error) {
     if (fallbackOperations.length === 0) throw error;
-    parsed = proposalSchema.parse({ ...generated, operations: fallbackOperations });
+    parsed = proposalSchema.parse({ ...generated, assumptions: normalizedAssumptions, risks: normalizedRisks, operations: fallbackOperations });
   }
   const proposal = { intent: (run.architectureIntent || 'propose_change') as ArchitectureChangeProposal['intent'], baseRevisionId: context.revisionId, operations: parsed.operations as ArchitectureOperation[], summary: parsed.summary, assumptions: parsed.assumptions, risks: parsed.risks };
   validateArchitectureProposal(context.graph, proposal);
