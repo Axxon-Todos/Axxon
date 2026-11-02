@@ -92,10 +92,35 @@ export async function buildArchitectureChangeSet(projectId: number, runId: numbe
   };
 }
 
+// Serializes every JSONB payload explicitly while preserving the shape expected by approval and review code.
+function encodeJsonb(value: unknown, field: string, shape: 'array' | 'object') {
+  try {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+    const normalized = parsed == null ? (shape === 'array' ? [] : {}) : parsed;
+    if (shape === 'array' && !Array.isArray(normalized)) throw new Error('expected an array');
+    if (shape === 'object' && (typeof normalized !== 'object' || Array.isArray(normalized))) throw new Error('expected an object');
+    const encoded = JSON.stringify(normalized);
+    if (encoded === undefined) throw new Error('value is not JSON serializable');
+    return encoded;
+  } catch (error) {
+    throw new Error(`Architecture change-set ${field} is not JSON serializable: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
 export class ArchitectureChangeSets {
   // Persists one immutable proposal preview for a run.
   static async create(input: Awaited<ReturnType<typeof buildArchitectureChangeSet>>, trx = db) {
-    const [row] = await trx('architecture_change_sets').insert(input).returning('*');
+    const [row] = await trx('architecture_change_sets').insert({
+      ...input,
+      operations_json: encodeJsonb(input.operations_json, 'operations', 'array'),
+      proposed_graph_json: encodeJsonb(input.proposed_graph_json, 'proposed graph', 'object'),
+      semantic_diff_json: encodeJsonb(input.semantic_diff_json, 'semantic diff', 'object'),
+      impact_findings_json: encodeJsonb(input.impact_findings_json, 'impact findings', 'array'),
+      validation_json: encodeJsonb(input.validation_json, 'validation', 'object'),
+      assumptions_json: encodeJsonb(input.assumptions_json, 'assumptions', 'array'),
+      risks_json: encodeJsonb(input.risks_json, 'risks', 'array'),
+      provenance_json: encodeJsonb(input.provenance_json, 'provenance', 'object'),
+    }).returning('*');
     return row;
   }
 
