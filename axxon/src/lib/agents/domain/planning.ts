@@ -21,6 +21,8 @@ const RESOLVABLE_GENERIC_REASONS: AgentPlanningDecisionReason[] = [
   'low_confidence',
 ];
 const MATERIAL_SLOT_QUESTION_LIMIT = 3;
+const PLANNING_CONTEXT_TEXT_LIMIT = 240;
+const PLANNING_CONTEXT_SHORT_TEXT_LIMIT = 120;
 
 export const NONE_OF_THE_ABOVE_OPTION: AgentQuestionOption = {
   optionKey: 'none-of-the-above',
@@ -145,6 +147,37 @@ function mergeTechnicalDecisions(
   return merged;
 }
 
+// Keeps persisted planning memory inside the public schema limits used by tools and provider payloads.
+export function sanitizePlanningContext(context: AgentPlanningContext): AgentPlanningContext {
+  return {
+    objective: context.objective ? limitPlanText(context.objective, 500) : null,
+    summary: context.summary ? limitPlanText(context.summary, 1000) : null,
+    targetOutcome: context.targetOutcome ? limitPlanText(context.targetOutcome, 1000) : null,
+    inScope: limitPlanStrings(context.inScope, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    outOfScope: limitPlanStrings(context.outOfScope, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    assumptions: limitPlanStrings(context.assumptions, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    constraints: limitPlanStrings(context.constraints, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    acceptanceCriteria: limitPlanStrings(context.acceptanceCriteria, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    knownRequirements: limitPlanStrings(context.knownRequirements, PLANNING_CONTEXT_TEXT_LIMIT, 30),
+    unresolvedUnknowns: limitPlanStrings(context.unresolvedUnknowns, PLANNING_CONTEXT_TEXT_LIMIT, 30),
+    blockingUnknowns: limitPlanStrings(context.blockingUnknowns, PLANNING_CONTEXT_TEXT_LIMIT, 30),
+    affectedAreas: limitPlanStrings(context.affectedAreas, PLANNING_CONTEXT_SHORT_TEXT_LIMIT, 25),
+    risks: limitPlanStrings(context.risks, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    dependencies: limitPlanStrings(context.dependencies, PLANNING_CONTEXT_TEXT_LIMIT, 25),
+    technicalDecisions: context.technicalDecisions.slice(0, 15).flatMap((decision) => {
+      const area = limitPlanText(decision.area, PLANNING_CONTEXT_SHORT_TEXT_LIMIT);
+      const choice = limitPlanText(decision.choice, PLANNING_CONTEXT_TEXT_LIMIT);
+      const rationale = limitPlanText(decision.rationale, 320);
+
+      return area && choice && rationale
+        ? [{ area, choice, rationale, source: decision.source }]
+        : [];
+    }),
+    estimatedComplexity: context.estimatedComplexity,
+    planningConfidence: clampConfidence(context.planningConfidence),
+  };
+}
+
 // Applies a provider analysis patch while preserving previously clarified context.
 export function mergePlanningContext(
   currentContext: AgentPlanningContext,
@@ -152,7 +185,7 @@ export function mergePlanningContext(
 ): AgentPlanningContext {
   const patch = analysis.contextPatch;
 
-  return {
+  return sanitizePlanningContext({
     objective: patch.objective !== undefined ? patch.objective : currentContext.objective,
     summary: patch.summary !== undefined ? patch.summary : currentContext.summary,
     targetOutcome: patch.targetOutcome !== undefined ? patch.targetOutcome : currentContext.targetOutcome,
@@ -170,7 +203,7 @@ export function mergePlanningContext(
     technicalDecisions: mergeTechnicalDecisions(currentContext.technicalDecisions, patch.technicalDecisions),
     estimatedComplexity: patch.estimatedComplexity !== undefined ? patch.estimatedComplexity : currentContext.estimatedComplexity,
     planningConfidence: clampConfidence(analysis.confidence || patch.planningConfidence || currentContext.planningConfidence),
-  };
+  });
 }
 
 function hasConcreteDetails(values: string[]) {
@@ -299,7 +332,7 @@ export function applyPromptPlanningDefaults({
   const subject = formatAnchorLabel(anchors);
   const titleSubject = titleCase(subject);
 
-  return {
+  return sanitizePlanningContext({
     ...context,
     targetOutcome: context.targetOutcome ?? `Deliver the smallest usable ${subject} workflow described by the prompt.`,
     inScope: context.inScope.length > 0
@@ -318,7 +351,7 @@ export function applyPromptPlanningDefaults({
     knownRequirements: mergeStrings(context.knownRequirements, [
       `Plan the prompt-named ${subject} workflow using the concrete terms from the initial request.`,
     ]),
-  };
+  });
 }
 
 // Detects generic MVP cards that should be assumed instead of shown to the user.
@@ -960,9 +993,13 @@ function buildClarifiedAnswerStatement(
   const note = answer.note?.trim();
   return [
     `${question.prompt}: ${selectedOptions.map((option) => option.label).join(', ')}.`,
-    ...selectedOptions.map((option) => option.description),
     note ? `Note: ${note}` : null,
   ].filter(Boolean).join(' ');
+}
+
+// Stores option rationale as bounded separate facts so multi-select cards cannot create invalid memory blobs.
+function buildClarifiedOptionStatements(selectedOptions: AgentQuestionOption[]) {
+  return selectedOptions.map((option) => `${option.label}: ${option.description}`);
 }
 
 // Resolves one or more selected option keys against the active clarification card.
@@ -1002,16 +1039,20 @@ function mergeClarifiedAnswerIntoContext(
     dependencies: [...context.dependencies],
     technicalDecisions: [...context.technicalDecisions],
   };
-  const optionDescriptions = selectedOptions.map((option) => option.description);
+  const optionDescriptions = buildClarifiedOptionStatements(selectedOptions);
 
   if (question.category === 'scope') {
     nextContext.inScope = mergeStrings(nextContext.inScope, [statement]);
+    nextContext.knownRequirements = mergeStrings(nextContext.knownRequirements, optionDescriptions);
   } else if (question.category === 'acceptance_criteria') {
     nextContext.acceptanceCriteria = mergeStrings(nextContext.acceptanceCriteria, [statement]);
+    nextContext.knownRequirements = mergeStrings(nextContext.knownRequirements, optionDescriptions);
   } else if (question.category === 'constraints' || question.category === 'rollout') {
     nextContext.constraints = mergeStrings(nextContext.constraints, [statement]);
+    nextContext.knownRequirements = mergeStrings(nextContext.knownRequirements, optionDescriptions);
   } else if (question.category === 'dependencies') {
     nextContext.dependencies = mergeStrings(nextContext.dependencies, [statement]);
+    nextContext.knownRequirements = mergeStrings(nextContext.knownRequirements, optionDescriptions);
   } else if (question.category === 'technical') {
     nextContext.technicalDecisions = mergeTechnicalDecisions(nextContext.technicalDecisions, [{
       area: question.prompt,
@@ -1023,7 +1064,7 @@ function mergeClarifiedAnswerIntoContext(
     nextContext.targetOutcome = statement;
   }
 
-  return nextContext;
+  return sanitizePlanningContext(nextContext);
 }
 
 // Merges submitted clarification answers into structured memory before the next provider turn.
@@ -1041,7 +1082,7 @@ export function applyClarificationAnswersToContext({
   return answers.reduce((nextContext, answer) => {
     const question = questionsByKey.get(normalizeAgentQuestionKey(answer.questionKey));
     return question ? mergeClarifiedAnswerIntoContext(nextContext, question, answer) : nextContext;
-  }, context);
+  }, sanitizePlanningContext(context));
 }
 
 // Builds deterministic fallback cards when provider candidates cannot be used.

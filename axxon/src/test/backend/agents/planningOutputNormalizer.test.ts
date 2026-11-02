@@ -190,6 +190,69 @@ describe('planning output normalizer', () => {
     ]);
   });
 
+  it('normalizes implementation detail object arrays for monitoring artifacts', () => {
+    const parsed = parseNormalizedArtifact(createArtifact({
+      implementationDetails: {
+        dataFlow: ['Rust telemetry flows through OpenTelemetry.'],
+        tooling: ['Next.js', 'Recharts'],
+        integrations: [
+          { description: 'OpenTelemetry collector forwards agent telemetry into the metrics backend.' },
+        ],
+        realtimeStrategy: ['WebSocket stream sends ordered eval and tool-call updates.'],
+        storageAndRetention: ['Keep 24h raw telemetry and 90d rollups.'],
+        observability: [
+          { text: 'Track collector lag and WebSocket fanout lag.' },
+        ],
+        securityAndAccess: ['Require authenticated organization access.'],
+      },
+    }));
+
+    expect(parsed.implementationDetails?.integrations).toEqual([
+      'OpenTelemetry collector forwards agent telemetry into the metrics backend.',
+    ]);
+    expect(parsed.implementationDetails?.observability).toEqual([
+      'Track collector lag and WebSocket fanout lag.',
+    ]);
+  });
+
+  it('normalizes provider source aliases and overlong strings before final artifact validation', () => {
+    const parsed = parseNormalizedArtifact(createArtifact({
+      assumptions: ['x'.repeat(280)],
+      affectedAreas: ['agent monitoring dashboard '.repeat(10)],
+      technicalDecisions: [{
+        area: 'telemetry exporter '.repeat(10),
+        choice: 'OpenTelemetry collector',
+        rationale: 'Chosen by the user during clarification. '.repeat(12),
+        source: 'user',
+      }],
+      implementationPhases: [{
+        id: 'telemetry-phase',
+        title: 'Telemetry phase',
+        summary: 'Implement telemetry. '.repeat(40),
+        tasks: [{
+          id: 'telemetry-task',
+          title: 'Telemetry task',
+          description: 'Instrument agent telemetry. '.repeat(40),
+          type: 'implementation',
+          priority: 'critical',
+          dependencyIds: ['define-agent-telemetry-records-with-an-intentionally-overlong-provider-generated-id'],
+          acceptanceCriteria: ['Collector, WebSocket, Recharts, and retention behavior is verified. '.repeat(8)],
+        }],
+      }],
+    }));
+
+    expect(parsed.assumptions[0]?.length).toBeLessThanOrEqual(240);
+    expect(parsed.affectedAreas[0]?.length).toBeLessThanOrEqual(120);
+    expect(parsed.technicalDecisions[0]).toMatchObject({ source: 'clarified' });
+    expect(parsed.technicalDecisions[0]?.area.length).toBeLessThanOrEqual(120);
+    expect(parsed.technicalDecisions[0]?.rationale.length).toBeLessThanOrEqual(320);
+    expect(parsed.implementationPhases[0]?.summary.length).toBeLessThanOrEqual(500);
+    expect(parsed.implementationPhases[0]?.tasks[0]?.description.length).toBeLessThanOrEqual(600);
+    expect(parsed.implementationPhases[0]?.tasks[0]?.priority).toBe('high');
+    expect(parsed.implementationPhases[0]?.tasks[0]?.dependencyIds[0]?.length).toBeLessThanOrEqual(80);
+    expect(parsed.implementationPhases[0]?.tasks[0]?.acceptanceCriteria[0]?.length).toBeLessThanOrEqual(240);
+  });
+
   it('drops empty copied final-artifact placeholders', () => {
     const normalized = normalizeProviderPlanArtifact(createArtifact({
       assumptions: [

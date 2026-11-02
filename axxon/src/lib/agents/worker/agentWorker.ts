@@ -1,4 +1,5 @@
 // Runs durable agent jobs independently from Socket.IO and advances runs through the state machine.
+import { z } from 'zod';
 import db from '@/lib/db/db';
 import {
   applyWorkerPlanningAnalysis,
@@ -12,6 +13,12 @@ import {
 } from '../application/runService';
 import { attachPlanArtifactQuality, buildFallbackPlanArtifact } from '../domain';
 import { AgentRepository } from '../infrastructure/repository';
+import { Architecture } from '@/lib/models/architecture';
+import { buildArchitectureContext } from '../architecture/context';
+import { architectureProposalToPlanArtifact, generateArchitectureProposalWithOllama } from '../architecture/provider';
+import { buildArchitectureChangeSet, ArchitectureChangeSets } from '../architecture/changeSets';
+import { architectureDiscoveryQuestions, getArchitectureDiscoveryQuestions } from '../architecture/requirements';
+import { ArchitectureRequirements } from '@/lib/models/architectureRequirements';
 import { AgentProviderValidationError, analyzePlanningTurnWithOllama, generatePlanWithOllama } from '../providers/ollama';
 import { getAllowedAgentToolsForState } from '../toolCalls/registry';
 
@@ -27,6 +34,19 @@ function mapProviderMessages(messages: Awaited<ReturnType<typeof AgentRepository
 
 async function hasNewerUserMessage(runId: number, latestMessageId: number) {
   return await AgentRepository.getLatestMessageId(runId) !== latestMessageId;
+}
+
+// Converts Zod paths into compact strings suitable for persisted diagnostics.
+function summarizeZodIssuePaths(error: z.ZodError) {
+  return error.issues.slice(0, 10).map((issue) => issue.path.length > 0 ? issue.path.join('.') : 'root');
+}
+
+// Keeps validation diagnostics useful without exposing large JSON blobs in the run message.
+function summarizeZodDiagnostics(error: z.ZodError) {
+  return error.issues.slice(0, 8).map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join('.') : 'root';
+    return `${path}: ${issue.message}`;
+  });
 }
 
 // Converts provider-format failures into concise user copy and compact persisted diagnostics.
@@ -47,6 +67,28 @@ function serializeWorkerError(error: unknown) {
         message: error.message,
         category: 'provider_validation',
         providerValidation,
+      }),
+    };
+  }
+
+  if (error instanceof z.ZodError) {
+    const validation = {
+      phase: 'worker_state_validation',
+      issuePaths: summarizeZodIssuePaths(error),
+      diagnostics: summarizeZodDiagnostics(error),
+      retryable: true,
+    };
+
+    return {
+      userMessage: 'The planning run contained invalid structured state. Retry this run to repair saved context and generate the plan again.',
+      eventPayload: {
+        category: 'worker_state_validation',
+        validation,
+      },
+      jobError: JSON.stringify({
+        message: 'Worker state validation failed',
+        category: 'worker_state_validation',
+        validation,
       }),
     };
   }
@@ -77,6 +119,39 @@ export async function processNextAgentJob() {
       }
       const planningRun = await startAgentPlanningTurn(claimedRun.id);
       if (!planningRun) {
+        await AgentRepository.finishJob(Number(job.id), null);
+        return true;
+      }
+      if (planningRun.projectId) {
+        const projectRequirements = await ArchitectureRequirements.list(planningRun.projectId);
+        if (planningRun.architectureIntent === 'bootstrap' && projectRequirements.length === 0) {
+          const discoveryRun = await db.transaction(async (trx) => {
+            const locked = await AgentRepository.lockRun(planningRun.id, trx);
+            if (!locked || locked.state !== 'planning') return null;
+            const updated = await AgentRepository.updateRun(locked.id, locked.version, { state: 'awaiting_input', questions: getArchitectureDiscoveryQuestions() }, trx);
+            await AgentRepository.addMessage(locked.id, 'assistant', 'Before I design the system, I need a few decisions about security, reliability, infrastructure, and data. You can answer in plain language; technical details are optional.', { kind: 'architecture_discovery', categories: architectureDiscoveryQuestions.map((question) => question.requirementCategory) }, trx);
+            await AgentRepository.appendEvent({ runId: locked.id, type: 'input.required', fromState: locked.state, toState: updated.state, actorType: 'worker', payload: { phase: 'requirements_discovery', questionCount: architectureDiscoveryQuestions.length } }, trx);
+            await AgentRepository.appendEvent({ runId: locked.id, type: 'architecture.progress', fromState: updated.state, toState: updated.state, actorType: 'worker', payload: { phase: 'requirements_discovery', status: 'awaiting_answers' } }, trx);
+            return updated;
+          });
+          await AgentRepository.finishJob(Number(job.id), null);
+          return Boolean(discoveryRun);
+        }
+        const revisions = await Architecture.listRevisions(planningRun.projectId);
+        // A historical target can guide context, but proposals must always hash the current draft.
+        const revisionId = Number(revisions[0]?.id || 0);
+        const context = await buildArchitectureContext(planningRun.projectId, revisionId, planningRun.targetContext as never);
+        const messages = await AgentRepository.listMessages(planningRun.id);
+        context.reviewerFeedback = messages.filter((message) => message.metadata && typeof message.metadata === 'object' && (message.metadata as Record<string, unknown>).kind === 'architecture_change_request').map((message) => message.content);
+        await AgentRepository.appendEvent({ runId: planningRun.id, type: 'architecture.progress', fromState: planningRun.state, toState: planningRun.state, actorType: 'worker', payload: { phase: 'proposal_generation', status: 'started' } });
+        const proposal = await generateArchitectureProposalWithOllama(planningRun, context);
+        await AgentRepository.appendEvent({ runId: planningRun.id, type: 'architecture.progress', fromState: planningRun.state, toState: planningRun.state, actorType: 'worker', payload: { phase: 'preview_generation', status: 'started' } });
+        const changeSet = await db.transaction(async (trx) => {
+          const preview = await buildArchitectureChangeSet(planningRun.projectId!, planningRun.id, planningRun.createdBy, proposal, context.graph);
+          return ArchitectureChangeSets.create(preview, trx);
+        });
+        await completeWorkerPlanning(planningRun.id, architectureProposalToPlanArtifact(proposal), { action: 'complete_planning', reason: 'requirements_satisfied' });
+        await AgentRepository.appendEvent({ runId: planningRun.id, type: 'architecture.progress', fromState: 'awaiting_plan_review', toState: 'awaiting_plan_review', actorType: 'worker', payload: { phase: 'preview_ready', changeSetId: changeSet.id, semanticDiff: changeSet.semantic_diff_json, impactFindings: changeSet.impact_findings_json } });
         await AgentRepository.finishJob(Number(job.id), null);
         return true;
       }

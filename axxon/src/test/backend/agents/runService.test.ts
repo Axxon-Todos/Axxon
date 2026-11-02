@@ -14,8 +14,10 @@ import {
   claimAgentRunForWork,
   completeWorkerPlanning,
   createAgentRun,
+  failAgentRun,
   getAgentRunDetail,
   requestWorkerPlanQualityInput,
+  retryAgentRun,
   startAgentPlanningTurn,
   submitAgentInput,
   submitAgentRunMessage,
@@ -25,7 +27,7 @@ import type { AgentPlanArtifact, AgentPlanningTurnAnalysis } from '@/lib/agents/
 import { AgentRepository } from '@/lib/agents/infrastructure/repository';
 import { BadRequestError } from '@/lib/utils/apiErrors';
 import { addBoardMember, createBoardRecord, createOrganizationRecord, createUser } from '../factories';
-import { resetDatabase } from '../db';
+import { db, resetDatabase } from '../db';
 
 async function createBoardAgentFixture() {
   const user = await createUser();
@@ -201,7 +203,7 @@ describe('agent planning run service', () => {
     });
     const answeredRun = await AgentRepository.getRun(created.id);
     expect(answeredRun?.planningContext.knownRequirements).toContain(
-      'Which planning agent loop input behavior should the plan detail first?: Structured cards. Answer planning agent questions through a compact guided card batch. Note: Use API smoke testing as the local success bar.'
+      'Which planning agent loop input behavior should the plan detail first?: Structured cards. Note: Use API smoke testing as the local success bar.'
     );
 
     await claimAgentRunForWork(created.id);
@@ -358,6 +360,40 @@ describe('agent planning run service', () => {
     expect(detail.messages.at(-1)?.content).toContain('3 quick decisions');
     expect(detail.events.at(-1)?.type).toBe('input.required');
     expect(detail.events.at(-1)?.payload).toMatchObject({ reason: 'plan_quality_failed' });
+  });
+
+  it('sanitizes persisted planning context when retrying a failed run', async () => {
+    const { board, organization, user } = await createBoardAgentFixture();
+    const created = await createAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      userId: user.id,
+      data: {
+        prompt: 'i want to make a dashboard built with rust and nextjs to monitor my agents performance in realtime with heavy visual graphs showing realtime evals and tool calls',
+        runType: 'planning',
+      },
+    });
+    await failAgentRun(created.id, 'Initial provider validation failure');
+    const failedRun = await AgentRepository.getRun(created.id);
+    await db('agent_runs').where({ id: created.id }).update({
+      planning_context_json: {
+        ...failedRun!.planningContext,
+        inScope: ['Which agent telemetry records should be first-class in the plan?: Eval results, Tool calls, Run traces, Latency and cost, Failures. Track eval score, suite, pass/fail state, and model/run metadata. Track tool name, arguments summary, result status, latency, and errors. Track ordered agent steps, state transitions, and message timing. Track duration, token usage, queue time, and estimated spend. Track provider errors, tool failures, retries, and unresolved exceptions.'],
+        knownRequirements: ['Which agent telemetry records should be first-class in the plan?: Eval results, Tool calls, Run traces, Latency and cost, Failures. Track eval score, suite, pass/fail state, and model/run metadata. Track tool name, arguments summary, result status, latency, and errors. Track ordered agent steps, state transitions, and message timing. Track duration, token usage, queue time, and estimated spend. Track provider errors, tool failures, retries, and unresolved exceptions.'],
+      },
+    });
+
+    const retried = await retryAgentRun({
+      organizationId: organization.id,
+      boardId: board.id,
+      runId: created.id,
+      userId: user.id,
+    });
+
+    expect(retried.state).toBe('queued');
+    expect(retried.failureMessage).toBeNull();
+    expect(retried.planningContext.inScope[0]?.length).toBeLessThanOrEqual(240);
+    expect(retried.planningContext.knownRequirements[0]?.length).toBeLessThanOrEqual(240);
   });
 
   it('accepts free-form context while awaiting input and queues replanning', async () => {

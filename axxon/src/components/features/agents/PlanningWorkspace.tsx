@@ -104,6 +104,34 @@ function getWorkingCopy(run: AgentRunDetail) {
   return ['Agent is working', 'This thread updates when the board receives the next agent-run event.'];
 }
 
+// Groups the durable run lifecycle into the two user-facing stages shown by the workspace.
+function getRunPhase(state: AgentRunState): 'planning' | 'execution' {
+  return ['dispatching', 'dispatched', 'executing', 'awaiting_result_review', 'completed'].includes(state) ? 'execution' : 'planning';
+}
+
+// Renders the fixed planning-to-execution workflow so users always know where the run is and what is blocking it.
+function AgentWorkflowRail({ run }: { run: AgentRunDetail }) {
+  const phase = getRunPhase(run.state);
+  const planningDone = phase === 'execution' || run.state === 'awaiting_plan_review';
+  const questionCount = run.questions.length;
+  const executionLabel = run.state === 'awaiting_result_review' ? 'Ready for result review' : run.state === 'completed' ? 'Completed' : 'Execution update';
+  return (
+    <div className="sticky top-0 z-10 mb-5 rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel-strong)_94%,transparent)] p-3 shadow-[0_18px_40px_-34px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+        <span className={cn('rounded-lg px-3 py-2', phase === 'planning' ? 'bg-[var(--app-foreground)] text-[var(--app-panel)]' : 'bg-[var(--app-panel-soft)] app-text-muted')}><span className="mr-1.5">01</span> Planning</span>
+        <span className="h-px w-6 bg-[var(--app-border-strong)]" />
+        <span className={cn('rounded-lg px-3 py-2', phase === 'execution' ? 'bg-[var(--app-foreground)] text-[var(--app-panel)]' : 'bg-[var(--app-panel-soft)] app-text-muted')}><span className="mr-1.5">02</span> Execution</span>
+        <Badge className="ml-auto" variant={stateBadgeVariant(run.state)}>{stateLabels[run.state]}</Badge>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs app-text-muted">
+        <span className={cn('inline-flex items-center gap-1.5', planningDone && 'text-[var(--app-foreground)]')}><CheckCircle2 className="h-3.5 w-3.5" /> {planningDone ? 'Plan established' : 'Building plan'}</span>
+        {phase === 'planning' && questionCount > 0 ? <span className="inline-flex items-center gap-1.5 text-[var(--app-foreground)]"><MessageSquareText className="h-3.5 w-3.5" /> {questionCount} question{questionCount === 1 ? '' : 's'} waiting</span> : null}
+        {phase === 'execution' ? <span className="inline-flex items-center gap-1.5 text-[var(--app-foreground)]"><GitBranch className="h-3.5 w-3.5" /> {executionLabel}</span> : <span>{run.readiness?.unresolvedUnknowns?.length || 0} open planning unknowns</span>}
+      </div>
+    </div>
+  );
+}
+
 // Returns the persisted transcript, synthesizing the initial prompt only when older data has no messages.
 function getThreadMessages(run: AgentRunDetail): AgentRunMessage[] {
   if (run.messages.length > 0) return run.messages;
@@ -128,7 +156,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
   const [prompt, setPrompt] = useState('');
   const [feedback, setFeedback] = useState('');
   const [messageDraft, setMessageDraft] = useState('');
-  const socketRef = useSocket(selectedBoardId);
+  const { socketRef } = useSocket(selectedBoardId);
 
   const { data: boards = [], isLoading: isBoardsLoading } = useQuery<BoardBaseData[]>({
     queryKey: ['boards', organizationId],
@@ -299,6 +327,7 @@ export default function PlanningWorkspace({ organizationId }: { organizationId: 
             onRequestChanges={() => changesMutation.mutate()}
             onApprove={() => approveMutation.mutate()}
             onRetry={() => retryMutation.mutate()}
+            onPromptSuggestion={(value) => setPrompt(value)}
             isSubmitting={isAnyMutationPending}
           />
 
@@ -472,7 +501,7 @@ function ChatHeader({
             <Bot className="h-5 w-5 text-[var(--app-accent-strong)]" />
           </div>
           <div className="min-w-0">
-            <p className="app-kicker">Agent planning</p>
+            <p className="app-kicker">Axxon planning studio</p>
             <h1 className="truncate text-lg font-semibold sm:text-xl">
               {activeRun?.title ?? 'New planning run'}
             </h1>
@@ -541,6 +570,7 @@ function ChatThread({
   onRequestChanges,
   onApprove,
   onRetry,
+  onPromptSuggestion,
   isSubmitting,
 }: {
   run: AgentRunDetail | null;
@@ -552,6 +582,7 @@ function ChatThread({
   onRequestChanges: () => void;
   onApprove: () => void;
   onRetry: () => void;
+  onPromptSuggestion: (value: string) => void;
   isSubmitting: boolean;
 }) {
   if (isRunLoading) {
@@ -563,7 +594,7 @@ function ChatThread({
   }
 
   if (!run || isNewPlanMode) {
-    return <NewPlanEmptyState />;
+    return <NewPlanEmptyState onPromptSuggestion={onPromptSuggestion} />;
   }
 
   const [workingTitle, workingDescription] = getWorkingCopy(run);
@@ -572,6 +603,7 @@ function ChatThread({
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
       <div className="mx-auto flex max-w-4xl flex-col gap-5">
+        <AgentWorkflowRail run={run} />
         {messages.map((message) => (
           <ChatMessage
             key={message.id}
@@ -643,17 +675,21 @@ function ChatThread({
 }
 
 // Renders the centered empty state when composing a new run.
-function NewPlanEmptyState() {
+function NewPlanEmptyState({ onPromptSuggestion }: { onPromptSuggestion: (value: string) => void }) {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
-      <div className="max-w-md text-center">
+      <div className="max-w-2xl text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-accent)_12%,var(--app-panel))]">
           <MessageSquareText className="h-6 w-6 text-[var(--app-accent-strong)]" />
         </div>
-        <h2 className="mt-4 text-2xl font-semibold">Start with a planning prompt.</h2>
+        <p className="mt-4 app-kicker">Plan with Axxon</p>
+        <h2 className="mt-2 text-2xl font-semibold">Turn an idea into a reviewed plan.</h2>
         <p className="mt-2 text-sm leading-6 app-text-muted">
-          Pick the board context above, then describe what the agent should plan from the composer below.
+          Pick the board context, describe the outcome, and Axxon will clarify unknowns before it drafts a plan for review.
         </p>
+        <div className="mt-6 grid gap-2 text-left sm:grid-cols-3">
+          {['Design a new feature', 'Review an architecture change', 'Plan a technical refactor'].map((suggestion) => <button key={suggestion} type="button" onClick={() => onPromptSuggestion(`${suggestion}: `)} className="rounded-2xl border border-[var(--app-border)] bg-[color-mix(in_srgb,var(--app-panel)_72%,transparent)] px-4 py-3 text-sm transition-colors hover:border-[var(--app-border-strong)] hover:bg-[var(--app-panel-soft)]">{suggestion}<span className="mt-1 block text-xs app-text-muted">Start with a focused brief</span></button>)}
+        </div>
       </div>
     </div>
   );

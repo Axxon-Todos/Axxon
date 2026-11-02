@@ -2,7 +2,7 @@
 import db from '@/lib/db/db';
 import { requireBoardInOrganization, requireOrganizationOwner } from '@/lib/utils/authorization';
 import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/utils/apiErrors';
-import { publishBoardUpdate } from '@/lib/wsServer';
+import { publishBoardUpdate, publishProjectUpdate } from '@/lib/wsServer';
 import {
   applyClarificationAnswersToContext,
   applyPromptPlanningDefaults,
@@ -18,6 +18,7 @@ import {
   mergePlanningContext,
   normalizeAgentQuestionKey,
   requestAgentChangesCommandSchema,
+  sanitizePlanningContext,
   submitAgentInputCommandSchema,
   submitAgentMessageCommandSchema,
   type AgentActorType,
@@ -103,10 +104,14 @@ async function publishAgentRunUpdate(run: AgentRun | null) {
   if (!run) return;
 
   try {
-    await publishBoardUpdate(String(run.boardId), {
+    const publish = run.projectId ? publishProjectUpdate(String(run.projectId), {
+      type: 'agent:run:updated',
+      payload: { run },
+    }) : publishBoardUpdate(String(run.boardId), {
       type: 'agent:run:updated',
       payload: { run },
     });
+    await publish;
   } catch (error) {
     console.error('[AGENT_RUN_REALTIME_ERROR]', error);
   }
@@ -321,7 +326,13 @@ export async function approveAgentPlan(input: { organizationId: number; boardId:
 export async function retryAgentRun(input: { organizationId: number; boardId: number; runId: number; userId: number }) {
   const run = await getRunForBoard(input.organizationId, input.boardId, input.runId, input.userId);
   assertCapability(getAgentCapabilities(run.state, await getAccess(run, input.userId)), 'retry');
-  await transitionRun({ runId: run.id, event: 'run.retried', actorType: 'user', actorId: input.userId, update: { failureMessage: null } });
+  await transitionRun({
+    runId: run.id,
+    event: 'run.retried',
+    actorType: 'user',
+    actorId: input.userId,
+    update: { failureMessage: null, planningContext: sanitizePlanningContext(run.planningContext) },
+  });
   await AgentRepository.enqueueJob(run.id, 'prepare');
   return getAgentRunDetail({ organizationId: input.organizationId, boardId: input.boardId, runId: input.runId, userId: input.userId });
 }
@@ -550,10 +561,11 @@ export async function requestWorkerPlanQualityInput(runId: number, quality: Agen
 
     if (shouldAskStructuredPlanQualityQuestions(quality)) {
       const historicalQuestions = extractHistoricalQuestions(await AgentRepository.listToolCalls(locked.id, trx));
+      const planningContext = sanitizePlanningContext(locked.planningContext);
       const toolInput = {
         candidateQuestions: [],
         existingQuestions: [...historicalQuestions, ...locked.questions],
-        planningContext: locked.planningContext,
+        planningContext,
         prompt: locked.prompt,
         readiness,
       };
@@ -569,6 +581,7 @@ export async function requestWorkerPlanQualityInput(runId: number, quality: Agen
           state: nextState,
           questions: toolResult.questions,
           readiness,
+          planningContext,
           planArtifact: null,
           clarificationTurnCount: locked.clarificationTurnCount + 1,
         }, trx);
@@ -602,6 +615,7 @@ export async function requestWorkerPlanQualityInput(runId: number, quality: Agen
     const updated = await AgentRepository.updateRun(locked.id, locked.version, {
       state: nextState,
       questions: [],
+      planningContext: sanitizePlanningContext(locked.planningContext),
       readiness,
       planArtifact: null,
     }, trx);

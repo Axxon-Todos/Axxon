@@ -286,6 +286,126 @@ select {
   box-shadow: none;
 }
 
+/* Keeps React Flow nodes and controls readable against both product themes. */
+.architecture-flow .react-flow__node-default {
+  border: 1px solid var(--app-border-strong);
+  border-radius: 0.75rem;
+  background: var(--app-panel-strong);
+  color: var(--app-foreground-strong);
+  box-shadow: var(--app-shadow);
+}
+
+.architecture-flow .architecture-node {
+  min-width: 150px;
+  min-height: 64px;
+  height: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--app-border-strong);
+  border-radius: 0.85rem;
+  background: var(--app-panel-strong);
+  color: var(--app-foreground-strong);
+  box-shadow: var(--app-shadow);
+}
+.architecture-flow .architecture-node-context { opacity: 0.48; border-style: dashed; }
+.architecture-flow .architecture-node-context:hover, .architecture-flow .architecture-node.selected { opacity: 1; }
+.architecture-flow .architecture-node-context-label { margin-left: 0.45rem; border: 1px solid var(--app-border-strong); border-radius: 999px; padding: 0.1rem 0.3rem; font-size: 0.55rem; letter-spacing: 0.05em; text-transform: none; }
+.architecture-flow .architecture-node-handle { opacity: 0; transition: opacity 160ms ease, transform 160ms ease; }
+.architecture-flow .architecture-node:hover .architecture-node-handle, .architecture-flow .react-flow__node.selected .architecture-node-handle, .architecture-flow .react-flow__handle-connecting { opacity: 1; }
+.architecture-flow .architecture-node-handle:hover { transform: scale(1.35); }
+.architecture-node-palette-option { border: 1px solid transparent; transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease; }
+.architecture-node-palette-option:hover, .architecture-node-palette-option:focus-visible { border-color: var(--app-border-strong); background: var(--app-panel-soft); transform: translateX(2px); outline: none; }
+
+.architecture-flow .architecture-node-type { margin: 0; color: var(--app-muted); font-size: 0.62rem; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; }
+.architecture-flow .architecture-node-label { margin: 0.35rem 0 0; font-size: 0.82rem; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.architecture-flow .architecture-node-name-input { width: 100%; margin-top: 0.25rem; border: 1px solid var(--app-border-strong); border-radius: 0.45rem; background: var(--app-panel); color: var(--app-foreground-strong); padding: 0.3rem 0.4rem; font-size: 0.82rem; font-weight: 650; outline: none; }
+.architecture-flow .architecture-node-name-input:focus { border-color: var(--app-foreground); box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-foreground) 18%, transparent); }
+.architecture-flow .architecture-node-resizer { border-color: var(--app-foreground); }
+
+.architecture-flow .react-flow__edge-text {
+  fill: var(--app-foreground);
+}
+
+.architecture-flow .react-flow__edge-textbg { fill: var(--app-panel-strong); }
+
+.architecture-flow .architecture-flow-edge path {
+  stroke: var(--app-muted-strong);
+  stroke-width: 1.5;
+  opacity: 0.72;
+  transition: stroke 180ms ease, opacity 180ms ease, stroke-width 180ms ease;
+}
+
+.architecture-flow .architecture-flow-edge:hover path {
+  stroke: var(--app-foreground);
+  stroke-width: 2.25;
+  opacity: 1;
+}
+
+.architecture-flow-packet {
+  fill: var(--app-foreground-strong);
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--app-foreground) 65%, transparent));
+  pointer-events: none;
+}
+
+.architecture-flow-packet-secondary { opacity: 0.48; }
+
+.architecture-flow-edge-label {
+  position: absolute;
+  padding: 0.16rem 0.42rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-panel-strong) 90%, transparent);
+  color: var(--app-muted);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.architecture-flow-legend {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 4;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-panel-strong) 88%, transparent);
+  color: var(--app-muted);
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+
+.architecture-flow-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.architecture-flow-legend-dot { width: 0.42rem; height: 0.42rem; border-radius: 999px; background: var(--app-foreground-strong); box-shadow: 0 0 0.45rem var(--app-foreground); }
+.architecture-flow-legend-line { width: 0.75rem; height: 1px; background: var(--app-muted-strong); }
+
+.architecture-flow .react-flow__controls,
+.architecture-flow .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  background: var(--app-panel-strong);
+}
+
+.architecture-flow .react-flow__controls-button {
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-panel-strong);
+  color: var(--app-foreground);
+  fill: var(--app-foreground);
+}
+
+.architecture-flow .react-flow__minimap-mask { fill: color-mix(in srgb, var(--app-panel) 78%, transparent); }
+.architecture-flow .react-flow__minimap-node { fill: var(--app-muted-strong); stroke: var(--app-border-strong); }
+.architecture-flow .react-flow__attribution { background: var(--app-panel-strong); color: var(--app-muted); }
+@media (prefers-reduced-motion: reduce) {
+  .architecture-flow .architecture-node-handle, .architecture-node-palette-option { transition: none; }
+  .architecture-flow .architecture-flow-packet { display: none; }
+}
+
 .glass-button,
 .app-button {
   display: inline-flex;

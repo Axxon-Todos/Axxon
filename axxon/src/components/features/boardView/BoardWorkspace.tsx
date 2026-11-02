@@ -56,7 +56,7 @@ export default function BoardWorkspace({
   selectedSprint?: SprintBaseData | null
 }) {
   const { organizationId } = useOrganizationRouteParams()
-  const socketRef = useSocket(boardId)
+  const { socketRef } = useSocket(boardId)
   useBoardRealtime(organizationId, boardId, socketRef)
 
   const [activeView, setActiveView] = useState<BoardDisplayView>('list')

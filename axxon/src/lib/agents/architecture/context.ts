@@ -1,5 +1,6 @@
 // Builds the smallest useful architecture context package for a project-agent request.
 import { Architecture } from '@/lib/models/architecture';
+import { ArchitectureRequirements } from '@/lib/models/architectureRequirements';
 import type { ArchitectureAgentContextPackage, ArchitectureAgentTarget } from './contracts';
 
 export async function buildArchitectureContext(
@@ -34,5 +35,17 @@ export async function buildArchitectureContext(
       relationships: graph.relationships.filter((relationship) => componentIds.has(relationship.source_component_id) || componentIds.has(relationship.target_component_id)),
     },
     constraints: selectedComponent?.constraints || [],
+    requirements: (await ArchitectureRequirements.list(projectId)).map((requirement) => ({
+      key: requirement.key,
+      title: requirement.title,
+      statement: requirement.statement,
+      category: requirement.category,
+      priority: requirement.priority,
+      status: requirement.status,
+      source: requirement.source,
+      rationale: requirement.rationale,
+      blocking: requirement.blocking,
+    })),
+    reviewerFeedback: [],
   };
 }

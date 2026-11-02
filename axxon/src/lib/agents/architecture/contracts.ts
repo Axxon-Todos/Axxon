@@ -24,6 +24,20 @@ export type ArchitectureAgentContextPackage = {
     relationships: ArchitectureRelationship[];
   };
   constraints: string[];
+  requirements: ArchitectureRequirementContext[];
+  reviewerFeedback: string[];
+};
+
+export type ArchitectureRequirementContext = {
+  key: string;
+  title: string;
+  statement: string;
+  category: string;
+  priority: string;
+  status: string;
+  source: string;
+  rationale: string | null;
+  blocking: boolean;
 };
 
 export type ArchitectureOperation =
@@ -41,4 +55,18 @@ export type ArchitectureChangeProposal = {
   summary: string;
   assumptions: string[];
   risks: string[];
+};
+
+export type ArchitectureSemanticDiff = {
+  added: Array<{ entityType: 'component' | 'relationship'; id: string; name?: string; type?: string }>;
+  modified: Array<{ entityType: 'component' | 'relationship'; id: string; fields: string[] }>;
+  removed: Array<{ entityType: 'component' | 'relationship'; id: string; name?: string; type?: string }>;
+  affected: Array<{ entityType: 'component' | 'relationship'; id: string; reason: string }>;
+};
+
+export type ArchitectureImpactFinding = {
+  severity: 'info' | 'warning' | 'blocking';
+  entityType: 'component' | 'relationship' | 'requirement';
+  entityId: string;
+  message: string;
 };

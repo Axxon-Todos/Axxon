@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyClarificationAnswersToContext,
+  agentPlanningContextSchema,
   createEmptyPlanningContext,
   type AgentQuestion,
 } from '@/lib/agents/domain';
@@ -46,14 +47,51 @@ describe('planning clarification memory', () => {
     });
 
     expect(context.inScope).toEqual([
-      'What should the first release boundary be?: Focused MVP. Ship one core workflow with minimum supporting pieces.',
+      'What should the first release boundary be?: Focused MVP.',
     ]);
     expect(context.acceptanceCriteria).toEqual([
-      'What should count as success for the first release?: End-to-end demo. The first release proves the core workflow from input to output.',
+      'What should count as success for the first release?: End-to-end demo.',
     ]);
     expect(context.knownRequirements).toEqual([
-      'What should the first release boundary be?: Focused MVP. Ship one core workflow with minimum supporting pieces.',
-      'What should count as success for the first release?: End-to-end demo. The first release proves the core workflow from input to output.',
+      'What should the first release boundary be?: Focused MVP.',
+      'Focused MVP: Ship one core workflow with minimum supporting pieces.',
+      'What should count as success for the first release?: End-to-end demo.',
+      'End-to-end demo: The first release proves the core workflow from input to output.',
     ]);
+  });
+
+  it('keeps multi-select telemetry answers inside planning context schema limits', () => {
+    const telemetryQuestion: AgentQuestion = {
+      questionKey: 'agent-telemetry-scope',
+      category: 'scope',
+      prompt: 'Which agent telemetry records should be first-class in the plan?',
+      whyThisMatters: 'The implementation plan needs structured telemetry priorities instead of a vague monitoring requirement.',
+      required: true,
+      blocking: true,
+      allowMultiple: true,
+      options: [
+        { optionKey: 'eval-results', label: 'Eval results', description: 'Track eval score, suite, pass/fail state, and model/run metadata.' },
+        { optionKey: 'tool-calls', label: 'Tool calls', description: 'Track tool name, arguments summary, result status, latency, and errors.' },
+        { optionKey: 'run-traces', label: 'Run traces', description: 'Track ordered agent steps, state transitions, and message timing.' },
+        { optionKey: 'latency-cost', label: 'Latency and cost', description: 'Track duration, token usage, queue time, and estimated spend.' },
+        { optionKey: 'failures', label: 'Failures', description: 'Track provider errors, tool failures, retries, and unresolved exceptions.' },
+      ],
+    };
+    const context = applyClarificationAnswersToContext({
+      context: createEmptyPlanningContext(),
+      questions: [telemetryQuestion],
+      answers: [{
+        questionKey: 'agent-telemetry-scope',
+        selectedOptionKeys: ['eval-results', 'tool-calls', 'run-traces', 'latency-cost', 'failures'],
+      }],
+    });
+
+    expect(() => agentPlanningContextSchema.parse(context)).not.toThrow();
+    expect(context.inScope[0]).toBe('Which agent telemetry records should be first-class in the plan?: Eval results, Tool calls, Run traces, Latency and cost, Failures.');
+    expect(context.knownRequirements).toEqual(expect.arrayContaining([
+      'Tool calls: Track tool name, arguments summary, result status, latency, and errors.',
+      'Failures: Track provider errors, tool failures, retries, and unresolved exceptions.',
+    ]));
+    expect(context.knownRequirements.every((requirement) => requirement.length <= 240)).toBe(true);
   });
 });

@@ -23,6 +23,7 @@ const transitions: Transition[] = [
   { event: 'planning.superseded', from: 'planning', to: 'queued' },
   { event: 'plan.generated', from: 'planning', to: 'awaiting_plan_review' },
   { event: 'plan.approved', from: 'awaiting_plan_review', to: 'dispatching' },
+  { event: 'architecture.applied', from: 'awaiting_plan_review', to: 'completed' },
   { event: 'changes.requested', from: 'awaiting_plan_review', to: 'queued' },
   { event: 'dispatch.delivered', from: 'dispatching', to: 'dispatched' },
   { event: 'execution.started', from: 'dispatched', to: 'executing' },

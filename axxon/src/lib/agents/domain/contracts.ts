@@ -1,4 +1,5 @@
 // Defines the stable agent-run contracts shared by routes, services, persistence, and workers.
+import type { ArchitectureChangeProposal } from '@/lib/agents/architecture/contracts';
 export const agentRunTypes = ['planning', 'coding', 'planning_execution'] as const;
 
 export type AgentRunType = (typeof agentRunTypes)[number];
@@ -32,7 +33,9 @@ export type AgentRunEventType =
   | 'planning.superseded'
   | 'plan.generated'
   | 'plan.approved'
+  | 'architecture.applied'
   | 'changes.requested'
+  | 'architecture.progress'
   | 'dispatch.delivered'
   | 'execution.started'
   | 'result.review_requested'
@@ -235,6 +238,7 @@ export type AgentPlanArtifact = {
   successCriteria: string[];
   openQuestions: string[];
   notes: string[];
+  architectureProposal?: ArchitectureChangeProposal;
   quality?: AgentPlanningQuality;
 };
 

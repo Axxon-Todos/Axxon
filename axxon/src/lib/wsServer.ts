@@ -7,6 +7,8 @@ import {
   getRedisUrl,
 } from '@/lib/env/connectionConfig';
 import { BoardMembers } from '@/lib/models/boardMembers';
+import { Projects } from '@/lib/models/projects';
+import { requireProjectMember } from '@/lib/utils/authorization';
 import {
   getSessionTokenFromCookieHeader,
   verifySessionToken,
@@ -17,6 +19,7 @@ let sub: Redis | null = null;
 let isSubscribed = false;
 let isRedisForwarderRegistered = false;
 const activeIoServers = new Set<Server>();
+const projectPresence = new Map<string, Map<number, Record<string, unknown>>>();
 const unauthorizedHandshakeAttempts = new Map<
   string,
   {
@@ -208,7 +211,7 @@ export function createWsServer(server: http.Server) {
     isSubscribed = true;
 
     // Subscribe to all Redis channels
-    subscriber.psubscribe("board:*", "user:*", (err) => {
+    subscriber.psubscribe("board:*", "project:*", "user:*", (err) => {
       if (err) console.error("Redis psubscribe error:", err);
       else console.log("Subscribed to Redis channels: board:* and user:*");
     });
@@ -219,6 +222,7 @@ export function createWsServer(server: http.Server) {
     socket.join(`user:${socket.data.userId}`);
 
     let currentBoard: string | null = null;
+    let currentProject: string | null = null;
 
     // Join a board room (only if different from current)
     socket.on("joinBoard", async (boardId: string) => {
@@ -269,8 +273,72 @@ export function createWsServer(server: http.Server) {
       }
     });
 
+    socket.on("joinProject", async (projectId: string) => {
+      try {
+        const numericProjectId = Number(projectId);
+        const project = await Projects.getById(numericProjectId);
+        if (!Number.isFinite(numericProjectId) || !project) {
+          socket.emit('socket:error', { error: 'Forbidden' });
+          return;
+        }
+        await requireProjectMember(project.organization_id, numericProjectId, Number(socket.data.userId));
+        if (currentProject === String(numericProjectId)) return;
+        if (currentProject) socket.leave(`project:${currentProject}`);
+        socket.join(`project:${numericProjectId}`);
+        currentProject = String(numericProjectId);
+        const members = projectPresence.get(currentProject) || new Map<number, Record<string, unknown>>();
+        projectPresence.set(currentProject, members);
+        socket.emit('project:presence:snapshot', [...members.values()]);
+      } catch (error) {
+        console.error(`Socket ${socket.id} failed to join project ${projectId}:`, error);
+        socket.emit('socket:error', { error: 'Failed to join project' });
+      }
+    });
+
+    socket.on("leaveProject", () => {
+      if (currentProject) {
+        const members = projectPresence.get(currentProject);
+        members?.delete(Number(socket.data.userId));
+        if (members?.size === 0) projectPresence.delete(currentProject);
+      }
+      if (currentProject) socket.leave(`project:${currentProject}`);
+      currentProject = null;
+    });
+
+    socket.on('project:presence', async (presence: Record<string, unknown>) => {
+      if (!currentProject) return;
+      const safePresence = {
+        userId: Number(socket.data.userId),
+        componentId: typeof presence?.componentId === 'string' ? presence.componentId : null,
+        relationshipId: typeof presence?.relationshipId === 'string' ? presence.relationshipId : null,
+        viewKey: typeof presence?.viewKey === 'string' ? presence.viewKey : null,
+        status: presence?.status === 'idle' ? 'idle' : 'active',
+      };
+      const members = projectPresence.get(currentProject) || new Map<number, Record<string, unknown>>();
+      if (safePresence.status === 'idle') members.delete(safePresence.userId);
+      else members.set(safePresence.userId, safePresence);
+      projectPresence.set(currentProject, members);
+      await publishProjectUpdate(currentProject, { type: 'project:presence:updated', payload: safePresence }).catch((error) => console.error('[WS_PROJECT_PRESENCE_ERROR]', error));
+    });
+
+    socket.on('project:selection', async (selection: Record<string, unknown>) => {
+      if (!currentProject) return;
+      const payload = {
+        userId: Number(socket.data.userId),
+        componentId: typeof selection?.componentId === 'string' ? selection.componentId : null,
+        relationshipId: typeof selection?.relationshipId === 'string' ? selection.relationshipId : null,
+        viewKey: typeof selection?.viewKey === 'string' ? selection.viewKey : null,
+      };
+      await publishProjectUpdate(currentProject, { type: 'project:selection:updated', payload }).catch((error) => console.error('[WS_PROJECT_SELECTION_ERROR]', error));
+    });
+
     // Handle disconnects
     socket.on("disconnect", () => {
+      if (currentProject) {
+        const members = projectPresence.get(currentProject);
+        members?.delete(Number(socket.data.userId));
+        if (members?.size === 0) projectPresence.delete(currentProject);
+      }
       console.log(`Client disconnected: ${socket.id}`);
     });
   });
@@ -282,6 +350,12 @@ export function createWsServer(server: http.Server) {
 export async function publishBoardUpdate(boardId: string, payload: unknown) {
   console.log(`Publishing update to Redis board:${boardId}`, payload);
   await getPublisher().publish(`board:${boardId}`, JSON.stringify(payload));
+}
+
+// Publishes updates to the authenticated project room used by architecture workspaces.
+export async function publishProjectUpdate(projectId: string | number, payload: unknown) {
+  console.log(`Publishing update to Redis project:${projectId}`, payload);
+  await getPublisher().publish(`project:${projectId}`, JSON.stringify(payload));
 }
 
 // Helper to publish user-scoped events so creator-owned resources stay private.
@@ -301,7 +375,7 @@ export async function closeWsInfrastructure() {
   if (sub) {
     try {
       if (isSubscribed) {
-        await sub.punsubscribe("board:*", "user:*");
+        await sub.punsubscribe("board:*", "project:*", "user:*");
       }
       sub.removeAllListeners("pmessage");
       await sub.quit();

@@ -122,6 +122,14 @@ export type AgentPlanArtifact = {
   successCriteria: string[];
   openQuestions: string[];
   notes: string[];
+  architectureProposal?: {
+    intent: string;
+    baseRevisionId: number;
+    operations: Array<Record<string, unknown>>;
+    summary: string;
+    assumptions: string[];
+    risks: string[];
+  };
   quality?: AgentPlanningQuality;
 };
 

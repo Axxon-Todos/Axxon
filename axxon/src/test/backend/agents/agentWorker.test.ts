@@ -63,6 +63,29 @@ function createCompleteAnalysisPayload() {
   };
 }
 
+// Builds an analysis payload that routes through clarification tool validation.
+function createAskAnalysisPayload() {
+  return {
+    title: 'Payment reconciliation ledger exceptions',
+    summary: 'Clarify payment reconciliation ledger exception handling.',
+    assistantMessage: null,
+    contextPatch: {
+      objective: 'Build a payment reconciliation ledger exception workflow for fintech operators.',
+      inScope: ['Payment reconciliation ledger exception workflow'],
+      planningConfidence: 0.55,
+    },
+    knownRequirements: [
+      'Fintech operators need payment reconciliation ledger exception review.',
+    ],
+    unresolvedUnknowns: ['Need a bounded exception review workflow.'],
+    blockingUnknowns: ['Need a bounded exception review workflow.'],
+    resolvedQuestionKeys: [],
+    candidateQuestions: [],
+    confidence: 0.55,
+    decision: { action: 'ask_questions', reason: 'low_confidence' },
+  };
+}
+
 // Builds a final artifact with recoverable object arrays that should still pass quality review.
 function createRecoverablePlanArtifactPayload() {
   return {
@@ -270,5 +293,52 @@ describe('agent worker provider recovery', () => {
     expect(job?.state).toBe('failed');
     expect(jobError.category).toBe('provider_validation');
     expect(jobError.providerValidation.issuePaths).toContain('assumptions.0');
+  });
+
+  it('stores structured diagnostics for worker state validation failures', async () => {
+    const { run } = await createWorkerFixture();
+    await db('agent_runs').where({ id: run.id }).update({
+      questions_json: JSON.stringify([{
+        questionKey: 'invalid-existing-question',
+        category: 'scope',
+        prompt: 'x'.repeat(400),
+        whyThisMatters: 'The worker should not expose raw validation JSON.',
+        required: true,
+        blocking: true,
+        options: [
+          { optionKey: 'small', label: 'Small', description: 'Keep the change focused.' },
+          { optionKey: 'medium', label: 'Medium', description: 'Include adjacent workflow updates.' },
+          { optionKey: 'large', label: 'Large', description: 'Update the whole feature area.' },
+        ],
+      }]),
+    });
+    const mockedFetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ message: { content: JSON.stringify(createAskAnalysisPayload()) } }),
+    });
+    vi.stubGlobal('fetch', mockedFetch);
+
+    await processNextAgentJob();
+    const failedRun = await AgentRepository.getRun(run.id);
+    const events = await AgentRepository.listEvents(run.id);
+    const job = await db('agent_jobs').where({ run_id: run.id }).first();
+    const jobError = JSON.parse(String(job?.error_message)) as {
+      category: string;
+      validation: { phase: string; issuePaths: string[]; retryable: boolean };
+    };
+
+    expect(failedRun?.state).toBe('failed');
+    expect(failedRun?.failureMessage).toBe('The planning run contained invalid structured state. Retry this run to repair saved context and generate the plan again.');
+    expect(failedRun?.failureMessage).not.toContain('"code"');
+    expect(events.at(-1)?.payload).toMatchObject({
+      category: 'worker_state_validation',
+      validation: {
+        phase: 'worker_state_validation',
+        retryable: true,
+      },
+    });
+    expect(job?.state).toBe('failed');
+    expect(jobError.category).toBe('worker_state_validation');
+    expect(jobError.validation.issuePaths).toContain('existingQuestions.0.prompt');
   });
 });

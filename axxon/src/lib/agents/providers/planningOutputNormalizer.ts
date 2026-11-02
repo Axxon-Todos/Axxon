@@ -25,6 +25,23 @@ const STRING_ARRAY_FIELDS = [
 ] as const;
 
 const PREFERRED_STRING_KEYS = ['text', 'description', 'title', 'label', 'criterion'] as const;
+const IMPLEMENTATION_DETAIL_FIELDS = [
+  'dataFlow',
+  'tooling',
+  'integrations',
+  'realtimeStrategy',
+  'storageAndRetention',
+  'observability',
+  'securityAndAccess',
+] as const;
+const TECHNICAL_DECISION_SOURCE_ALIASES: Record<string, 'explicit' | 'clarified' | 'assumed'> = {
+  user: 'clarified',
+  'user-provided': 'clarified',
+  'user provided': 'clarified',
+  clarification: 'clarified',
+  inferred: 'assumed',
+  default: 'assumed',
+};
 
 const ASK_QUESTION_REASON_ORDER: AgentPlanningDecisionReason[] = [
   'missing_objective',
@@ -48,6 +65,12 @@ function isNonEmptyString(value: unknown): value is string {
 function truncateDiagnostic(value: string) {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length > 240 ? `${normalized.slice(0, 237)}...` : normalized;
+}
+
+// Trims schema-bound provider text before strict validation.
+function limitProviderText(value: string, maxLength: number) {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length > maxLength ? normalized.slice(0, maxLength).trim() : normalized;
 }
 
 // Extracts valid enum members from a copied placeholder such as "a|b|c".
@@ -153,6 +176,22 @@ function normalizeTechnicalDecision(entry: unknown, diagnostics: string[]) {
   if (normalizedEntry.source === 'explicit|clarified|assumed') {
     normalizedEntry.source = 'assumed';
     diagnostics.push('Normalized copied technicalDecisions.source enum union to "assumed".');
+  } else if (typeof normalizedEntry.source === 'string') {
+    const sourceAlias = TECHNICAL_DECISION_SOURCE_ALIASES[normalizedEntry.source.trim().toLowerCase()];
+    if (sourceAlias) {
+      diagnostics.push(`Normalized technicalDecisions.source "${normalizedEntry.source}" to "${sourceAlias}".`);
+      normalizedEntry.source = sourceAlias;
+    }
+  }
+
+  if (typeof normalizedEntry.area === 'string') {
+    normalizedEntry.area = limitProviderText(normalizedEntry.area, 120);
+  }
+  if (typeof normalizedEntry.choice === 'string') {
+    normalizedEntry.choice = limitProviderText(normalizedEntry.choice, 240);
+  }
+  if (typeof normalizedEntry.rationale === 'string') {
+    normalizedEntry.rationale = limitProviderText(normalizedEntry.rationale, 320);
   }
 
   return normalizedEntry;
@@ -207,7 +246,7 @@ function normalizeStringArrayEntry(entry: unknown): string | unknown | null {
 }
 
 // Normalizes recoverable string-array entries while preserving unrecoverable objects for strict validation failure.
-function normalizeStringArray(value: unknown, fieldPath: string, diagnostics: string[]) {
+function normalizeStringArray(value: unknown, fieldPath: string, diagnostics: string[], maxLength = 240) {
   if (!Array.isArray(value)) return value;
 
   const normalized = value.flatMap((entry, index) => {
@@ -219,10 +258,49 @@ function normalizeStringArray(value: unknown, fieldPath: string, diagnostics: st
     if (nextEntry !== entry) {
       diagnostics.push(`Normalized ${fieldPath}[${index}] to "${truncateDiagnostic(String(nextEntry))}".`);
     }
-    return [nextEntry];
+    if (typeof nextEntry !== 'string') return [nextEntry];
+
+    const limitedEntry = limitProviderText(nextEntry, maxLength);
+    if (limitedEntry !== nextEntry.trim()) {
+      diagnostics.push(`Truncated ${fieldPath}[${index}] to ${maxLength} characters.`);
+    }
+    return [limitedEntry];
   });
 
   return normalized;
+}
+
+// Applies string-array recovery to implementation-detail buckets required by monitoring plans.
+function normalizeImplementationDetails(value: unknown, diagnostics: string[]) {
+  if (!isRecord(value)) return value;
+
+  const normalized = { ...value };
+  for (const field of IMPLEMENTATION_DETAIL_FIELDS) {
+    normalized[field] = normalizeStringArray(normalized[field], `implementationDetails.${field}`, diagnostics);
+  }
+
+  return normalized;
+}
+
+// Maps local-model priority aliases into the public task priority enum.
+function normalizeTaskPriority(value: unknown, diagnostics: string[]) {
+  if (typeof value !== 'string') return value;
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (['critical', 'urgent', 'p0', 'p1'].includes(normalizedValue)) {
+    diagnostics.push(`Normalized task priority "${value}" to "high".`);
+    return 'high';
+  }
+  if (['normal', 'p2'].includes(normalizedValue)) {
+    diagnostics.push(`Normalized task priority "${value}" to "medium".`);
+    return 'medium';
+  }
+  if (['minor', 'p3', 'p4'].includes(normalizedValue)) {
+    diagnostics.push(`Normalized task priority "${value}" to "low".`);
+    return 'low';
+  }
+
+  return value;
 }
 
 // Applies string-array recovery to implementation task acceptance criteria.
@@ -234,15 +312,30 @@ function normalizeImplementationPhases(value: unknown, diagnostics: string[]) {
 
     return {
       ...phase,
+      id: typeof phase.id === 'string' ? limitProviderText(phase.id, 80) : phase.id,
+      title: typeof phase.title === 'string' ? limitProviderText(phase.title, 200) : phase.title,
+      summary: typeof phase.summary === 'string' ? limitProviderText(phase.summary, 500) : phase.summary,
       tasks: phase.tasks.map((task, taskIndex) => {
         if (!isRecord(task)) return task;
 
         return {
           ...task,
+          id: typeof task.id === 'string' ? limitProviderText(task.id, 80) : task.id,
+          title: typeof task.title === 'string' ? limitProviderText(task.title, 200) : task.title,
+          description: typeof task.description === 'string' ? limitProviderText(task.description, 600) : task.description,
+          type: typeof task.type === 'string' ? limitProviderText(task.type, 80) : task.type,
+          priority: normalizeTaskPriority(task.priority, diagnostics),
+          dependencyIds: normalizeStringArray(
+            task.dependencyIds,
+            `implementationPhases[${phaseIndex}].tasks[${taskIndex}].dependencyIds`,
+            diagnostics,
+            80
+          ),
           acceptanceCriteria: normalizeStringArray(
             task.acceptanceCriteria,
             `implementationPhases[${phaseIndex}].tasks[${taskIndex}].acceptanceCriteria`,
-            diagnostics
+            diagnostics,
+            240
           ),
         };
       }),
@@ -334,8 +427,12 @@ export function normalizeProviderPlanArtifact(value: unknown): ProviderOutputNor
   const normalized = { ...value };
 
   for (const field of STRING_ARRAY_FIELDS) {
-    normalized[field] = normalizeStringArray(normalized[field], field, diagnostics);
+    normalized[field] = normalizeStringArray(normalized[field], field, diagnostics, field === 'affectedAreas' ? 120 : 240);
   }
+
+  if (typeof normalized.summary === 'string') normalized.summary = limitProviderText(normalized.summary, 1200);
+  if (typeof normalized.objective === 'string') normalized.objective = limitProviderText(normalized.objective, 1200);
+  normalized.implementationDetails = normalizeImplementationDetails(normalized.implementationDetails, diagnostics);
 
   if (isRecord(normalized.scope)) {
     normalized.scope = {

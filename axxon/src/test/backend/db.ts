@@ -1,6 +1,9 @@
 import db from '@/lib/db/db';
 
 export const TEST_TABLES = [
+  'architecture_collaboration_events',
+  'architecture_comments',
+  'architecture_comment_threads',
   'architecture_view_nodes',
   'architecture_views',
   'architecture_relationships',

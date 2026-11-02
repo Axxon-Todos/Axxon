@@ -21,4 +21,10 @@ describe('architecture agent operations', () => {
   it('rejects operations that leave dangling relationships', () => {
     expect(() => applyArchitectureOperations(graph, [{ type: 'add_relationship', relationship: { id: 'bad', source_component_id: 'api', target_component_id: 'missing', type: 'calls', label: null, metadata: {} } }])).toThrow('unknown component');
   });
+
+  it('normalizes JSONB fields returned as serialized model values', () => {
+    const next = applyArchitectureOperations(graph, [{ type: 'add_component', component: { id: 'serialized', type: 'service', name: 'Serialized', description: null, parent_id: null, responsibilities: '[]' as unknown as string[], technologies: '[]' as unknown as string[], requirements: '[]' as unknown as string[], constraints: '[]' as unknown as string[], metadata: '{}' as unknown as Record<string, unknown> } }]);
+    expect(next.components[1].responsibilities).toEqual([]);
+    expect(next.components[1].metadata).toEqual({});
+  });
 });

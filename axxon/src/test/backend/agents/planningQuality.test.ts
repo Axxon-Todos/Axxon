@@ -660,7 +660,7 @@ describe('planning quality evaluation', () => {
     });
 
     expect(context.inScope[0]).toContain('Eval results, Tool calls, Run traces');
-    expect(context.knownRequirements[0]).toContain('Track tool name, status, latency, and errors.');
+    expect(context.knownRequirements).toContain('Tool calls: Track tool name, status, latency, and errors.');
   });
 
   it('fails generic phase-template plans before review', () => {
