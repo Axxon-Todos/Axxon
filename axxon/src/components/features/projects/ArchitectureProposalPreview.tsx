@@ -1,6 +1,8 @@
 // Projects the complete architecture change set in memory for review without mutating canonical state.
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ArchitectureOperation } from '@/lib/agents/architecture/contracts';
 import { applyArchitectureOperations } from '@/lib/agents/architecture/operations';
 import type { ArchitectureComponent, ArchitectureGraph, ArchitectureRelationship } from '@/lib/types/architectureTypes';
@@ -10,6 +12,7 @@ type ArchitectureProposalPreviewProps = {
   graph: ArchitectureGraph;
   operations: ArchitectureOperation[];
   proposedGraph?: ArchitectureGraph;
+  mode?: 'panel' | 'canvas';
 };
 
 export type ArchitectureProposalTopology = {
@@ -56,7 +59,12 @@ function buildGhostGraph(current: ArchitectureGraph, proposed: ArchitectureGraph
 }
 
 // Renders the projected graph topology; the saved architecture remains unchanged until approval.
-export function ArchitectureProposalPreview({ graph, operations, proposedGraph }: ArchitectureProposalPreviewProps) {
+export function ArchitectureProposalPreview({ graph, operations, proposedGraph, mode = 'canvas' }: ArchitectureProposalPreviewProps) {
+  const [canvasHost, setCanvasHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (mode === 'canvas') setCanvasHost(document.querySelector<HTMLElement>('.architecture-flow'));
+  }, [mode]);
   let topology: ArchitectureProposalTopology;
   try {
     topology = buildArchitectureProposalTopology(graph, operations, proposedGraph);
@@ -77,6 +85,21 @@ export function ArchitectureProposalPreview({ graph, operations, proposedGraph }
       <p className="mt-2 text-sm app-error-text">{error instanceof Error ? error.message : 'The proposed graph could not be rendered.'}</p>
     </div>;
   }
+  if (mode === 'canvas') {
+    if (!canvasHost) return null;
+    return createPortal(<div className="absolute inset-0 z-10 bg-[var(--app-panel)]" aria-label="Proposed architecture canvas">
+      <ReactFlow nodes={ghost.nodes} edges={ghost.edges} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} zoomOnDoubleClick={false} fitView fitViewOptions={{ padding: 0.2 }} proOptions={{ hideAttribution: true }}>
+        <Background color="var(--app-border)" gap={24} />
+        <MiniMap pannable={false} zoomable={false} />
+      </ReactFlow>
+      <div className="pointer-events-none absolute left-4 top-4 rounded-xl border border-[var(--app-border-strong)] bg-[var(--app-panel-soft)] px-3 py-2 shadow-lg">
+        <p className="app-kicker">Before approval</p>
+        <p className="mt-1 text-sm font-semibold">Ghost architecture · not applied</p>
+        <p className="mt-1 text-xs app-text-muted">Dashed nodes are new in this proposal.</p>
+      </div>
+    </div>, canvasHost);
+  }
+
   return <div className="mt-5 rounded-2xl border border-[var(--app-border)] bg-[var(--app-panel-soft)] p-4" aria-label="Proposed architecture preview">
     <div className="flex items-center justify-between gap-3"><div><p className="app-kicker">Before approval</p><h3 className="mt-1 text-sm font-semibold">Projected topology</h3></div><span className="text-xs app-text-muted">{topology.componentCount} components · {topology.relationshipCount} connections</span></div>
     <div className="relative mt-4 h-[22rem] overflow-hidden rounded-xl border border-[var(--app-border)] bg-[var(--app-panel)]" aria-label="Ghost graph preview"><ReactFlow nodes={ghost.nodes} edges={ghost.edges} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} zoomOnDoubleClick={false} fitView fitViewOptions={{ padding: 0.2 }} proOptions={{ hideAttribution: true }}><Background color="var(--app-border)" gap={20} /><MiniMap pannable={false} zoomable={false} /></ReactFlow><span className="pointer-events-none absolute left-3 top-3 rounded-full border border-[var(--app-border-strong)] bg-[var(--app-panel-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] app-text-muted">Ghost preview · not applied</span></div>

@@ -1,5 +1,6 @@
 // Persists and validates the normalized architecture draft and immutable revision snapshots.
 import knex from '@/lib/db/db';
+import { randomUUID } from 'node:crypto';
 import type { Knex } from 'knex';
 import type { ArchitectureDraftInput, ArchitectureGraph, ArchitectureRevision } from '@/lib/types/architectureTypes';
 import { validateArchitectureDraft } from '@/lib/utils/architectureValidation';
@@ -28,6 +29,44 @@ function relationshipRow(relationship: Record<string, unknown>, projectId: numbe
   return { ...relationship, project_id: projectId, metadata: jsonObject(relationship.metadata), created_at: now.now(), updated_at: now.now() };
 }
 
+// Remaps provider or draft identifiers that exceed the 36-character database contract while preserving graph references.
+export function normalizeArchitectureGraphIds(graph: ArchitectureGraph): ArchitectureGraph {
+  const componentIdMap = new Map<string, string>();
+  const relationshipIdMap = new Map<string, string>();
+  const normalizeId = (id: string, map: Map<string, string>) => {
+    if (id.length <= 36) return id;
+    const normalized = randomUUID();
+    map.set(id, normalized);
+    return normalized;
+  };
+
+  const components = graph.components.map((component) => ({
+    ...component,
+    id: normalizeId(component.id, componentIdMap),
+  }));
+  const relationships = graph.relationships.map((relationship) => ({
+    ...relationship,
+    id: normalizeId(relationship.id, relationshipIdMap),
+  }));
+
+  return {
+    ...graph,
+    components: components.map((component) => ({
+      ...component,
+      parent_id: component.parent_id ? componentIdMap.get(component.parent_id) || component.parent_id : null,
+    })),
+    relationships: relationships.map((relationship) => ({
+      ...relationship,
+      source_component_id: componentIdMap.get(relationship.source_component_id) || relationship.source_component_id,
+      target_component_id: componentIdMap.get(relationship.target_component_id) || relationship.target_component_id,
+    })),
+    views: graph.views.map((view) => ({
+      ...view,
+      nodes: view.nodes.map((node) => ({ ...node, component_id: componentIdMap.get(node.component_id) || node.component_id })),
+    })),
+  };
+}
+
 export class Architecture {
   static async getGraph(projectId: number): Promise<ArchitectureGraph> {
     const [components, relationships, views] = await Promise.all([
@@ -52,10 +91,11 @@ export class Architecture {
       await trx('architecture_view_nodes').whereIn('view_id', trx('architecture_views').select('id').where({ project_id: projectId })).del();
       await trx('architecture_relationships').where({ project_id: projectId }).del();
       await trx('architecture_components').where({ project_id: projectId }).del();
-      if (input.components.length) await trx('architecture_components').insert(input.components.map((component) => componentRow(component as unknown as Record<string, unknown>, projectId, trx.fn)));
-      if (input.relationships.length) await trx('architecture_relationships').insert(input.relationships.map((relationship) => relationshipRow(relationship as unknown as Record<string, unknown>, projectId, trx.fn)));
+      const normalizedGraph = normalizeArchitectureGraphIds(input as unknown as ArchitectureGraph);
+      if (normalizedGraph.components.length) await trx('architecture_components').insert(normalizedGraph.components.map((component) => componentRow(component as unknown as Record<string, unknown>, projectId, trx.fn)));
+      if (normalizedGraph.relationships.length) await trx('architecture_relationships').insert(normalizedGraph.relationships.map((relationship) => relationshipRow(relationship as unknown as Record<string, unknown>, projectId, trx.fn)));
       const viewRows = await trx('architecture_views').where({ project_id: projectId }).select('id', 'key');
-      for (const view of input.views) {
+      for (const view of normalizedGraph.views) {
         const row = viewRows.find((candidate) => candidate.key === view.key);
         if (!row || !view.nodes.length) continue;
         await trx('architecture_view_nodes').insert(view.nodes.map((node) => ({ ...node, view_id: row.id })));
@@ -86,7 +126,7 @@ export class Architecture {
       const current = await transaction('architecture_revisions').where({ id: draft.base_revision_id }).first();
       if (!current || Number(current.project_id) !== projectId) throw new Error('Architecture base revision not found for project');
       const graph = await this.getGraphWithTransaction(projectId, transaction);
-      const nextGraph = validateArchitectureProposal(graph, proposal, projectId);
+      const nextGraph = normalizeArchitectureGraphIds(validateArchitectureProposal(graph, proposal, projectId));
       await transaction('architecture_view_nodes').whereIn('view_id', transaction('architecture_views').select('id').where({ project_id: projectId })).del();
       await transaction('architecture_relationships').where({ project_id: projectId }).del();
       await transaction('architecture_components').where({ project_id: projectId }).del();
