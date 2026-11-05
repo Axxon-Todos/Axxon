@@ -1,0 +1,8 @@
+# Allows the native and bundler dependencies required by Next.js and the test suite to build non-interactively.
+allowBuilds:
+  '@sentry/cli': true
+  '@tailwindcss/oxide': true
+  esbuild: true
+  sharp: true
+  sqlite3: true
+  unrs-resolver: true
